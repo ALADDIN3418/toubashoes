@@ -1,0 +1,11 @@
+# Supabase CLI project configuration. The remote project is selected by
+# SUPABASE_PROJECT_REF in GitHub Actions, never by a credential in this file.
+project_id = "toubashoes"
+
+[db.migrations]
+enabled = true
+schema_paths = ["./migrations/*.sql"]
+
+[db.seed]
+enabled = false
+sql_paths = ["./seed.sql"]

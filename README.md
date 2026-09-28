@@ -44,7 +44,7 @@
 - `stage3.js`: UI/route composition و flowهای demo.
 - `types/domain.js`: JSDoc contracts؛ `prisma/schema.prisma` مدل relational معادل PostgreSQL/Supabase.
 - `repositories/supabase-repository.stub.js`: فعلاً interface آینده؛ import یا اجرا نمی‌شود.
-- `supabase/migrations/202609280001_initial_schema.sql`: پیش‌نویس schema/RLS برای Supabase خالی؛ هنوز روی پروژهٔ راه‌دور اجرا نشده و storefront هنوز از آن استفاده نمی‌کند.
+- `supabase/migrations/202609280001_initial_schema.sql`: migration اولیهٔ schema/RLS؛ ممکن است هنوز روی پروژهٔ راه‌دور اجرا نشده باشد و storefront هنوز از آن استفاده نمی‌کند. اجرای خودکار migrationها با GitHub Actions پیکربندی شده است.
 - `.env.example`: placeholderهای Cloudflare Workers AI و تنظیمات رزروشدهٔ آینده؛ فایل واقعی `.env` از git خارج است.
 
 UI از state snapshot محلی استفاده می‌کند و persistence فقط از `DataProvider` عبور می‌کند؛ operations حساس فروش از `DemoServices` و Repositoryها انجام می‌شوند. در مرحله اتصال، composition root و adapter جایگزین می‌شوند؛ در صورت نیاز APIهای کاملاً async می‌توانند همان قرارداد repository را حفظ کنند.
@@ -58,6 +58,14 @@ UI از state snapshot محلی استفاده می‌کند و persistence فق
 
 ### ماندگاری / Reset
 تمام state با کلید `toubashop-v1` در LocalStorage مرورگر فعلی ذخیره می‌شود. Super Admin در Admin → ابزار دمو می‌تواند Reset به Seed، Seed در Storage خالی، یا Clear Local Data انجام دهد. برای reset دستی همین کلید را از LocalStorage حذف کنید.
+
+## انتشار خودکار تغییرات دیتابیس Supabase
+
+هر تغییر ساختاری را به‌صورت یک فایل SQL جدید و شماره‌دار در `supabase/migrations/` ثبت کنید؛ migrationی را که قبلاً اجرا شده ویرایش نکنید. پس از commit و push به شاخهٔ `main`، GitHub Actions ابتدا `dry-run` می‌گیرد و سپس migrationهای pending را به‌ترتیب روی Supabase اعمال می‌کند. تغییر مستقیم در Supabase Dashboard، ویرایش فایل‌های اپ یا تغییر محلیِ push‌نشده به‌طور خودکار sync نمی‌شود.
+
+پیش از اولین اجرا، در GitHub مخزن → **Settings → Secrets and variables → Actions** این سه Actions Secret را بسازید: `SUPABASE_ACCESS_TOKEN`، `SUPABASE_PROJECT_REF` و `SUPABASE_DB_PASSWORD`. مقادیر را فقط در GitHub Secrets نگه دارید؛ در چت، مخزن، Vercel یا کد مرورگر قرار ندهید. سپس در **Actions → Apply Supabase database migrations → Run workflow**، ورودی `confirm` را فعال کنید تا migration اولیه اجرا شود. اجرای دستی نیازمند تأیید صریح است؛ پس از آن push هر migration تازه به `main` خودکار اجرا می‌شود. جزئیات اولین اجرا و احتیاط برای schemaای که قبلاً دستی ساخته شده در `supabase/README.md` است.
+
+این pipeline فقط schema را مدیریت می‌کند و به‌تنهایی storefront را به Supabase وصل نمی‌کند یا احراز هویت، سفارش، پرداخت و موجودی را Production-ready نمی‌سازد.
 
 ## تست‌های آفلاین
 ```bash
