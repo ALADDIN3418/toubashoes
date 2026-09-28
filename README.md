@@ -1,17 +1,28 @@
-# کفش طوبی — Demo آفلاین و Supabase-ready
+# کفش طوبی — فروشگاه فارسی RTL با Supabase Auth و حالت Demo
 
-فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های ماندگار محلی و Repository/Service layer. هسته فروشگاه و خرید آفلاین/محلی است؛ ابزار اختیاری عکس محصول از Cloudflare Workers AI و مدل FLUX.2 [klein] 4B با تصویر مرجع استفاده می‌کند. هیچ Supabase یا درگاه پرداختی متصل نیست.
+فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های Demo در LocalStorage و Repository/Service layer. اتصال ورود/ثبت‌نام ایمیلی Supabase به‌صورت اختیاری از تنظیمات عمومی پروژه فعال می‌شود؛ کاتالوگ، مدیریت فروشگاه، سفارش و موجودی هنوز به دیتابیس وصل نیستند و پرداخت همچنان mock است. ابزار اختیاری عکس محصول از Cloudflare Workers AI و مدل FLUX.2 [klein] 4B با تصویر مرجع استفاده می‌کند.
 
 ## اجرا
-- نیازمندی: Node.js 18+
+- نیازمندی: Node.js 22+ (Supabase JS SDK در build بسته‌بندی می‌شود).
 - `npm start` یا `node local-server.js`؛ سرور توسعه روی پورت 4173 باز می‌شود. روی Vercel، فایل `local-server.js` اجرا نمی‌شود؛ سایت به‌صورت static به‌همراه API Functions جداگانه منتشر می‌شود.
 - تمام routeهای SPA با fallback سرور محلی و rewrite وریسل به `index.html` کار می‌کنند.
-- `npm run build` اجرای syntax/build-check بدون transpiler؛ `npm test` اجرای repository, runtime و E2E mock tests. برای هسته هیچ package خارجی لازم نیست.
+- `npm run build` اجرای syntax/build-check و بسته‌بندی SDK مرورگر Supabase؛ `npm test` تست Repository، API، Auth و Demo E2E را اجرا می‌کند.
 
 ## انتشار روی Vercel
 - مخزن را در Vercel دوباره Deploy کنید (یا پس از push منتظر deploy خودکار GitHub بمانید). `vercel.json`، preset را روی Other/static قرار می‌دهد؛ `npm run build` فقط فایل‌های لازم وب را در `public/` آماده می‌کند، مسیرهای SPA به `index.html` می‌روند و endpointها به Vercel Functions متصل می‌شوند.
 - صفحه فروشگاه بدون کلید Cloudflare هم بالا می‌آید؛ فقط ساخت تصویر تا زمان تنظیم Environment Variables غیرفعال می‌ماند. برای فعال‌سازی تصویر، در Vercel → Project → Settings → Environment Variables، `CLOUDFLARE_ACCOUNT_ID` و یک `CLOUDFLARE_API_TOKEN` تازه با دسترسی محدود `Workers AI: Read` اضافه و سپس Redeploy کنید. توکن افشاشده در گفتگو را استفاده نکنید.
-- این Vercel deployment همچنان Demo است: داده‌های فروشگاه در LocalStorage هر مرورگر می‌ماند؛ ورود و پرداخت واقعی نیستند. same-origin و سقف حافظه‌ای API جای احراز هویت یا rate limit پایدار را نمی‌گیرند.
+- این Vercel deployment تا اتصال کاتالوگ/سفارش/موجودی و درگاه واقعی Demo می‌ماند. ورود/ثبت‌نام ایمیلی فقط وقتی فعال است که `SUPABASE_URL` و `SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY` را در Environment Variables پروژهٔ Vercel قرار دهید؛ پرداخت و checkout واقعی همچنان غیرفعال‌اند.
+
+### اتصال Auth ایمیل/رمز Supabase
+
+برای فعال‌کردن صفحهٔ واقعی ورود/ثبت‌نام در Vercel، در **Project → Settings → Environment Variables** فقط این موارد را برای Production (و در صورت نیاز Preview) اضافه کنید:
+
+- `SUPABASE_URL`: URL پروژه از Supabase → Project Settings → API.
+- `SUPABASE_PUBLISHABLE_KEY`: کلید publishable/public از همان بخش. اگر پروژه فقط کلید قدیمی دارد، می‌توانید به‌جای آن `SUPABASE_ANON_KEY` بگذارید.
+
+این endpoint عمداً فقط URL و کلید عمومی را به مرورگر می‌دهد؛ `service_role`, database password و GitHub migration token را اضافه نکنید. بعد از افزودن متغیرها Redeploy کنید. در Supabase → **Authentication → URL Configuration**، Site URL را روی `https://toubashoes.vercel.app` بگذارید و Redirect URLهای `/login?verified=1` و `/reset-password` را مجاز کنید (پس از اتصال دامنهٔ نهایی، دامنهٔ همان‌جا هم اضافه شود). در Authentication → Providers، Email را فعال و تأیید ایمیل را روشن کنید؛ برای ارسال قابل‌اعتماد Production باید SMTP دامنهٔ تأییدشده را تنظیم کنید.
+
+در حالت Supabase، حساب Demo و ورود مدیر نمایشی غیرفعال‌اند؛ signup فقط نقش `customer` می‌سازد. حساب مدیر را پس از ثبت‌نام/تأیید، فقط مالک از SQL Editor و با بررسی ایمیل به `super_admin` ارتقا دهد. تا اتصال و آزمون CRUD امن مدیر، کاتالوگ، سفارش/موجودی تراکنشی و درگاه تأییدشده، پنل مدیریت و Checkout واقعی عمداً بسته می‌مانند و هیچ پرداخت mock به مشتری Supabase ارائه نمی‌شود. در نبود متغیرهای Supabase، Demo محلی بدون تغییر کار می‌کند.
 
 ### ابزار اختیاری عکس محصول با Cloudflare Workers AI
 در Products عکس را انتخاب کنید و سبک پس‌زمینه را برگزینید. مدل پیش‌فرض `@cf/black-forest-labs/flux-2-klein-4b` از ویرایش با تصویر مرجع پشتیبانی می‌کند؛ وزن‌های 4B در مجوز Apache-2.0 معرفی شده‌اند. Cloudflare Workers AI پلن رایگان با ۱۰٬۰۰۰ Neurons در روز دارد (سهمیه در ۰۰:۰۰ UTC بازنشانی می‌شود). این سهمیه بین استفاده‌های همان حساب مشترک است؛ ابزار به‌عنوان محافظ داخلی حداکثر ۲۰ تصویر در هر ۲۴ ساعت می‌سازد. استفادهٔ بالاتر از سهمیهٔ رایگان در حساب‌های دارای billing ممکن است هزینه‌دار شود؛ قبل از اجرا وضعیت پلن و مصرف حساب را بررسی کنید. این endpoint کنترل دسترسی production نیست و فقط same-origin، سقف محلی و ورود نمایشی فعلی را دارد.
@@ -26,8 +37,8 @@
 
 **مجوز مدل:** 4B برای این کاربرد تجاری انتخاب شده چون مستندات Black Forest Labs آن را Apache-2.0 معرفی می‌کنند. از 9B با مجوز FLUX NCL/غیرتجاری برای فروشگاه استفاده نکنید مگر مجوزش را مستقلاً بررسی کرده باشید.
 
-## نقش‌های Demo
-در `/login` روی حساب نمونه کلیک کنید:
+## نقش‌های Demo (فقط وقتی Supabase Auth پیکربندی نشده)
+در حالت آفلاین `/login` روی حساب نمونه کلیک کنید:
 - Customer: `09120000001`
 - Admin: `09120000002`
 - Super Admin: `09120000003`
@@ -36,16 +47,16 @@
 
 ## Architecture / Data Layer
 - `mock/seed-data.js`: داده‌های پایه و یک‌جای Demo؛ فقط اگر Storage خالی باشد Seed می‌شود.
-- `services/data-provider.js`: انتخاب Provider و LocalPersistence adapter. در این build مقدار `DATA_PROVIDER=mock` قفل است.
+- `services/data-provider.js`: Provider فروشگاه فعلاً Mock/LocalPersistence است؛ `services/supabase-auth.js` فقط Supabase Auth (email/password + PKCE) را اختیاری متصل می‌کند.
 - `repositories/mock-repository.js`: قرارداد generic و عملیات CRUD/list/get/search/filter برای entityها.
 - `repositories/bootstrap.js`: ساخت کاربران Demo، Home CMS defaults، Repository container و Application services.
-- `services/application-services.js`: Product/Auth/Order/Coupon/Shipping/Payment/Review/Cart services؛ بدون وابستگی به SDK خارجی.
+- `services/application-services.js`: Product/Auth/Order/Coupon/Shipping/Payment/Review/Cart services؛ commerce همچنان روی Mock Repository است.
 - `services/cart-functions.js`: عملیات Cart از طریق Cart repository.
 - `stage3.js`: UI/route composition و flowهای demo.
 - `types/domain.js`: JSDoc contracts؛ `prisma/schema.prisma` مدل relational معادل PostgreSQL/Supabase.
 - `repositories/supabase-repository.stub.js`: فعلاً interface آینده؛ import یا اجرا نمی‌شود.
-- `supabase/migrations/202609280001_initial_schema.sql`: migration اولیهٔ schema/RLS؛ ممکن است هنوز روی پروژهٔ راه‌دور اجرا نشده باشد و storefront هنوز از آن استفاده نمی‌کند. اجرای خودکار migrationها با GitHub Actions پیکربندی شده است.
-- `.env.example`: placeholderهای Cloudflare Workers AI و تنظیمات رزروشدهٔ آینده؛ فایل واقعی `.env` از git خارج است.
+- `supabase/migrations/202609280001_initial_schema.sql` و migrationهای بعدی: schema/RLS نسخه‌بندی‌شده؛ مالک تأیید کرده اجرای اولیه در Actions سبز شده است. migration جدید `202609280002_active_profile_rls.sql` با push به `main` خودکار اجرا می‌شود.
+- `.env.example`: placeholderهای تنظیم عمومی Supabase و Cloudflare؛ فایل واقعی `.env` از git خارج است. فقط URL/کلید public برای Auth هستند؛ هیچ `service_role` وارد مرورگر نکنید.
 
 UI از state snapshot محلی استفاده می‌کند و persistence فقط از `DataProvider` عبور می‌کند؛ operations حساس فروش از `DemoServices` و Repositoryها انجام می‌شوند. در مرحله اتصال، composition root و adapter جایگزین می‌شوند؛ در صورت نیاز APIهای کاملاً async می‌توانند همان قرارداد repository را حفظ کنند.
 
@@ -74,5 +85,5 @@ node tests/demo-e2e.js
 ```
 تست E2E بدون مرورگر یا شبکه مسیر ساخت محصول و Variant، انتشار و جستجو، Login Demo، افزودن Cart، کوپن، Checkout، پرداخت موفق و ناموفق، کاهش موجودی، تغییر وضعیت سفارش و بارگذاری مجدد از local persistence را بررسی می‌کند.
 
-## اتصال آینده (فعلاً غیرفعال)
-`prisma/schema.prisma` مدل‌های users/profiles/products/product_variants/categories/product_images/orders/order_items/addresses/payments/coupons/reviews/banners/page_contents/site_settings/media را نگه می‌دارد. Supabase URL/anon key عمداً خالی‌اند. در مرحله نهایی لازم است adapter واقعی، server-side auth/RBAC، تراکنش اتمیک موجودی، upload storage و verify پرداخت ساخته شود؛ هیچ‌کدام در Demo حاضر فعال نیست.
+## وضعیت اتصال Production
+Auth ایمیلی Supabase در کد آماده و با runtime config فعال می‌شود؛ پس از افزودن URL و public key در Vercel، signup/login، تأیید ایمیل، logout، بازیابی رمز و پروفایل role-checked به Auth/`profiles` وصل می‌شوند. مابقی provider همچنان Mock است: دادهٔ محصولات، سبد، سفارش‌ها، CMS و موجودی مرکزی نشده‌اند. Checkout و پرداخت mock برای کاربر Supabase عمداً بسته است. درگاه «بلوپال» تا ارائهٔ نام دقیق و مستندات رسمی، mock می‌ماند. Production واقعی پس از پیاده‌سازی و تست CRUD مدیر با RLS، RPC تراکنشی سفارش/stock، storage پایدار، SMTP، دامنه/محتوای واقعی، درگاه و end-to-end ممکن می‌شود.

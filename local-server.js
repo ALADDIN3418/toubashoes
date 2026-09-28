@@ -75,6 +75,25 @@ const server = http.createServer(async (req, res) => {
   try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }
   catch { return json(res, 400, { error:'آدرس درخواست معتبر نیست.' }); }
 
+  if (pathname === '/api/supabase-config') {
+    if (req.method !== 'GET') return json(res, 405, { error:'روش درخواست مجاز نیست.' }, { Allow:'GET' });
+    const rawUrl = String(process.env.SUPABASE_URL || '').trim();
+    let url = '';
+    try { const parsed = new URL(rawUrl); if (parsed.protocol === 'https:' && !parsed.username && !parsed.password && parsed.pathname === '/' && !parsed.search && !parsed.hash) url = parsed.origin; } catch { /* keep config disabled */ }
+    const anonKey = String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+    const safeKey = anonKey && anonKey.length < 4096 ? anonKey : '';
+    const publicConfig = { configured:Boolean(url || safeKey), enabled:Boolean(url && safeKey), url, anonKey:safeKey };
+    res.writeHead(200, { 'Content-Type':'application/javascript; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+    return res.end(`window.TOUBA_PUBLIC_CONFIG=Object.freeze(${JSON.stringify(publicConfig)});`);
+  }
+
+  if (pathname === '/vendor/supabase.js' && req.method === 'GET') {
+    const sdk = path.join(root, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js');
+    if (!fs.existsSync(sdk)) return json(res, 503, { error:'Supabase browser SDK is not installed; run npm install.' });
+    res.writeHead(200, { 'Content-Type':types['.js'], 'Cache-Control':'public, max-age=3600', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+    return fs.createReadStream(sdk).pipe(res);
+  }
+
   if (pathname === '/api/ai/status' && req.method === 'GET') {
     const configured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
     return json(res, 200, { configured, provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:20, referenceMaxSide:511 });
@@ -117,7 +136,11 @@ const server = http.createServer(async (req, res) => {
     } catch (error) { return json(res, 500, { error:error.message || 'ذخیره فایل انجام نشد.' }); }
   }
 
-  const file = path.join(root, pathname.replace(/^\/+/, ''));
+  let file = path.join(root, pathname.replace(/^\/+/, ''));
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    const builtAsset = path.join(root, 'public', pathname.replace(/^\/+/, ''));
+    if (builtAsset.startsWith(path.join(root, 'public') + path.sep) && fs.existsSync(builtAsset) && fs.statSync(builtAsset).isFile()) file = builtAsset;
+  }
   if (pathname === '/sitemap.xml' || pathname === '/robots.txt') {
     const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'localhost').split(',')[0].trim();
     const protocol = String(req.headers['x-forwarded-proto'] || (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? 'http' : 'https')).split(',')[0].trim();

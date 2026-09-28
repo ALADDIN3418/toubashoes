@@ -1,6 +1,7 @@
 /* Provider selection is local/demo-only. No network or Supabase SDK is loaded here. */
 (function(g){
- const config=Object.freeze({DATA_PROVIDER:'mock',SUPABASE_URL:'',SUPABASE_ANON_KEY:''});
+ const publicConfig=g.TOUBA_PUBLIC_CONFIG||{};
+ const config=Object.freeze({DATA_PROVIDER:'mock',SUPABASE_URL:publicConfig.url||'',SUPABASE_ANON_KEY:publicConfig.anonKey||'',AUTH_PROVIDER:publicConfig.enabled?'supabase':publicConfig.configured?'misconfigured':'demo'});
  class LocalPersistenceAdapter{
   constructor(storage){this.storage=storage}
   load(key,seed){try{const raw=this.storage.getItem(key);if(raw){const parsed=JSON.parse(raw);if(parsed&&typeof parsed==='object'&&Object.keys(parsed).length>0)return parsed}}catch(e){console.warn('Mock storage is corrupt; using a fresh demo seed.',e)}const fresh=structuredClone(seed);this.save(key,fresh);return fresh}

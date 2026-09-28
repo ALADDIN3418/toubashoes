@@ -7,7 +7,7 @@ const files = [
   'index.html', 'app.js', 'enhancements.js', 'customer-orders.js', 'stage3.js', 'stage4.js',
   'styles.css', 'stage2.css', 'stage3.css', 'stage4.css',
   'hero-shoe.jpg', 'product-shoes.jpg', 'touba-hero.jpg', 'robots.txt', 'sitemap.xml',
-  'services/data-provider.js', 'services/application-services.js', 'services/cart-functions.js', 'services/seo.js',
+  'services/data-provider.js', 'services/application-services.js', 'services/cart-functions.js', 'services/seo.js', 'services/supabase-auth.js', 'services/auth-ui.js',
   'repositories/mock-repository.js', 'repositories/bootstrap.js', 'mock/seed-data.js', 'admin-product-ai.js'
 ];
 fs.rmSync(output, { recursive:true, force:true });
@@ -18,4 +18,13 @@ for (const relative of files) {
   fs.mkdirSync(path.dirname(target), { recursive:true });
   fs.copyFileSync(source, target);
 }
-console.log(`Vercel static output ready: ${files.length} assets in public/`);
+const vendorDir = path.join(output, 'vendor');
+fs.mkdirSync(vendorDir, { recursive:true });
+for (const [source, target] of [
+  [path.join(root, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'), path.join(vendorDir, 'supabase.js')],
+  [path.join(root, 'node_modules/@supabase/supabase-js/LICENSE'), path.join(vendorDir, 'supabase-LICENSE')]
+]) {
+  if (!fs.existsSync(source)) throw new Error(`Supabase JS dependency asset missing: ${source}`);
+  fs.copyFileSync(source, target);
+}
+console.log(`Vercel static output ready: ${files.length + 2} assets in public/`);
