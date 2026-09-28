@@ -46,7 +46,16 @@
       .select('id,email,display_name,phone,role,is_active')
       .eq('id', authUser.id)
       .single();
-    if (error || !data) throw new Error('پروفایل حساب در Supabase پیدا نشد؛ وضعیت trigger ساخت پروفایل را بررسی کنید.');
+    if (error) {
+      console.error('Supabase profile lookup failed:', { code: error.code, message: error.message });
+      if (error.code === '42501' || /permission denied|row-level security/i.test(error.message || '')) {
+        throw new Error('خواندن پروفایل به‌دلیل RLS رد شد؛ migrationها و سیاست profiles_read_self_or_admin را بررسی کنید.');
+      }
+      if (error.code && error.code !== 'PGRST116') {
+        throw new Error(`خواندن پروفایل انجام نشد (کد ${error.code})؛ گزارش Console را بررسی کنید.`);
+      }
+    }
+    if (!data) throw new Error('پروفایل این حساب در جدول public.profiles پیدا نشد؛ مطمئن شوید رکورد profile با همان Auth user id ساخته شده است.');
     if (!data.is_active) throw new Error('این حساب غیرفعال شده است. با پشتیبانی فروشگاه تماس بگیرید.');
     return appUser(data, authUser);
   }
@@ -87,9 +96,12 @@
     }
     const result = requireClient().auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') passwordRecovery = true;
+      // INITIAL_SESSION was already read with getSession above. SIGNED_IN is
+      // applied by signIn/signUp directly; repeating the profile fetch here can
+      // race navigation and clear a valid session on a transient RLS/network error.
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') return;
       // Defer Supabase calls until after its auth event lock is released.
-      const shouldRender = !(event === 'SIGNED_IN' && g.location.pathname === '/login');
-      setTimeout(() => setSession(session, { render: shouldRender }).catch(error => {
+      setTimeout(() => setSession(session).catch(error => {
         console.error('Supabase profile/session restore failed:', error);
         if (g.toast) g.toast(error.message || 'بازیابی وضعیت ورود انجام نشد.');
       }), 0);

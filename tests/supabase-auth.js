@@ -21,7 +21,7 @@ const path = require('path');
     },
     from(table){
       assert.equal(table,'profiles');
-      return { select(fields){ calls.profileFields=fields; return { eq(column,value){ calls.profileFilter=[column,value]; return { async single(){return {data:profile,error:null};} }; } }; } };
+      return { select(fields){ calls.profileFields=fields; return { eq(column,value){ calls.profileFilter=[column,value]; return { async single(){calls.profileReads=(calls.profileReads||0)+1;return {data:profile,error:null};} }; } }; } };
     }
   };
   const window={
@@ -49,6 +49,12 @@ const path = require('path');
   assert.equal(user.role,'customer');
   assert.equal(user.authProvider,'supabase');
   assert.equal(calls.profileFilter[1],'user-1');
+  await auth.start();
+  const profileReadsBeforeEvents=calls.profileReads;
+  authCallback('SIGNED_IN',session);
+  authCallback('INITIAL_SESSION',session);
+  await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(calls.profileReads,profileReadsBeforeEvents,'already handled Auth events must not trigger a duplicate profile read');
   await auth.sendPasswordReset('shopper@example.com');
   assert.equal(calls.reset.options.redirectTo,'https://shop.example/reset-password');
   assert.equal(auth.publicError({message:'Invalid login credentials'}),'ایمیل یا رمز عبور درست نیست.');
@@ -74,10 +80,12 @@ const path = require('path');
     ToubaAuth:{configured:true,currentUser:{id:'admin-1',email:'owner@example.com',name:'مدیر',role:'super_admin',isActive:true},start:async()=>null,publicError:()=> 'auth error',signIn:async()=>({role:'super_admin'}),signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{}},
     location:{pathname:'/login',search:'?mode=signup',origin:'https://shop.example'},
     document:{body:{classList:{remove(){}}},querySelector(selector){return selector==='#app'?uiApp:null;}},
+    history:null,
     header:()=>'<header/>',footer:()=>'<footer/>',esc:value=>String(value),toast:value=>{uiWindow.lastToast=value;},go:value=>{uiWindow.lastGo=value;},
     render:null,login:null,loginUser:null,demoLogin:null,adminLogin:null,logout:null,account:null,ordersPage:null,
     setTimeout,URLSearchParams
   };
+  uiWindow.history={pushState(_state,_title,target){const parsed=new URL(target,uiWindow.location.origin);uiWindow.location.pathname=parsed.pathname;uiWindow.location.search=parsed.search;uiWindow.lastPush=target;}};
   uiWindow.render=function(){uiApp.innerHTML=uiWindow.login();};
   class MockFormData{constructor(form){this.fields=form.fields}get(key){return this.fields[key]}}
   const uiContext={window:uiWindow,URLSearchParams,FormData:MockFormData,setTimeout,Promise,console};
@@ -88,7 +96,8 @@ const path = require('path');
   const submitButton={disabled:false,textContent:'ورود',dataset:{}};
   const loginForm={fields:{email:'owner@example.com',password:'strong-password'},querySelector(){return submitButton;}};
   await uiWindow.ToubaAuthUI.signIn(loginForm);
-  assert.equal(uiWindow.lastGo,'/admin');
+  assert.equal(uiWindow.lastPush,'/admin');
+  assert.match(uiApp.innerHTML,/پنل امن Supabase/);
   uiWindow.location.pathname='/admin';uiWindow.location.search='';uiWindow.render();
   assert.match(uiApp.innerHTML,/پنل امن Supabase/);
   assert.match(uiApp.innerHTML,/مدیریت طوبی/);

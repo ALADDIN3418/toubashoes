@@ -19,6 +19,17 @@
     return `<div class="${kind}" role="status" aria-live="polite">${g.esc(text)}</div>`;
   }
 
+  function navigate(path) {
+    // Keep successful Auth transitions in the current document so the freshly
+    // established Supabase session is not raced by an immediate full reload.
+    if (g.history?.pushState) {
+      g.history.pushState({}, '', path);
+      g.render();
+      return;
+    }
+    g.go(path);
+  }
+
   function authLogin() {
     const mode = new URLSearchParams(g.location.search).get('mode') || 'login';
     const verified = new URLSearchParams(g.location.search).get('verified') === '1';
@@ -54,7 +65,7 @@
     const data = new FormData(form);
     return runForm(form, async () => {
       const user = await auth.signIn({ email: data.get('email'), password: data.get('password') });
-      g.go(user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/account');
+      navigate(user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/account');
       return true;
     }, () => 'ورود انجام شد؛ در حال انتقال به حساب کاربری…');
   }
@@ -68,7 +79,7 @@
     }
     return runForm(form, () => auth.signUp({ email: data.get('email'), password: data.get('password'), displayName: data.get('displayName') }), result => {
       if (result.confirmationRequired) return 'حساب ساخته شد. برای فعال‌کردن آن، پیوند تأیید ارسال‌شده به ایمیل را باز کنید؛ پوشهٔ Spam را هم بررسی کنید.';
-      g.go('/account');
+      navigate('/account');
       return 'حساب ساخته شد؛ در حال انتقال به حساب کاربری…';
     });
   }
@@ -91,7 +102,7 @@
     }
     return runForm(form, async () => {
       await auth.updatePassword(data.get('password'));
-      g.go('/account');
+      navigate('/account');
       return true;
     }, () => 'رمز عبور تغییر کرد؛ در حال انتقال…');
   }
@@ -202,7 +213,7 @@
   };
 
   auth.start().then(() => {
-    if (auth.currentUser && new URLSearchParams(g.location.search).get('verified') === '1') g.go(auth.currentUser.role==='admin'||auth.currentUser.role==='super_admin'?'/admin':'/account');
+    if (auth.currentUser && new URLSearchParams(g.location.search).get('verified') === '1') navigate(auth.currentUser.role==='admin'||auth.currentUser.role==='super_admin'?'/admin':'/account');
     else g.render();
   }).catch(error => {
     console.error('Supabase Auth initialization failed:', error);
