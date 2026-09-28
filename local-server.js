@@ -25,7 +25,7 @@ const productImageSaveTimes = [];
 const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.webp':'image/webp', '.svg':'image/svg+xml', '.json':'application/json', '.xml':'application/xml; charset=utf-8', '.txt':'text/plain; charset=utf-8' };
 
 function json(res, status, value, extraHeaders = {}) {
-  res.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', ...extraHeaders });
+  res.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()', ...extraHeaders });
   res.end(JSON.stringify(value));
 }
 function readBody(req, limit) {
@@ -124,7 +124,7 @@ const server = http.createServer(async (req, res) => {
     let origin; try { origin = new URL(`${protocol}://${host}`).origin; } catch { origin = 'https://localhost'; }
     return fs.readFile(file, 'utf8', (err, content) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }
-      res.writeHead(200, { 'Content-Type':types[path.extname(file)], 'Cache-Control':'no-store' });
+      res.writeHead(200, { 'Content-Type':types[path.extname(file)], 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
       res.end(content.replaceAll('{{ORIGIN}}', origin));
     });
   }
@@ -133,7 +133,7 @@ const server = http.createServer(async (req, res) => {
   serveFile(file, res);
 });
 function serveFile(file, res) {
-  res.writeHead(200, { 'Content-Type':types[path.extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff' });
+  res.writeHead(200, { 'Content-Type':types[path.extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
   fs.createReadStream(file).pipe(res);
 }
 server.listen(process.env.PORT || 4173, '0.0.0.0', () => console.log(`طوبی storefront listening on ${server.address().port} · mock commerce / Cloudflare Workers AI product-image demo`));

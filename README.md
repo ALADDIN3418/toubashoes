@@ -43,8 +43,9 @@
 - `services/cart-functions.js`: عملیات Cart از طریق Cart repository.
 - `stage3.js`: UI/route composition و flowهای demo.
 - `types/domain.js`: JSDoc contracts؛ `prisma/schema.prisma` مدل relational معادل PostgreSQL/Supabase.
-- `repositories/supabase-repository.stub.js`: صرفاً interface آینده؛ import یا اجرا نمی‌شود.
-- `.env.example`: placeholderهای Cloudflare Workers AI برای مدل تصویر، به‌علاوه حالت mock رزروشده برای Supabase؛ فایل واقعی `.env` از git خارج است.
+- `repositories/supabase-repository.stub.js`: فعلاً interface آینده؛ import یا اجرا نمی‌شود.
+- `supabase/migrations/202609280001_initial_schema.sql`: پیش‌نویس schema/RLS برای Supabase خالی؛ هنوز روی پروژهٔ راه‌دور اجرا نشده و storefront هنوز از آن استفاده نمی‌کند.
+- `.env.example`: placeholderهای Cloudflare Workers AI و تنظیمات رزروشدهٔ آینده؛ فایل واقعی `.env` از git خارج است.
 
 UI از state snapshot محلی استفاده می‌کند و persistence فقط از `DataProvider` عبور می‌کند؛ operations حساس فروش از `DemoServices` و Repositoryها انجام می‌شوند. در مرحله اتصال، composition root و adapter جایگزین می‌شوند؛ در صورت نیاز APIهای کاملاً async می‌توانند همان قرارداد repository را حفظ کنند.
 
