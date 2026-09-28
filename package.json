@@ -4,8 +4,8 @@
   "private": true,
   "description": "Offline-first Persian RTL shoe store demo with repository-based mock data",
   "scripts": {
-    "start": "node server.js",
+    "start": "node local-server.js",
     "build": "node scripts/check.js",
-    "test": "node tests/repository-crud.js && node tests/cloudflare-image.js && node tests/runtime-smoke.js && node tests/demo-e2e.js"
+    "test": "node tests/repository-crud.js && node tests/cloudflare-image.js && node tests/vercel-api.js && node tests/runtime-smoke.js && node tests/demo-e2e.js"
   }
 }

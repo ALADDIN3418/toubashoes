@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Sitemap: {{ORIGIN}}/sitemap.xml
+Sitemap: https://toubashoes.vercel.app/sitemap.xml
