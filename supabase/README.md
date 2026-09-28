@@ -51,7 +51,7 @@ where p.id = u.id
   and lower(u.email) = lower('OWNER_EMAIL_HERE');
 ```
 
-Inspect the affected row count and `profiles.role` afterwards. Do not expose a promotion endpoint or allow the frontend to write `profiles.role`. The current CMS/Admin CRUD UI is **not** connected to the production database and remains disabled in Supabase Auth mode.
+Inspect the affected row count and `profiles.role` afterwards. Do not expose a promotion endpoint or allow the frontend to write `profiles.role`. A read-only admin dashboard/list view for products, orders, and profiles is available to active admins and remains subject to RLS. CMS/Admin CRUD is **not** connected to the production database; writes and checkout stay disabled in Supabase Auth mode.
 
 ## Automatic database migrations
 

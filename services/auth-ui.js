@@ -53,8 +53,8 @@
   async function signIn(form) {
     const data = new FormData(form);
     return runForm(form, async () => {
-      await auth.signIn({ email: data.get('email'), password: data.get('password') });
-      g.go('/account');
+      const user = await auth.signIn({ email: data.get('email'), password: data.get('password') });
+      g.go(user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/account');
       return true;
     }, () => 'ورود انجام شد؛ در حال انتقال به حساب کاربری…');
   }
@@ -99,7 +99,7 @@
   function accountPage() {
     const user = auth.currentUser;
     if (!user) return `${g.header()}<main class="page container"><div class="panel empty"><div class="big">♙</div><h2>برای مشاهده حساب وارد شوید</h2><a class="btn" href="/login">ورود به حساب</a>　<a class="btn outline" href="/login?mode=signup">ثبت‌نام</a></div></main>${g.footer()}`;
-    return `${g.header()}<main class="page container"><h1 class="page-title">حساب کاربری</h1><div class="checkout-layout"><section class="panel"><h3>اطلاعات حساب</h3><p>نام: ${g.esc(user.name || '—')}</p><p>ایمیل: ${g.esc(user.email)}</p><p>شماره تماس: ${g.esc(user.phone || '—')}</p><p>نوع حساب: مشتری</p><button class="btn outline small" onclick="ToubaAuthUI.signOut()">خروج امن</button></section><section class="panel"><h3>سفارش‌ها</h3><p>ورود و پروفایل به Supabase Auth متصل است؛ ثبت سفارش و نمایش سفارش‌های واقعی هنوز فعال نشده است.</p><a class="text-link" href="/account/orders">وضعیت سفارش‌ها ←</a></section></div></main>${g.footer()}`;
+    return `${g.header()}<main class="page container"><h1 class="page-title">حساب کاربری</h1><div class="checkout-layout"><section class="panel"><h3>اطلاعات حساب</h3><p>نام: ${g.esc(user.name || '—')}</p><p>ایمیل: ${g.esc(user.email)}</p><p>شماره تماس: ${g.esc(user.phone || '—')}</p><p>نوع حساب: ${user.role==='super_admin'?'مدیر ارشد':user.role==='admin'?'مدیر فروشگاه':'مشتری'}</p><button class="btn outline small" onclick="ToubaAuthUI.signOut()">خروج امن</button></section><section class="panel"><h3>سفارش‌ها</h3><p>ورود و پروفایل به Supabase Auth متصل است؛ ثبت سفارش و نمایش سفارش‌های واقعی هنوز فعال نشده است.</p><a class="text-link" href="/account/orders">وضعیت سفارش‌ها ←</a></section></div></main>${g.footer()}`;
   }
 
   function ordersPage() {
@@ -111,7 +111,58 @@
     return `${g.header()}<main class="page container"><section class="auth-card"><h1>${g.esc(title)}</h1>${messageBox(explanation)}<p>تا تکمیل کاتالوگ، ثبت تراکنشی سفارش و تأیید درگاه، ثبت سفارش واقعی غیرفعال نگه داشته شده است.</p><a class="btn" href="/shop">بازگشت به فروشگاه</a></section></main>${g.footer()}`;
   }
 
-  g.ToubaAuthUI = Object.freeze({ signIn, signUp, resetPassword, updatePassword, async signOut() {
+  const adminSections = { dashboard:'نمای کلی', products:'محصولات', orders:'سفارش‌ها', customers:'کاربران' };
+  function adminPage() {
+    const user = auth.currentUser;
+    if (!user) return `${g.header()}<main class="page container"><section class="auth-card"><h1>ورود مدیر</h1><p>برای ورود به بخش مدیریت، با حساب تأییدشدهٔ مدیر وارد شوید.</p><a class="btn" href="/login">ورود</a></section></main>${g.footer()}`;
+    if (!['admin','super_admin'].includes(user.role)) return `${g.header()}<main class="page container"><section class="auth-card"><h1>دسترسی مجاز نیست</h1>${messageBox('این حساب نقش مدیر ندارد.') }<a class="btn" href="/account">بازگشت به حساب</a></section></main>${g.footer()}`;
+    const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
+    const selected = Object.hasOwn(adminSections, section) ? section : 'dashboard';
+    return `${g.header()}<main class="page container"><div class="auth-admin-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${g.esc(user.email)} · ${user.role==='super_admin'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><nav class="auth-admin-nav" aria-label="بخش‌های مدیریت" style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0">${Object.entries(adminSections).map(([key,label])=>`<a class="${selected===key?'active':''}" style="display:grid;place-items:center;min-height:42px;padding:8px 14px;border:1px solid #dfe4d7;border-radius:10px" href="/admin?section=${key}">${label}</a>`).join('')}</nav>${messageBox('این پنل با نقش واقعی Supabase محافظت می‌شود و اطلاعات زیر را مستقیم و فقط‌خواندنی از دیتابیس می‌خواند. افزودن/ویرایش، تغییر وضعیت سفارش و مدیریت مشتری هنوز پیاده نشده است؛ هیچ دکمهٔ ویرایشی Mock نمایش داده نمی‌شود.')}<section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
+  }
+
+  function adminTable(headers, rows) {
+    return `<div class="table-wrap auth-admin-table-wrap"><table class="data-table auth-admin-table"><thead><tr>${headers.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}">رکوردی ثبت نشده است.</td></tr>`}</tbody></table></div>`;
+  }
+
+  async function loadAdminSection(section) {
+    const target = g.document.querySelector('#admin-live-content');
+    if (!target || !auth.client || !['admin','super_admin'].includes(auth.currentUser?.role)) return;
+    target.innerHTML = 'در حال دریافت اطلاعات…';
+    const client = auth.client;
+    try {
+      if (section === 'products') {
+        const { data, error } = await client.from('products').select('id,name,sku,price_toman,is_active,product_variants(stock)').order('created_at',{ascending:false}).limit(100);
+        if (error) throw error;
+        target.innerHTML = adminTable(['نام محصول','SKU','قیمت (تومان)','موجودی','وضعیت'], (data||[]).map(p=>`<tr><td>${g.esc(p.name)}</td><td>${g.esc(p.sku||'—')}</td><td>${g.toman(p.price_toman)}</td><td>${(p.product_variants||[]).reduce((n,v)=>n+Number(v.stock||0),0).toLocaleString('fa-IR')}</td><td>${p.is_active?'فعال':'پیش‌نویس'}</td></tr>`).join(''));
+        return;
+      }
+      if (section === 'orders') {
+        const { data, error } = await client.from('orders').select('id,number,status,total_toman,created_at').order('created_at',{ascending:false}).limit(100);
+        if (error) throw error;
+        target.innerHTML = adminTable(['شماره سفارش','وضعیت','مبلغ (تومان)','تاریخ'], (data||[]).map(o=>`<tr><td>${g.esc(o.number)}</td><td>${g.esc(o.status)}</td><td>${g.toman(o.total_toman)}</td><td>${g.esc(new Intl.DateTimeFormat('fa-IR',{dateStyle:'medium'}).format(new Date(o.created_at)))}</td></tr>`).join(''));
+        return;
+      }
+      if (section === 'customers') {
+        const { data, error } = await client.from('profiles').select('id,email,display_name,role,is_active,created_at').order('created_at',{ascending:false}).limit(100);
+        if (error) throw error;
+        target.innerHTML = adminTable(['نام','ایمیل','نقش','وضعیت','ثبت‌نام'], (data||[]).map(u=>`<tr><td>${g.esc(u.display_name||'—')}</td><td>${g.esc(u.email||'—')}</td><td>${g.esc(u.role)}</td><td>${u.is_active?'فعال':'مسدود'}</td><td>${g.esc(new Intl.DateTimeFormat('fa-IR',{dateStyle:'medium'}).format(new Date(u.created_at)))}</td></tr>`).join(''));
+        return;
+      }
+      const [products,orders,profiles] = await Promise.all([
+        client.from('products').select('id',{count:'exact',head:true}),
+        client.from('orders').select('id',{count:'exact',head:true}),
+        client.from('profiles').select('id',{count:'exact',head:true})
+      ]);
+      const failure=[products,orders,profiles].find(x=>x.error); if(failure?.error) throw failure.error;
+      target.innerHTML = `<div class="auth-admin-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px"><article style="padding:14px;background:#fff;border:1px solid #e6e7de;border-radius:12px"><span>محصولات</span><b style="display:block;font-size:24px;margin-top:6px">${Number(products.count||0).toLocaleString('fa-IR')}</b></article><article style="padding:14px;background:#fff;border:1px solid #e6e7de;border-radius:12px"><span>سفارش‌ها</span><b style="display:block;font-size:24px;margin-top:6px">${Number(orders.count||0).toLocaleString('fa-IR')}</b></article><article style="padding:14px;background:#fff;border:1px solid #e6e7de;border-radius:12px"><span>حساب‌ها</span><b style="display:block;font-size:24px;margin-top:6px">${Number(profiles.count||0).toLocaleString('fa-IR')}</b></article></div><p class="muted">این شمارنده‌ها با RLS Supabase خوانده شده‌اند؛ عملیات ثبت سفارش و ویرایش کاتالوگ هنوز بسته است.</p>`;
+    } catch (error) {
+      target.innerHTML = messageBox('خواندن اطلاعات مدیریتی از Supabase انجام نشد. نقش دیتابیس، اجرای migrationهای RLS و گزارش Network را بررسی کنید.', 'notice error-notice');
+      console.error('Admin data read failed:', error);
+    }
+  }
+
+  g.ToubaAuthUI = Object.freeze({ signIn, signUp, resetPassword, updatePassword, loadAdminSection, async signOut() {
     try { await auth.signOut(); g.toast('از حساب خارج شدید.'); g.go('/'); }
     catch (error) { g.toast(auth.publicError(error)); }
   } });
@@ -132,7 +183,9 @@
     }
     if (pathname === '/admin') {
       g.document.body.classList.remove('admin-body');
-      g.document.querySelector('#app').innerHTML = unavailable('پنل مدیریت آماده نیست', 'احراز هویت مشتری به Supabase متصل است؛ CRUD محصولات، موجودی و سفارش‌های پنل هنوز به API امن متصل نشده‌اند.');
+      g.document.querySelector('#app').innerHTML = adminPage();
+      const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
+      loadAdminSection(Object.hasOwn(adminSections, section) ? section : 'dashboard');
       return;
     }
     if (pathname === '/checkout' || pathname.startsWith('/payment/')) {
@@ -149,7 +202,7 @@
   };
 
   auth.start().then(() => {
-    if (auth.currentUser && new URLSearchParams(g.location.search).get('verified') === '1') g.go('/account');
+    if (auth.currentUser && new URLSearchParams(g.location.search).get('verified') === '1') g.go(auth.currentUser.role==='admin'||auth.currentUser.role==='super_admin'?'/admin':'/account');
     else g.render();
   }).catch(error => {
     console.error('Supabase Auth initialization failed:', error);

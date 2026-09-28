@@ -71,7 +71,7 @@ const path = require('path');
   }
   const uiApp={innerHTML:'',insertAdjacentHTML(position,html){this.innerHTML=html+this.innerHTML;}};
   const uiWindow={
-    ToubaAuth:{configured:true,currentUser:null,start:async()=>null,publicError:()=> 'auth error',signIn:async()=>{},signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{}},
+    ToubaAuth:{configured:true,currentUser:{id:'admin-1',email:'owner@example.com',name:'مدیر',role:'super_admin',isActive:true},start:async()=>null,publicError:()=> 'auth error',signIn:async()=>({role:'super_admin'}),signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{}},
     location:{pathname:'/login',search:'?mode=signup',origin:'https://shop.example'},
     document:{body:{classList:{remove(){}}},querySelector(selector){return selector==='#app'?uiApp:null;}},
     header:()=>'<header/>',footer:()=>'<footer/>',esc:value=>String(value),toast:value=>{uiWindow.lastToast=value;},go:value=>{uiWindow.lastGo=value;},
@@ -79,11 +79,19 @@ const path = require('path');
     setTimeout,URLSearchParams
   };
   uiWindow.render=function(){uiApp.innerHTML=uiWindow.login();};
-  const uiContext={window:uiWindow,URLSearchParams,FormData,setTimeout,Promise,console};
+  class MockFormData{constructor(form){this.fields=form.fields}get(key){return this.fields[key]}}
+  const uiContext={window:uiWindow,URLSearchParams,FormData:MockFormData,setTimeout,Promise,console};
   vm.createContext(uiContext);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../services/auth-ui.js'),'utf8'),uiContext);
   assert.match(uiApp.innerHTML,/ساخت حساب کاربری/);
   assert.match(uiApp.innerHTML,/name="email"/);
+  const submitButton={disabled:false,textContent:'ورود',dataset:{}};
+  const loginForm={fields:{email:'owner@example.com',password:'strong-password'},querySelector(){return submitButton;}};
+  await uiWindow.ToubaAuthUI.signIn(loginForm);
+  assert.equal(uiWindow.lastGo,'/admin');
+  uiWindow.location.pathname='/admin';uiWindow.location.search='';uiWindow.render();
+  assert.match(uiApp.innerHTML,/پنل امن Supabase/);
+  assert.match(uiApp.innerHTML,/مدیریت طوبی/);
   uiWindow.demoLogin('admin');
   assert.match(uiWindow.lastToast,/غیرفعال است/);
   console.log('PASS: Supabase signup/login/profile mapping/password reset, public-only config and demo-login lockout');

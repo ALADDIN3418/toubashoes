@@ -11,7 +11,7 @@
 | صفحه و API زنده | بررسی شد | صفحهٔ اصلی، `/shop` و `/api/ai/status` پاسخ 200 داده‌اند؛ هنگام بررسی AI status مقدار `configured: true` بود. |
 | ساخت تصویر | کار می‌کند، اما هنوز Production-safe نیست | توکن سروری است؛ ولی endpoint احراز هویت مدیر واقعی و rate limit پایدار ندارد. سهمیهٔ حافظه‌ای در Vercel تضمین سراسری نیست. |
 | مدیریت محصول و سفارش | Production نیست | مالک تأیید کرده schema اولیه اعمال شده، اما اپ هنوز LocalStorage/Mock است؛ داده‌ها بین دستگاه‌ها مشترک نیستند و کاتالوگ/سفارش به جداول وصل نیست. |
-| ورود مدیر و مشتری | Auth code آماده؛ برای فعال‌سازی نیاز به Vercel config و SMTP دارد | Signup/login ایمیلی، تأیید، بازیابی رمز، PKCE و profile role lookup پیاده شده؛ تا افزودن URL/public key در Vercel ورود demo باقی می‌ماند. مدیریت واقعی هنوز متصل نیست و Admin عمداً بسته می‌شود در Supabase mode. |
+| ورود مدیر و مشتری | Supabase config زنده فعال گزارش شده؛ ورود واقعی نیازمند آزمون end-to-end است | Signup/login ایمیلی، تأیید، بازیابی رمز، PKCE و role lookup پیاده شده؛ مدیر فعال داشبورد/فهرست فقط‌خواندنی با RLS دارد. SMTP و redirectها باید تأیید شوند؛ CRUD فروشگاه متصل نیست. |
 | پرداخت و ثبت سفارش واقعی | Production نیست | پرداخت آزمایشی است؛ هیچ gateway، callback verification، webhook یا ذخیرهٔ مرکزی سفارش وجود ندارد. |
 | ذخیرهٔ عکس تأییدشده در Vercel | فقط Demo | در Vercel به‌صورت data URL در LocalStorage همان مرورگر می‌ماند، نه در Object Storage مرکزی. |
 | تست خودکار | پایه‌ای و موفق | build و تست‌های Repository، API mock، runtime و Demo E2E موفق‌اند؛ تست مرورگری واقعی، بار، پرداخت و API خارجی نداریم. |
@@ -21,7 +21,7 @@
 ## یافته‌های مسدودکنندهٔ Production (P0)
 
 1. **پایگاه داده و ماندگاری:** schema Supabase از طریق Actions اعمال شده است (طبق تأیید مالک)، اما `services/data-provider.js` هنوز LocalStorage/Mock است. محصولات، موجودی، مشتریان، کوپن، سفارش، بازبینی و CMS هنوز در جداول ذخیره/خوانده نمی‌شوند. Migration `202609280002_active_profile_rls.sql` پس از push باید با Actions اعمال و نتیجه تأیید شود.
-2. **Authentication و RBAC:** کد Supabase Auth برای ایمیل/رمز، تأیید ایمیل، بازیابی، PKCE، logout و پروفایل اضافه شده؛ برای فعال‌سازی باید public URL/key در Vercel و SMTP/redirect در Supabase تنظیم شود. در Supabase mode ثبت‌نام فقط customer است؛ نقش مدیر از RLS-protected profile خوانده می‌شود. Admin CRUD و endpointهای AI هنوز باید server-side authorize شوند؛ UI admin و checkout عمداً بسته‌اند.
+2. **Authentication و RBAC:** کد Supabase Auth برای ایمیل/رمز، تأیید ایمیل، بازیابی، PKCE، logout و پروفایل اضافه شده؛ برای فعال‌سازی باید public URL/key در Vercel و SMTP/redirect در Supabase تنظیم شود. در Supabase mode ثبت‌نام فقط customer است؛ نقش مدیر از RLS-protected profile خوانده می‌شود. داشبورد مدیر و فهرست‌های فقط‌خواندنی محصولات/سفارش‌ها/کاربران با RLS ارائه می‌شوند؛ Admin CRUD و endpointهای AI هنوز باید server-side authorize شوند و checkout عمداً بسته است.
 3. **پرداخت:** Checkout و پرداخت mock است. برای فروش واقعی باید درگاه کشور هدف انتخاب و verify سمت سرور، callback/webhook امضاشده، idempotency، لغو/بازپرداخت و تطبیق تراکنش اضافه شود. صرفاً نمایش صفحهٔ موفق کافی نیست.
 4. **موجودی و سفارش:** کاهش موجودی در مرورگر انجام می‌شود و تراکنش اتمیک/رزرو موجودی نداریم؛ دو مشتری هم‌زمان می‌توانند آخرین کالا را بخرند. ثبت سفارش، قیمت نهایی، تخفیف، هزینهٔ ارسال و stock باید سمت سرور و تراکنشی محاسبه شوند.
 5. **هزینه و دسترسی ابزار تصویر:** `/api/ai/product-photo` فقط same-origin و سقف حافظه‌ای دارد. Origin را یک کلاینت غیرمرورگری می‌تواند جعل کند و در serverless چند instance/cold start سقف حافظه‌ای سراسری نیست. تا اتصال آن به authentication واقعی و rate limit پایدار، این را کنترل دسترسی یا سقف مالی تضمین‌شده فرض نکنید. اگر حساب Cloudflare روی پلن پولی باشد، مصرف فراتر از سهمیهٔ رایگان ممکن است هزینه‌دار شود.
@@ -44,8 +44,8 @@
 - صفحات SPA، status تصویر، تولید تصویر و مسیر ذخیرهٔ Demo برای Vercel پیکربندی شده‌اند.
 - در این بررسی headerهای امنیتی پایه به `vercel.json` و پاسخ‌های سرور محلی اضافه شدند. این تغییرها در workspace هستند و تا push و deploy بعدی روی دامنهٔ زنده اعمال نمی‌شوند.
 - مالک تأیید کرده migration `202609280001_initial_schema.sql` از طریق GitHub Actions موفق اجرا شده است؛ اجرای remote مستقل از این محیط بررسی نشده. Migration تازهٔ `202609280002_active_profile_rls.sql` RLS را برای حساب غیرفعال سخت‌تر می‌کند و با push خودکار اجرا می‌شود.
-- Supabase Auth frontend integration (email/password, email confirmation redirect, password reset, PKCE, profile role lookup) اضافه شده، اما تا ثبت `SUPABASE_URL` و publishable/anon key در Vercel Auth در دامنهٔ زنده فعال نیست؛ SMTP و redirectهای Supabase نیز باید تنظیم شوند.
-- در Supabase Auth mode ورود Demo، admin و checkout mock عمداً مسدود می‌شوند تا نقش‌های نمایشی یا پرداخت ساختگی به‌عنوان واقعی دیده نشوند. Commerce catalog/order/admin CRUD هنوز Mock است.
+- Supabase Auth frontend integration (email/password, email confirmation redirect, password reset, PKCE, profile role lookup) اضافه شده؛ آخرین بررسی قبلی `/api/supabase-config` در دامنهٔ زنده `enabled=true` برگرداند. تغییرات تازهٔ role redirect و پنل read-only هنوز Deploy/Live-test نشده‌اند؛ SMTP و redirectهای Supabase نیز باید بررسی شوند.
+- در Supabase Auth mode ورود Demo و checkout mock عمداً مسدود می‌شوند تا نقش‌های نمایشی یا پرداخت ساختگی به‌عنوان واقعی دیده نشوند. Admin dashboard/list view فقط‌خواندنی است؛ Commerce catalog/order/admin CRUD هنوز Mock است.
 - `.env` و آپلودهای محلی در Git نادیده گرفته می‌شوند؛ از commitکردن token خودداری شود.
 
 ## تصمیم‌های مالک و موارد باقی‌مانده

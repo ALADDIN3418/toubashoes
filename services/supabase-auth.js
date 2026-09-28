@@ -88,7 +88,8 @@
     const result = requireClient().auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') passwordRecovery = true;
       // Defer Supabase calls until after its auth event lock is released.
-      setTimeout(() => setSession(session).catch(error => {
+      const shouldRender = !(event === 'SIGNED_IN' && g.location.pathname === '/login');
+      setTimeout(() => setSession(session, { render: shouldRender }).catch(error => {
         console.error('Supabase profile/session restore failed:', error);
         if (g.toast) g.toast(error.message || 'بازیابی وضعیت ورود انجام نشد.');
       }), 0);
@@ -121,7 +122,7 @@
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) throw new Error('ایمیل معتبر وارد کنید.');
     const { data, error } = await requireClient().auth.signInWithPassword({ email: normalizedEmail, password });
     if (error) throw error;
-    const user = await setSession(data.session);
+    const user = await setSession(data.session, { render: false });
     return user;
   }
 
@@ -158,7 +159,9 @@
     if (/user already registered/i.test(message)) return 'این ایمیل قبلاً ثبت‌نام کرده است؛ وارد شوید یا رمز را بازیابی کنید.';
     if (/password should be at least/i.test(message)) return 'رمز عبور کوتاه است؛ حداقل ۱۲ نویسه انتخاب کنید.';
     if (/rate limit|too many requests/i.test(message)) return 'درخواست‌های زیادی ارسال شده؛ کمی بعد دوباره تلاش کنید.';
-    return 'درخواست به Supabase انجام نشد. تنظیمات Auth/SMTP و گزارش اجرای درخواست را بررسی کنید.';
+    if (message.includes('پروفایل حساب') || message.includes('این حساب غیرفعال')) return message;
+    if (/failed to fetch|networkerror|load failed/i.test(message)) return 'ارتباط با Supabase برقرار نشد؛ URL، اتصال اینترنت و تنظیمات Auth را بررسی کنید.';
+    return 'ورود کامل نشد؛ ایمیل تأیید، وضعیت پروفایل و دسترسی RLS را بررسی کنید.';
   }
 
   g.ToubaAuth = Object.freeze({
