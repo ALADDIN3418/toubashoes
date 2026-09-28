@@ -5,7 +5,8 @@
 # Runtime uploads and user-generated product media
 /uploads/
 
-# Node.js tooling output
+# Node.js and Vercel build output
+/public/
 node_modules/
 .npm/
 .cache/

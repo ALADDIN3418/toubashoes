@@ -9,7 +9,7 @@
 - `npm run build` اجرای syntax/build-check بدون transpiler؛ `npm test` اجرای repository, runtime و E2E mock tests. برای هسته هیچ package خارجی لازم نیست.
 
 ## انتشار روی Vercel
-- مخزن را در Vercel دوباره Deploy کنید (یا پس از push منتظر deploy خودکار GitHub بمانید). `vercel.json`، preset را روی Other/static قرار می‌دهد، فایل‌های وب را از ریشه سرو می‌کند، مسیرهای SPA را به `index.html` می‌فرستد و endpointها را به Vercel Functions وصل می‌کند.
+- مخزن را در Vercel دوباره Deploy کنید (یا پس از push منتظر deploy خودکار GitHub بمانید). `vercel.json`، preset را روی Other/static قرار می‌دهد؛ `npm run build` فقط فایل‌های لازم وب را در `public/` آماده می‌کند، مسیرهای SPA به `index.html` می‌روند و endpointها به Vercel Functions متصل می‌شوند.
 - صفحه فروشگاه بدون کلید Cloudflare هم بالا می‌آید؛ فقط ساخت تصویر تا زمان تنظیم Environment Variables غیرفعال می‌ماند. برای فعال‌سازی تصویر، در Vercel → Project → Settings → Environment Variables، `CLOUDFLARE_ACCOUNT_ID` و یک `CLOUDFLARE_API_TOKEN` تازه با دسترسی محدود `Workers AI: Read` اضافه و سپس Redeploy کنید. توکن افشاشده در گفتگو را استفاده نکنید.
 - این Vercel deployment همچنان Demo است: داده‌های فروشگاه در LocalStorage هر مرورگر می‌ماند؛ ورود و پرداخت واقعی نیستند. same-origin و سقف حافظه‌ای API جای احراز هویت یا rate limit پایدار را نمی‌گیرند.
 

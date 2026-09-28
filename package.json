@@ -5,7 +5,7 @@
   "description": "Offline-first Persian RTL shoe store demo with repository-based mock data",
   "scripts": {
     "start": "node local-server.js",
-    "build": "node scripts/check.js",
+    "build": "node scripts/check.js && node scripts/build-vercel.js",
     "test": "node tests/repository-crud.js && node tests/cloudflare-image.js && node tests/vercel-api.js && node tests/runtime-smoke.js && node tests/demo-e2e.js"
   }
 }
