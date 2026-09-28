@@ -11,3 +11,5 @@ node_modules/
 .cache/
 coverage/
 npm-debug.log*
+/.ssh/
+/touba-shoes-github-ready.zip
