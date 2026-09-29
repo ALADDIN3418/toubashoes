@@ -4837,13 +4837,15 @@ body {
   font-size: 12px;
   color: #556956;
 }
+.ai-source-grid,
 .ai-angle-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 16px;
 }
-.ai-angle-card {
+.ai-source-card,
+.ai-final-output {
   min-width: 0;
   margin: 0;
   padding: 10px;
@@ -4851,15 +4853,27 @@ body {
   border-radius: 12px;
   background: #fff;
 }
-.ai-angle-card img,
-.ai-angle-placeholder {
+.ai-source-card label {
+  display: block;
+  min-height: 34px;
+  color: #26382a;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ai-source-card input[type="file"] {
+  width: 100%;
+  margin: 4px 0 8px;
+  font-size: 11px;
+}
+.ai-source-card img,
+.ai-source-placeholder {
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
   border-radius: 8px;
   background: #f0f2ed;
 }
-.ai-angle-placeholder {
+.ai-source-placeholder {
   display: grid;
   place-items: center;
   padding: 12px;
@@ -4867,28 +4881,35 @@ body {
   font-size: 12px;
   text-align: center;
 }
-.ai-angle-card figcaption {
-  margin-top: 8px;
-  color: #26382a;
-  font-size: 12px;
-  font-weight: 600;
-}
-.ai-angle-status {
-  min-height: 36px;
-  margin: 6px 0;
+.ai-source-status {
+  min-height: 32px;
+  margin-top: 7px;
   color: #68756a;
   font-size: 11px;
   line-height: 1.7;
 }
-.ai-angle-apply {
+.ai-final-output {
+  width: min(100%, 620px);
+  margin: 16px auto 0;
+}
+.ai-final-output img {
   width: 100%;
-  white-space: normal;
+  max-height: 620px;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #f0f2ed;
 }
-.ai-angle-apply:disabled {
-  cursor: not-allowed;
-  opacity: .55;
+.ai-final-output figcaption {
+  margin-top: 9px;
+  color: #26382a;
+  font-size: 12px;
+  text-align: center;
 }
+.ai-source-grid [hidden],
+.ai-final-output[hidden] { display: none !important; }
 @media (max-width: 680px) {
+  .ai-source-grid,
   .ai-angle-grid { grid-template-columns: 1fr; }
 }
 

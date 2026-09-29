@@ -211,13 +211,16 @@ const server = http.createServer(async (req, res) => {
     let body, sourceBytes;
     try {
       body = await readBody(req, 4 * 1024 * 1024);
-      sourceBytes = parseJpegDataUrl(body.image);
+      if (!Array.isArray(body.images) || body.images.length !== 3) {
+        throw Object.assign(new Error('سه عکس مرجع لازم است: نمای روبه‌رو، جانبی و پشت/پاشنه.'), { status:400 });
+      }
+      sourceBytes = body.images.map(image => parseJpegDataUrl(image, 768 * 1024));
     } catch (error) { return json(res, Number(error.status) || 400, { error:error.message }); }
     if (!useQuota(aiGenerationTimes, 20, 24 * 60 * 60 * 1000)) {
       return json(res, 429, { error:'سقف محافظ داخلی فروشگاه (۲۰ تصویر در ۲۴ ساعت) پر شده است تا مصرف سهمیهٔ رایگان Cloudflare کنترل شود.' }, { 'Retry-After':'86400' });
     }
     try {
-      const result = await generateProductPhoto({ imageBytes:sourceBytes, style:body.style, angle:body.angle, productHint:body.productHint });
+      const result = await generateProductPhoto({ imageBytes:sourceBytes, style:body.style, productHint:body.productHint });
       return json(res, 200, result);
     } catch (error) {
       const status = Number(error.status) || 502;

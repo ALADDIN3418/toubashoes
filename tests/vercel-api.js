@@ -5,6 +5,7 @@ const productPhoto = require('../api/ai/product-photo.js');
 const productImageUpload = require('../api/uploads/product-image.js');
 const productDescription = require('../api/ai/describe.js');
 const { generateLocalShoeDescription } = require('../app/applet/lib/gemini-describer.js');
+const { parseProductReferenceImages } = require('../lib/vercel-api.js');
 
 function response() {
   return {
@@ -16,6 +17,9 @@ function response() {
 function payload(res) { return JSON.parse(res.body); }
 
 async function main() {
+  const referenceDataUrl=`data:image/jpeg;base64,${Buffer.from([0xff,0xd8,0xff,0x00]).toString('base64')}`;
+  assert.equal(parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl]}).length,3);
+  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl]}),/سه عکس مرجع/);
   const draft = generateLocalShoeDescription({ name:'کفش نمونه', category:'formal' });
   assert.equal(draft.model,'local-draft');
   assert.doesNotMatch(`${draft.shortDesc} ${draft.longDesc} ${draft.features.join(' ')}`, /چرم طبیعی|طبی ارگونومیک|ضدباکتری|درجه یک|PU/i);

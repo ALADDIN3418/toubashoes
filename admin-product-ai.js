@@ -118,155 +118,170 @@
     const images = form?.elements?.images;
     const field = images?.closest('.field');
     if (!field || form.querySelector('.ai-product-studio')) return;
-    let sourceDataUrl = '';
-    let generatedDataUrls = Object.create(null);
+
+    const sourceDataUrls = Object.create(null);
+    let generatedDataUrl = '';
     let providerReady = false;
     let generationId = 0;
+    const sourceLoadIds = Object.create(null);
 
     const studio = document.createElement('section');
     studio.className = 'ai-product-studio field full';
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ استودیوی ساخت تصاویر سه‌زاویه‌ای کفش</h3>
-        <p class="ai-studio-note">سه درخواست جداگانه برای نمای روبه‌رو، جانبی و پاشنه ارسال می‌شود. تصویر تولیدی ممکن است جزئیات واقعی کفش را دقیق حفظ نکند؛ خروجی‌ها را بررسی کنید.</p>
+        <h3 id="ai-product-title">✨ استودیوی ساخت عکس محصول از سه زاویه</h3>
+        <p class="ai-studio-note">سه عکس از روبه‌رو، کنار و پشت/پاشنهٔ همان کفش بارگذاری کنید. هوش مصنوعی هر سه مرجع را با هم بررسی می‌کند و فقط یک تصویر نهاییِ یکپارچه می‌سازد.</p>
       </div>
+      <div class="ai-source-grid" id="ai-source-grid">${ANGLES.map(angle => `
+        <figure class="ai-source-card" data-source-card="${angle.id}">
+          <label for="ai-product-file-${angle.id}">${angle.label} · عکس مرجع</label>
+          <input id="ai-product-file-${angle.id}" type="file" accept="image/jpeg,image/png,image/webp" data-source-input="${angle.id}" aria-describedby="ai-studio-status">
+          <img data-source-preview="${angle.id}" alt="پیش‌نمایش عکس مرجع ${angle.label}" hidden>
+          <div class="ai-source-placeholder" data-source-placeholder="${angle.id}">برای این زاویه عکس انتخاب کنید</div>
+          <div class="ai-source-status" data-source-status="${angle.id}" role="status">عکسی انتخاب نشده</div>
+        </figure>`).join('')}</div>
       <div class="ai-studio-controls">
-        <label class="ai-file-label" for="ai-product-file">انتخاب عکس مرجع محصول</label>
-        <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
-        <label for="ai-product-style">سبک پس‌زمینه</label>
+        <label for="ai-product-style">سبک پس‌زمینهٔ خروجی</label>
         <select id="ai-product-style">
           <option value="warm-studio">استودیوی گرم و روشن</option>
           <option value="dark-luxury">لوکس تیره و سبز</option>
           <option value="natural-stone">سنگ طبیعی و نور روز</option>
         </select>
-        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>ساخت هر سه زاویه</button>
+        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>تولید یک تصویر نهایی</button>
       </div>
-      <div class="ai-angle-grid" id="ai-angle-grid">${ANGLES.map(angle => `
-        <figure class="ai-angle-card" data-angle-card="${angle.id}">
-          <img data-angle-preview="${angle.id}" alt="${angle.alt}" hidden>
-          <div class="ai-angle-placeholder" data-angle-placeholder="${angle.id}">پیش‌نمایش ${angle.label}</div>
-          <figcaption>${angle.label}</figcaption>
-          <div class="ai-angle-status" data-angle-status="${angle.id}" role="status">هنوز تولید نشده</div>
-          <button type="button" class="action ai-angle-apply" data-angle-apply="${angle.id}" disabled>افزودن این زاویه به تصاویر محصول</button>
-        </figure>`).join('')}</div>
+      <figure class="ai-final-output" id="ai-product-output-wrap" hidden>
+        <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از سه عکس مرجع">
+        <figcaption>یک خروجی نهایی از سه زاویهٔ مرجع — پیش از استفاده، جزئیات کفش را بررسی کنید.</figcaption>
+      </figure>
       <div class="ai-studio-actions">
+        <button type="button" class="action" id="ai-product-apply" disabled>افزودن تصویر نهایی به تصاویر محصول</button>
         <span id="ai-studio-status" role="status" aria-live="polite">در حال بررسی سرویس تصویر…</span>
       </div>`;
     field.before(studio);
 
     const status = studio.querySelector('#ai-studio-status');
     const generateButton = studio.querySelector('#ai-product-generate');
-    const fileInput = studio.querySelector('#ai-product-file');
+    const applyButton = studio.querySelector('#ai-product-apply');
     const styleSelect = studio.querySelector('#ai-product-style');
+
+    function updateGenerateButton() {
+      generateButton.disabled = !providerReady || ANGLES.some(angle => !sourceDataUrls[angle.id]);
+    }
 
     function clearGenerated() {
       generationId++;
-      generatedDataUrls = Object.create(null);
-      for (const angle of ANGLES) {
-        const preview = studio.querySelector(`[data-angle-preview="${angle.id}"]`);
-        preview.hidden = true; preview.removeAttribute('src');
-        studio.querySelector(`[data-angle-placeholder="${angle.id}"]`).hidden = false;
-        studio.querySelector(`[data-angle-status="${angle.id}"]`).textContent = 'هنوز تولید نشده';
-        studio.querySelector(`[data-angle-apply="${angle.id}"]`).disabled = true;
-      }
+      generatedDataUrl = '';
+      studio.querySelector('#ai-product-output-wrap').hidden = true;
+      studio.querySelector('#ai-product-output-preview').removeAttribute('src');
+      applyButton.disabled = true;
     }
 
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
       status.textContent = providerReady
-        ? 'سرویس تصویر آماده است؛ هر نوبت ساخت هر سه زاویه، سه تصویر از سهمیه مصرف می‌کند.'
+        ? 'سرویس آماده است؛ هر بار تولید، یک تصویر نهایی از سه عکس مرجع می‌سازد.'
         : 'برای ساخت تصویر، کلیدهای Cloudflare را در Environment Variables وریسل تنظیم کنید.';
       status.classList.toggle('is-ready', providerReady);
-      generateButton.disabled = !providerReady || !sourceDataUrl;
+      updateGenerateButton();
     }).catch(() => { status.textContent = 'سرویس تصویر در دسترس نیست.'; });
 
-    fileInput.addEventListener('change', async () => {
-      sourceDataUrl = ''; clearGenerated(); generateButton.disabled = true;
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > MAX_UPLOAD) {
-        status.textContent = 'فقط عکس JPG، PNG یا WebP با حجم حداکثر ۱۵ مگابایت انتخاب کنید.';
-        fileInput.value = ''; return;
-      }
-      status.textContent = 'در حال آماده‌سازی عکس…';
-      try {
-        sourceDataUrl = await resizeImage(file, 1280, .90);
-        generateButton.disabled = !providerReady;
-        status.textContent = providerReady ? 'عکس مرجع آماده است؛ ساخت هر سه نما را آغاز کنید.' : 'عکس آماده است؛ سرویس تصویر هنوز تنظیم نشده است.';
-      } catch (error) { status.textContent = error.message || 'خواندن عکس انجام نشد.'; }
+    studio.querySelectorAll('[data-source-input]').forEach(input => {
+      input.addEventListener('change', async () => {
+        const angleId = input.dataset.sourceInput;
+        const sourceId = (sourceLoadIds[angleId] || 0) + 1;
+        sourceLoadIds[angleId] = sourceId;
+        delete sourceDataUrls[angleId];
+        clearGenerated();
+        updateGenerateButton();
+        const preview = studio.querySelector(`[data-source-preview="${angleId}"]`);
+        const placeholder = studio.querySelector(`[data-source-placeholder="${angleId}"]`);
+        const sourceStatus = studio.querySelector(`[data-source-status="${angleId}"]`);
+        const file = input.files?.[0];
+        preview.hidden = true; placeholder.hidden = false;
+        if (!file) {
+          preview.hidden = true; placeholder.hidden = false;
+          sourceStatus.textContent = 'عکسی انتخاب نشده';
+          return;
+        }
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > MAX_UPLOAD) {
+          sourceStatus.textContent = 'فقط عکس JPG، PNG یا WebP با حجم حداکثر ۱۵ مگابایت انتخاب کنید.';
+          input.value = '';
+          return;
+        }
+        sourceStatus.textContent = 'در حال آماده‌سازی عکس…';
+        try {
+          const dataUrl = await resizeImage(file, 511, .84);
+          if (sourceId !== sourceLoadIds[angleId]) return;
+          sourceDataUrls[angleId] = dataUrl;
+          preview.src = dataUrl; preview.hidden = false; placeholder.hidden = true;
+          sourceStatus.textContent = 'عکس مرجع آماده است.';
+          updateGenerateButton();
+          status.textContent = ANGLES.every(angle => sourceDataUrls[angle.id])
+            ? (providerReady ? 'هر سه عکس آماده‌اند؛ یک تصویر نهایی بسازید.' : 'هر سه عکس آماده‌اند؛ سرویس تصویر هنوز تنظیم نشده است.')
+            : 'لطفاً برای هر سه زاویه یک عکس انتخاب کنید.';
+        } catch (error) {
+          if (sourceId !== sourceLoadIds[angleId]) return;
+          sourceStatus.textContent = error.message || 'خواندن عکس انجام نشد.';
+          input.value = '';
+        }
+      });
     });
 
-    styleSelect.addEventListener('change', clearGenerated);
+    styleSelect.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
     generateButton.addEventListener('click', async () => {
-      if (!sourceDataUrl) { status.textContent = 'ابتدا عکس محصول را انتخاب کنید.'; return; }
+      if (ANGLES.some(angle => !sourceDataUrls[angle.id])) {
+        status.textContent = 'برای هر سه زاویه یک عکس از همان کفش انتخاب کنید.';
+        updateGenerateButton();
+        return;
+      }
       if (!providerReady) { status.textContent = 'سرویس تصویر فعال نیست.'; return; }
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      status.textContent = 'در حال ساخت سه زاویه؛ ممکن است کمی زمان ببرد…';
-      let referenceDataUrl;
-      try { referenceDataUrl = await resizeImage(sourceDataUrl, 511, .90); }
-      catch (error) { status.textContent = error.message || 'آماده‌سازی عکس مرجع انجام نشد.'; generateButton.disabled = false; return; }
-
-      const productHint = [form.elements.name?.value, form.elements.category?.selectedOptions?.[0]?.textContent, form.elements.shortDesc?.value]
-        .filter(Boolean).join('؛ ').slice(0, 180);
-      const results = await Promise.all(ANGLES.map(async angle => {
-        const angleStatus = studio.querySelector(`[data-angle-status="${angle.id}"]`);
-        angleStatus.textContent = 'در حال تولید…';
-        try {
-          const response = await fetch('/api/ai/product-photo', {
-            method:'POST', headers:{ 'Content-Type':'application/json' },
-            body:JSON.stringify({ image:referenceDataUrl, style:styleSelect.value, angle:angle.id, productHint })
-          });
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(payload.error || `خطای سرویس (${response.status})`);
-          const dataUrl = await resizeImage(payload.dataUrl, 1280, .80);
-          if (currentGenerationId !== generationId) return { ok:false, cancelled:true };
-          generatedDataUrls[angle.id] = dataUrl;
-          const preview = studio.querySelector(`[data-angle-preview="${angle.id}"]`);
-          preview.src = dataUrl; preview.hidden = false;
-          studio.querySelector(`[data-angle-placeholder="${angle.id}"]`).hidden = true;
-          studio.querySelector(`[data-angle-apply="${angle.id}"]`).disabled = false;
-          angleStatus.textContent = 'آمادهٔ بازبینی';
-          return { ok:true };
-        } catch (error) {
-          if (currentGenerationId !== generationId) return { ok:false, cancelled:true };
-          angleStatus.textContent = error.message || 'ساخت این نما انجام نشد.';
-          return { ok:false };
-        }
-      }));
-      if (currentGenerationId !== generationId) return;
-      const complete = results.filter(result => result.ok).length;
-      status.textContent = complete === ANGLES.length
-        ? 'هر سه تصویر آماده‌اند؛ هر زاویهٔ تأییدشده را جداگانه به تصاویر محصول اضافه کنید.'
-        : `${complete} از ۳ تصویر آماده شد؛ می‌توانید زاویه‌های ناموفق را دوباره بسازید.`;
-      generateButton.disabled = !providerReady || !sourceDataUrl;
+      status.textContent = 'هر سه عکس در حال ارسال و تحلیل‌اند؛ یک تصویر نهایی ساخته می‌شود…';
+      try {
+        const productHint = [form.elements.name?.value, form.elements.category?.selectedOptions?.[0]?.textContent, form.elements.shortDesc?.value]
+          .filter(Boolean).join('؛ ').slice(0, 180);
+        const response = await fetch('/api/ai/product-photo', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body:JSON.stringify({ images:ANGLES.map(angle => sourceDataUrls[angle.id]), style:styleSelect.value, productHint })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `خطای سرویس (${response.status})`);
+        const output = await resizeImage(payload.dataUrl, 1280, .84);
+        if (currentGenerationId !== generationId) return;
+        generatedDataUrl = output;
+        studio.querySelector('#ai-product-output-preview').src = output;
+        studio.querySelector('#ai-product-output-wrap').hidden = false;
+        applyButton.disabled = false;
+        status.textContent = 'یک تصویر نهایی از هر سه زاویه آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.';
+      } catch (error) {
+        if (currentGenerationId !== generationId) return;
+        status.textContent = error.message || 'ساخت تصویر انجام نشد.';
+      } finally {
+        if (currentGenerationId === generationId) updateGenerateButton();
+      }
     });
 
-    studio.querySelectorAll('.ai-angle-apply').forEach(button => {
-      button.addEventListener('click', async () => {
-        const angleId = button.dataset.angleApply;
-        const dataUrl = generatedDataUrls[angleId];
-        if (!dataUrl) { status.textContent = 'ابتدا این زاویه را تولید و بررسی کنید.'; return; }
-        button.disabled = true;
-        studio.querySelector(`[data-angle-status="${angleId}"]`).textContent = 'در حال افزودن…';
-        try {
-          const response = await fetch('/api/uploads/product-image', {
-            method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ image:dataUrl })
-          });
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(payload.error || `ذخیره تصویر انجام نشد (${response.status})`);
-          const textarea = form.elements.images;
-          const existing = textarea.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean).filter(url => url !== payload.url);
-          textarea.value = [...existing, payload.url].join('\n');
-          studio.querySelector(`[data-angle-status="${angleId}"]`).textContent = 'به فهرست تصاویر محصول افزوده شد.';
-          status.textContent = 'تصویر به فرم محصول افزوده شد؛ برای ماندگاری، تغییرات محصول را ذخیره کنید.';
-        } catch (error) {
-          studio.querySelector(`[data-angle-status="${angleId}"]`).textContent = error.message || 'افزودن تصویر انجام نشد.';
-          button.disabled = false;
-        }
-      });
+    applyButton.addEventListener('click', async () => {
+      if (!generatedDataUrl) { status.textContent = 'ابتدا تصویر نهایی را تولید کنید.'; return; }
+      applyButton.disabled = true;
+      status.textContent = 'در حال افزودن تصویر نهایی به محصول…';
+      try {
+        const response = await fetch('/api/uploads/product-image', {
+          method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ image:generatedDataUrl })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `ذخیره تصویر انجام نشد (${response.status})`);
+        const textarea = form.elements.images;
+        const existing = textarea.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean).filter(url => url !== payload.url);
+        textarea.value = [...existing, payload.url].join('\n');
+        status.textContent = 'تصویر نهایی به فرم اضافه شد؛ برای ماندگاری، تغییرات محصول را ذخیره کنید.';
+      } catch (error) {
+        status.textContent = error.message || 'افزودن تصویر انجام نشد.';
+        applyButton.disabled = false;
+      }
     });
   }
 
