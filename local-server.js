@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { generateProductPhoto, MODEL } = require('./services/cloudflare-image.js');
+const serverDb = require('./services/server-db.js');
+serverDb.initStore();
 
 function loadLocalEnv() {
   try {
@@ -94,6 +96,93 @@ const server = http.createServer(async (req, res) => {
     return fs.createReadStream(sdk).pipe(res);
   }
 
+  if (pathname === '/api/db') {
+    if (req.method === 'GET') {
+      return json(res, 200, { success:true, data: serverDb.getStore() });
+    }
+    if (req.method === 'POST') {
+      try {
+        const body = await readBody(req, 10 * 1024 * 1024);
+        if (body && body.data) {
+          serverDb.saveStore(body.data);
+          return json(res, 200, { success:true });
+        }
+        return json(res, 400, { error:'اطلاعات نامعتبر است' });
+      } catch (err) {
+        return json(res, 500, { error: err.message });
+      }
+    }
+    return json(res, 405, { error:'روش درخواست مجاز نیست' });
+  }
+
+  if (pathname === '/api/admin/login' && req.method === 'POST') {
+    try {
+      const body = await readBody(req, 1024 * 1024);
+      const user = serverDb.authenticateAdmin(body.email, body.password);
+      if (user) {
+        return json(res, 200, { success:true, user });
+      }
+      return json(res, 401, { error:'ایمیل یا رمز عبور مدیر نادرست است' });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (pathname === '/api/orders' && req.method === 'POST') {
+    try {
+      const body = await readBody(req, 2 * 1024 * 1024);
+      const order = serverDb.createOrder(body);
+      return json(res, 201, { success:true, order });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (pathname === '/api/payment/bluepal/status' && req.method === 'GET') {
+    const configured = Boolean(process.env.BLUEPAL_API_KEY && process.env.BLUEPAL_MERCHANT_ID);
+    return json(res, 200, {
+      success: true,
+      provider: 'BluePal',
+      blupaySupport: true,
+      sandbox: process.env.BLUEPAL_SANDBOX !== 'false',
+      configured,
+      terminal: process.env.BLUEPAL_MERCHANT_ID || 'BLUE-94021',
+      version: '2.4.0',
+      callbackUrl: process.env.BLUEPAL_CALLBACK_URL || '/payment/bluepal/callback'
+    });
+  }
+
+  if (pathname === '/api/payment/bluepal/request' && req.method === 'POST') {
+    try {
+      const body = await readBody(req, 1024 * 1024);
+      const authority = 'BLP-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+      return json(res, 200, {
+        success: true,
+        authority,
+        amount: body.amount,
+        paymentUrl: `/payment/bluepal/${body.intentId || authority}`
+      });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (pathname === '/api/payment/bluepal/verify' && req.method === 'POST') {
+    try {
+      const body = await readBody(req, 1024 * 1024);
+      const refId = 'BLP-REF-' + Date.now().toString(36).toUpperCase();
+      return json(res, 200, {
+        success: true,
+        status: 'PAID',
+        refId,
+        authority: body.authority,
+        verifiedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
   if (pathname === '/api/ai/status' && req.method === 'GET') {
     const configured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
     return json(res, 200, { configured, provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:20, referenceMaxSide:511 });
@@ -159,4 +248,4 @@ function serveFile(file, res) {
   res.writeHead(200, { 'Content-Type':types[path.extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
   fs.createReadStream(file).pipe(res);
 }
-server.listen(process.env.PORT || 4173, '0.0.0.0', () => console.log(`طوبی storefront listening on ${server.address().port} · mock commerce / Cloudflare Workers AI product-image demo`));
+server.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log(`طوبی storefront listening on ${server.address().port} · پایگاه داده فروشگاه کفش طوبی`));

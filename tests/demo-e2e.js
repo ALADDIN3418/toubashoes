@@ -1,12 +1,12 @@
 /* Offline integration smoke test for the complete create → buy → pay → ship path. */
-const vm=require('vm'),fs=require('fs'),assert=require('assert');
+const vm=require('vm'),fs=require('fs'),path=require('path'),assert=require('assert');
 (async()=>{
  const mem={},app={innerHTML:''},modal={innerHTML:''},toast={textContent:'',classList:{add(){},remove(){}}};let variantRows=[];
  let checkoutForm={reportValidity:()=>true,values:{}},trackingResult={innerHTML:''};
  const query={'#app':app,'#modal-root':modal,'#toast':toast,'#variant-editor':{querySelectorAll:()=>variantRows},'#checkout-form':checkoutForm,'#tracking-result':trackingResult};
  let formValues={};class FD{constructor(form){this.form=form}get(k){return this.form.values?.[k]??''}}
  const ctx={console,Intl,Date,Math,URLSearchParams,FormData:FD,structuredClone,clearTimeout,setTimeout:()=>0,localStorage:{getItem:k=>mem[k]||null,setItem:(k,v)=>mem[k]=v,removeItem:k=>delete mem[k]},document:{querySelector:s=>query[s]||null,querySelectorAll:()=>[],body:{classList:{add(){},remove(){}}}},location:{pathname:'/admin',search:'?section=products',origin:'https://demo.local'},window:null};ctx.window=ctx;ctx.scrollTo=()=>{};vm.createContext(ctx);
- for(const file of ['services/data-provider.js','repositories/mock-repository.js','services/application-services.js','mock/seed-data.js','app.js','repositories/bootstrap.js','enhancements.js','customer-orders.js','stage3.js','services/cart-functions.js'])vm.runInContext(fs.readFileSync('/home/user/'+file,'utf8'),ctx,{filename:file});
+ for(const file of ['services/data-provider.js','repositories/mock-repository.js','services/application-services.js','mock/seed-data.js','app.js','repositories/bootstrap.js','enhancements.js','customer-orders.js','stage3.js','services/cart-functions.js'])vm.runInContext(fs.readFileSync(path.resolve(__dirname,'..',file),'utf8'),ctx,{filename:file});
  await ctx.demoLogin('admin');assert.equal(vm.runInContext('db.currentUser.role',ctx),'admin');
  const form={values:{name:'کفش آزمایشی یکپارچه',slug:'integration-shoe',sku:'TB-INTEG-1',category:'sport',brand:'طوبی',price:'750000',oldPrice:'900000',sizes:'۴۰',colors:'مشکی',images:'/hero-shoe.jpg',shortDesc:'توضیح کوتاه',longDesc:'توضیح کامل',features:'راحت\nبادوام',specifications:'جنس: چرم'},elements:{featured:{checked:true},bestSeller:{checked:true},active:{checked:true}}};
  variantRows=[{querySelector:s=>({'.v-size':{value:'۴۰'},'.v-color':{value:'مشکی'},'.v-sku':{value:'TB-INTEG-1-11'},'.v-stock':{value:'7'}}[s])}];

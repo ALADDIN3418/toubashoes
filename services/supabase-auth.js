@@ -9,6 +9,7 @@
   let subscription = null;
   let passwordRecovery = false;
   let applying = Promise.resolve(null);
+  let customUser = null;
 
   if (enabled) {
     client = g.supabase.createClient(config.url, config.anonKey, {
@@ -63,7 +64,7 @@
   async function setSession(session, { render = true } = {}) {
     applying = applying.catch(() => null).then(async () => {
       if (!session?.user) {
-        if (g.db) g.db.currentUser = null;
+        if (g.db && g.db.currentUser?.authProvider === 'supabase') g.db.currentUser = null;
         return null;
       }
       try {
@@ -87,7 +88,7 @@
     if (!enabled) throw new Error('کتابخانهٔ Supabase بارگذاری نشد؛ اتصال امن را دوباره بارگذاری کنید.');
     if (started) return null;
     started = true;
-    if (g.db) g.db.currentUser = null;
+    if (g.db && g.db.currentUser?.authProvider === 'supabase') g.db.currentUser = null;
     const { data, error } = await requireClient().auth.getSession();
     if (error) throw error;
     if (data.session) {
@@ -180,7 +181,8 @@
     configured,
     get client() { return client; },
     get passwordRecovery() { return passwordRecovery; },
-    get currentUser() { return g.db?.currentUser || null; },
+    get currentUser() { return customUser || g.db?.currentUser || null; },
+    set currentUser(val) { customUser = val; if (g.db) g.db.currentUser = val; },
     start,
     signUp,
     signIn,
