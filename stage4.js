@@ -123,7 +123,7 @@ function toggleMobileCategories(e,link){
 if(typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function' && !window.__navDismissListener){
   window.__navDismissListener = true;
   document.addEventListener('click', function(e){
-    let nav=document.getElementById('store-nav');
+    let nav=document.querySelector('#store-nav');
     let toggle=document.querySelector('.mobile-menu-toggle');
     if(nav && nav.classList.contains('nav-open')){
       if(!nav.contains(e.target) && !toggle?.contains(e.target)){
@@ -157,34 +157,33 @@ function categoryCards(){
     let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;
     let count=db.products.filter(p=>p.active&&p.category===c.id).length;
     let url=`/category/${encodeURIComponent(c.slug||c.id)}`;
-    return `<article class="lux-category-card">
-      <a href="${url}" class="lux-category-image" aria-label="${esc(c.name)}">
-        <div class="category-image-visual" style="background-image:url('${style.bg}');background-position:${style.pos}"></div>
-        <span class="category-tag-badge">${style.tag}</span>
-        <span class="category-overlay-hint">مشاهده کالکشن ${esc(c.name)} ←</span>
-      </a>
-      <div class="lux-category-info">
-        <div class="category-meta-line">
-          <span class="category-kicker">${style.kicker}</span>
-          <span class="category-count">${count?`${count.toLocaleString('fa-IR')} مدل`:'کالکشن تازه'}</span>
-        </div>
-        <h3 class="lux-category-title"><a href="${url}">${esc(c.name)}</a></h3>
-        <p class="lux-category-desc">${style.desc}</p>
-        <div class="lux-category-bottom">
-          <span class="category-guarantee"><i>✓</i> ضمانت اصالت</span>
-          <a class="category-view-btn" href="${url}" aria-label="مشاهده محصولات ${esc(c.name)}">
-            <span>مشاهده</span>
-            ${uiIcon('arrow')}
-          </a>
+    return `<a href="${url}" class="lux-category-card" aria-label="مشاهده دسته‌بندی ${esc(c.name)}">
+      <div class="category-image-visual" style="background-image:url('${style.bg}');background-position:${style.pos}"></div>
+      <div class="category-card-overlay"></div>
+      <div class="category-card-top">
+        <span class="category-tag-badge">${esc(style.tag)}</span>
+        <span class="category-count-badge">${count?`${count.toLocaleString('fa-IR')} مدل`:'کالکشن جدید'}</span>
+      </div>
+      <div class="category-card-bottom-info">
+        <span class="category-card-kicker">${esc(style.kicker)}</span>
+        <h3 class="lux-category-title">${esc(c.name)}</h3>
+        <div class="category-card-cta">
+          <span>مشاهده محصولات</span>
+          ${uiIcon('arrow')}
         </div>
       </div>
-    </article>`;
+    </a>`;
   }).join('');
 }
 
 function card(p){
   let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||5),0)/reviews.length:5,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onerror="this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorMap[c]||'#64748b'};border:1px solid rgba(0,0,0,0.15)" title="${esc(c)}"></span>`}).join('');
-  return `<article class="lux-product-card"><button class="favorite-button ${db.settings.favorites?.includes(p.id)?'is-favorite':''}" aria-label="افزودن ${esc(p.name)} به علاقه‌مندی‌ها" aria-pressed="${db.settings.favorites?.includes(p.id)||false}" onclick="toggleFav(this,'${p.id}')">${uiIcon('heart')}</button>${off?`<span class="product-discount">${off}٪ تخفیف</span>`:''}<a class="lux-product-image" href="/product/${encodeURIComponent(url)}">${visual}<span class="image-overlay">مشاهده جزئیات　←</span></a><div class="lux-product-info"><div style="display:flex;justify-content:space-between;align-items:center"><span class="product-category">${esc(category?.name||'کفش طوبی')}</span><div style="display:flex;gap:4px">${colorDots}</div></div><a href="/product/${encodeURIComponent(url)}" class="lux-product-name">${esc(p.name)}</a><div class="product-rating" aria-label="امتیاز ${rating.toFixed(1)} از ۵"><span>★★★★★</span><small>${rating.toFixed(1)}</small></div><div class="lux-price-row">${p.oldPrice>p.price?`<del>${toman(p.oldPrice)}</del>`:''}<strong>${toman(p.price)}</strong></div><div class="product-card-bottom"><span class="stock-indicator ${stock>0?'in-stock':'out-stock'}"><i></i>${stock>0?`${stock} عدد موجود`:'ناموجود'}</span><a class="product-view-link" href="/product/${encodeURIComponent(url)}">مشاهده محصول</a><button class="quick-add-button" ${stock>0?'':'disabled'} onclick="quickAdd('${p.id}')" aria-label="افزودن سریع ${esc(p.name)} به سبد">+</button></div></div></article>`;
+  let stockMarkup = stock === 1
+    ? `<span class="stock-indicator last-one" title="تنها ۱ عدد باقی مانده است"><i></i>تنها ۱ عدد باقی مانده</span>`
+    : stock > 1
+    ? `<span class="stock-indicator in-stock"><i></i>موجود</span>`
+    : `<span class="stock-indicator out-stock"><i></i>ناموجود</span>`;
+  return `<article class="lux-product-card"><button class="favorite-button ${db.settings.favorites?.includes(p.id)?'is-favorite':''}" aria-label="افزودن ${esc(p.name)} به علاقه‌مندی‌ها" aria-pressed="${db.settings.favorites?.includes(p.id)||false}" onclick="toggleFav(this,'${p.id}')">${uiIcon('heart')}</button>${off?`<span class="product-discount">${off}٪ تخفیف</span>`:''}<a class="lux-product-image" href="/product/${encodeURIComponent(url)}">${visual}<span class="image-overlay">مشاهده جزئیات　←</span></a><div class="lux-product-info"><div style="display:flex;justify-content:space-between;align-items:center"><span class="product-category">${esc(category?.name||'کفش طوبی')}</span><div style="display:flex;gap:4px">${colorDots}</div></div><a href="/product/${encodeURIComponent(url)}" class="lux-product-name">${esc(p.name)}</a><div class="product-rating" aria-label="امتیاز ${rating.toFixed(1)} از ۵"><span>★★★★★</span><small>${rating.toFixed(1)}</small></div><div class="lux-price-row">${p.oldPrice>p.price?`<del>${toman(p.oldPrice)}</del>`:''}<strong>${toman(p.price)}</strong></div><div class="product-card-bottom">${stockMarkup}<a class="product-view-link" href="/product/${encodeURIComponent(url)}">مشاهده محصول</a><button class="quick-add-button" ${stock>0?'':'disabled'} onclick="quickAdd('${p.id}')" aria-label="افزودن سریع ${esc(p.name)} به سبد">+</button></div></div></article>`;
 }
 
 /* Shopping Cart designed specifically for mobile: compact items, scroll container, sticky action bar */
@@ -329,28 +328,22 @@ function home(){
     <div class="lux-category-grid">
       ${categoryCards()}
       <!-- Featured Sale Category Card -->
-      <article class="lux-category-card sale-cat-card">
-        <a href="/shop?category=sale" class="lux-category-image" aria-label="تخفیف‌های ویژه طوبی">
-          <div class="category-image-visual" style="background-image:url('/hero-shoe.jpg');background-position:center"></div>
+      <a href="/shop?category=sale" class="lux-category-card sale-cat-card" aria-label="مشاهده حراج و تخفیف‌های ویژه طوبی">
+        <div class="category-image-visual" style="background-image:url('/hero-shoe.jpg');background-position:center"></div>
+        <div class="category-card-overlay"></div>
+        <div class="category-card-top">
           <span class="category-tag-badge special-sale">تا ۳۰٪ تخفیف</span>
-          <span class="category-overlay-hint">مشاهده حراجی طوبی ←</span>
-        </a>
-        <div class="lux-category-info">
-          <div class="category-meta-line">
-            <span class="category-kicker">پیشنهاد شگفت‌انگیز</span>
-            <span class="category-count">فرصت محدود</span>
-          </div>
-          <h3 class="lux-category-title"><a href="/shop?category=sale">تخفیف‌ها و حراج ویژه</a></h3>
-          <p class="lux-category-desc">تخفیف‌های ویژه بر روی مدل‌های پرفروش و منتخب طوبی</p>
-          <div class="lux-category-bottom">
-            <span class="category-guarantee" style="color:#d97706"><i>★</i> فرصت خرید اقتصادی</span>
-            <a class="category-view-btn" href="/shop?category=sale" aria-label="مشاهده تخفیف‌های طوبی">
-              <span>مشاهده</span>
-              ${uiIcon('arrow')}
-            </a>
+          <span class="category-count-badge">فرصت محدود</span>
+        </div>
+        <div class="category-card-bottom-info">
+          <span class="category-card-kicker" style="color:#fcd34d">پیشنهاد شگفت‌انگیز</span>
+          <h3 class="lux-category-title">تخفیف‌ها و حراج ویژه</h3>
+          <div class="category-card-cta">
+            <span>مشاهده حراجی</span>
+            ${uiIcon('arrow')}
           </div>
         </div>
-      </article>
+      </a>
     </div>
   </section>
 
@@ -400,13 +393,14 @@ function productDetailWithSticky(id){
    ========================================================================== */
 
 function triggerNavProgress(){
-  let bar=document.getElementById('nav-progress-bar');
+  let bar=document.querySelector('#nav-progress-bar');
   if(!bar){
     bar=document.createElement('div');
     bar.id='nav-progress-bar';
     bar.className='nav-progress-bar';
-    document.body.appendChild(bar);
+    if(document.body&&typeof document.body.appendChild==='function'){document.body.appendChild(bar);}
   }
+  if(!bar.classList) return;
   bar.classList.remove('done');
   void bar.offsetWidth;
   bar.classList.add('active');
@@ -435,8 +429,12 @@ window.refreshCartBadge=function(){
 
 let lastRenderedUrl='';
 
+let __isStage4Rendering=false;
 function animatedRender(isPageTransition=false){
-  let appEl=document.getElementById('app');
+  if(__isStage4Rendering)return;
+  __isStage4Rendering=true;
+  try{
+  let appEl=document.querySelector('#app');
   let currentUrl=location.pathname+location.search;
   let isNewPage=isPageTransition||(currentUrl!==lastRenderedUrl);
   lastRenderedUrl=currentUrl;
@@ -446,8 +444,20 @@ function animatedRender(isPageTransition=false){
   }
 
   const doRender=()=>{
-    __stage3BaseRender();
-    if(isNewPage&&appEl){
+    if((location.pathname==='/admin'||location.pathname.startsWith('/admin/'))&&window.ToubaAuthUI?.adminPage){
+      document.body.classList.remove('admin-body');
+      document.querySelector('#app').innerHTML=window.ToubaAuthUI.adminPage();
+      const s=new URLSearchParams(location.search).get('section')||'dashboard';
+      if(window.ToubaAuthUI?.loadAdminSection){
+        window.ToubaAuthUI.loadAdminSection(s);
+      }
+    }else if(typeof __stage3BaseRender==='function'){
+      __stage3BaseRender();
+    }
+    if(typeof updateSEO==='function'){
+      updateSEO();
+    }
+    if(isNewPage&&appEl&&appEl.classList){
       appEl.classList.remove('page-transitioning');
       void appEl.offsetWidth;
       appEl.classList.add('page-transitioning');
@@ -461,6 +471,9 @@ function animatedRender(isPageTransition=false){
     });
   }else{
     doRender();
+  }
+  }finally{
+    __isStage4Rendering=false;
   }
 }
 
@@ -483,9 +496,11 @@ function smoothGo(url,replace=false){
 }
 
 // Popstate for browser back/forward buttons
-window.addEventListener('popstate',()=>{
-  animatedRender(true);
-});
+if(typeof window!=='undefined'&&typeof window.addEventListener==='function'){
+  window.addEventListener('popstate',()=>{
+    animatedRender(true);
+  });
+}
 
 // Intercept clicks on links for smooth client navigation
 if(typeof document!=='undefined'&&typeof document.addEventListener==='function'&&!window.__linkInterceptAttached){
@@ -514,7 +529,7 @@ window.quickAdd=function(id){
 const __prevProductQty=window.productQty;
 window.productQty=function(d,id){
   if(__prevProductQty)__prevProductQty(d,id);
-  let q=document.getElementById('qty');
+  let q=document.querySelector('#qty');
   if(q){
     q.classList.remove('num-pop');
     void q.offsetWidth;
@@ -531,7 +546,357 @@ window.header=header;
 window.home=home;
 window.toggleFav=toggleFav;
 window.go=smoothGo;
+window.shop=modernShop;
+window.checkout=modernCheckout;
+window.tracking=modernTracking;
+window.contentPage=modernContentPage;
 window.render=animatedRender;
 window.animateCartBadge=animateCartBadge;
 
 animatedRender(true);
+
+
+
+/* ==========================================================================
+   Modern Luxury Views: Shop, Checkout, Tracking, Content
+   ========================================================================== */
+function modernShop(forceCategory = "") {
+  let params = new URLSearchParams(location.search);
+  shopState = {
+    ...shopState,
+    q: params.get("q") || "",
+    categories: params.get("category") ? [params.get("category")] : forceCategory ? [forceCategory] : [],
+    min: "",
+    max: "",
+    sizes: [],
+    colors: [],
+    sort: "popular",
+    page: 1,
+    pageSize: 8
+  };
+  let visibleCats = db.categories.filter(c => c.active);
+  let activeCatName = shopState.categories.length ? (db.categories.find(c => c.id === shopState.categories[0])?.name || "دسته‌بندی منتخب") : "";
+
+  return `${header()}<main class="page container">
+    <div class="breadcrumb"><a href="/">خانه</a>　/　<span>فروشگاه محصولات</span>${activeCatName ? "　/　<span>" + esc(activeCatName) + "</span>" : ""}</div>
+    
+    <div class="shop-hero-bar">
+      <div>
+        <h1 class="page-title">${shopState.q ? `نتایج جستجو برای: «${esc(shopState.q)}»` : activeCatName ? `کالکشن ${esc(activeCatName)} طوبی` : "فروشگاه و کالکشن محصولات طوبی"}</h1>
+        <p class="shop-hero-sub">کیفیت اصیل چرم طبیعی، طراحی ارگونومیک طبی و راحتی ماندگار در هر قدم</p>
+      </div>
+      <div class="shop-hero-badges">
+        <span class="shop-badge">${uiIcon("shield")} ضمانت اصالت چرم</span>
+        <span class="shop-badge">${uiIcon("truck")} ارسال سریع سراسر کشور</span>
+      </div>
+    </div>
+
+    <div class="shop-toolbar">
+      <button type="button" class="btn outline small filter-open" onclick="document.querySelector('#shop-filters').classList.add('drawer-open')">
+        ${uiIcon("cart")} فیلترهای پیشرفته
+      </button>
+      <span id="shop-result-count" class="shop-result-count"></span>
+      <div class="shop-sort-wrap">
+        <label for="shop-sort">مرتب‌سازی:</label>
+        <select id="shop-sort" onchange="setShopSort(this.value)">
+          <option value="popular">محبوب‌ترین و پرفروش</option>
+          <option value="newest">جدیدترین مدل‌ها</option>
+          <option value="cheap">ارزان‌ترین قیمت</option>
+          <option value="expensive">گران‌ترین و لوکس‌ترین</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="shop-layout">
+      <aside class="filter-panel" id="shop-filters">
+        <div class="filter-header">
+          <h3>فیلتر محصولات</h3>
+          <button type="button" class="filter-close" onclick="document.querySelector('#shop-filters').classList.remove('drawer-open')">✕ بستن</button>
+        </div>
+
+        <div class="filter-group">
+          <b>جستجوی سریع</b>
+          <input class="filter-search" value="${esc(shopState.q)}" oninput="shopState.q=this.value;shopState.page=1;renderShopResults()" placeholder="نام مدل یا کد SKU...">
+        </div>
+
+        <div class="filter-group">
+          <b>دسته‌بندی‌ها</b>
+          ${visibleCats.map(c => `
+            <label class="filter-checkbox-label">
+              <input type="checkbox" value="${c.id}" ${shopState.categories.includes(c.id) ? "checked" : ""} onchange="toggleShopFilter('categories',this.value,this.checked)">
+              <span>${esc(c.name)}</span>
+              <small>${db.products.filter(p => p.active && p.category === c.id).length.toLocaleString("fa-IR")}</small>
+            </label>
+          `).join("")}
+        </div>
+
+        <div class="filter-group">
+          <b>محدوده قیمت (تومان)</b>
+          <div class="range">
+            <input id="minprice" type="number" placeholder="از" oninput="shopState.min=this.value;shopState.page=1;renderShopResults()">
+            <input id="maxprice" type="number" placeholder="تا" oninput="shopState.max=this.value;shopState.page=1;renderShopResults()">
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <b>سایز</b>
+          <div class="filter-pills">
+            ${[...new Set(db.products.flatMap(p => p.variants.map(v => v.size)))].map(x => `
+              <label class="size-pill-label">
+                <input type="checkbox" value="${esc(x)}" onchange="toggleShopFilter('sizes',this.value,this.checked)">
+                <span>${esc(x)}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <b>رنگ</b>
+          <div class="filter-pills">
+            ${[...new Set(db.products.flatMap(p => p.variants.map(v => v.color)))].map(x => `
+              <label class="color-pill-label">
+                <input type="checkbox" value="${esc(x)}" onchange="toggleShopFilter('colors',this.value,this.checked)">
+                <span>${esc(x)}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+
+        <button type="button" class="action filter-clear-btn" onclick="clearShopFilters()">پاک کردن فیلترها</button>
+      </aside>
+
+      <section class="shop-main-section">
+        <div class="products shop-grid" id="shop-grid"></div>
+        <div id="shop-pagination" class="pagination"></div>
+      </section>
+    </div>
+  </main>${footer()}`;
+}
+
+function modernCheckout() {
+  if (!db.cart.length) {
+    smoothGo("/cart");
+    return "";
+  }
+  let tot = checkoutTotals("normal");
+  let options = DemoServices.shipping.options(tot.subtotal);
+
+  return `${header()}<main class="page container">
+    <div class="breadcrumb"><a href="/">خانه</a>　/　<a href="/cart">سبد خرید</a>　/　<span>تسویه حساب امن</span></div>
+    <h1 class="page-title">تکمیل اطلاعات و ثبت سفارش</h1>
+
+    <form id="checkout-form" class="checkout-layout">
+      <section class="checkout-info-col">
+        <div class="panel checkout-panel">
+          <div class="panel-head-row">
+            <h3>اطلاعات تحویل‌گیرنده</h3>
+            <span class="panel-step-badge">مرحله ۱ از ۲</span>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="co-name">نام و نام خانوادگی تحویل‌گیرنده *</label>
+              <input id="co-name" required minlength="3" name="name" value="${esc(db.currentUser?.name || "")}" placeholder="نام و نام خانوادگی">
+            </div>
+            <div class="field">
+              <label for="co-phone">شماره موبایل هماهنگی تحویل *</label>
+              <input id="co-phone" required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" value="${esc(db.currentUser?.phone || "")}" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
+            </div>
+            <div class="field">
+              <label for="co-prov">استان *</label>
+              <select id="co-prov" required name="province">
+                <option value="">انتخاب استان</option>
+                ${["تهران","البرز","اصفهان","فارس","خراسان رضوی","گیلان","مازندران","آذربایجان شرقی","خوزستان","یزد","کرمان","قم"].map(x => `<option value="${x}">${x}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="co-city">شهر *</label>
+              <input id="co-city" required minlength="2" name="city" placeholder="نام شهر">
+            </div>
+            <div class="field full">
+              <label for="co-addr">نشانی دقیق پستی *</label>
+              <textarea id="co-addr" required minlength="10" name="address" placeholder="خیابان اصلی، کوچه، پلاک، زنگ، واحد"></textarea>
+            </div>
+            <div class="field">
+              <label for="co-postal">کد پستی ۱۰ رقمی *</label>
+              <input id="co-postal" required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal" placeholder="کد پستی بدون خط تیره">
+            </div>
+            <div class="field">
+              <label for="co-note">یادداشت برای تحویل (اختیاری)</label>
+              <input id="co-note" name="note" placeholder="مثلاً: بعدازظهر ارسال شود">
+            </div>
+          </div>
+        </div>
+
+        <div class="panel checkout-panel" style="margin-top:18px">
+          <div class="panel-head-row">
+            <h3>روش ارسال کالا</h3>
+          </div>
+          <div class="shipping-options-list">
+            ${options.map(x => `
+              <label class="shipping-option ${x.id === "normal" ? "selected" : ""}">
+                <div class="shipping-meta">
+                  <input type="radio" name="shippingMethod" value="${x.id}" ${x.id === "normal" ? "checked" : ""} ${x.available ? "" : "disabled"} onchange="refreshCheckoutTotals()">
+                  <div>
+                    <b>${esc(x.name)}</b>
+                    <small>${x.id === "free" ? "خرید بالاتر از ۲ میلیون تومان شامل ارسال رایگان طوبی است." : x.id === "express" ? "ارسال فوری پیشتاز هوایی یا پیک ویژه." : "ارسال استاندارد با بسته‌بندی ایمن جعبه کفش."}</small>
+                  </div>
+                </div>
+                <span class="shipping-cost">${x.cost ? toman(x.cost) : "رایگان"}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="panel checkout-panel" style="margin-top:18px">
+          <div class="panel-head-row">
+            <h3>درگاه پرداخت الکترونیک</h3>
+            <span class="panel-step-badge">امن و شاپرک</span>
+          </div>
+          <div class="checkout-payment-methods">
+            <label class="payment-method-card active-method">
+              <div class="pm-head">
+                <input type="radio" name="paymentMethod" value="bluepal" checked>
+                <div>
+                  <b>درگاه پرداخت هوشمند بلوپال</b>
+                  <span class="pm-badge">پیشنهادی • ۱ کلیک</span>
+                  <small>پرداخت سریع بدون رمز پویا برای کاربران بلوبانک یا کارت به کارت فوری</small>
+                </div>
+              </div>
+              <span class="pm-logo">BluePal</span>
+            </label>
+            <label class="payment-method-card">
+              <div class="pm-head">
+                <input type="radio" name="paymentMethod" value="mock">
+                <div>
+                  <b>درگاه پرداخت اینترنتی شاپرک</b>
+                  <span class="pm-badge outline">کلیه کارت‌ها</span>
+                  <small>اتصال به درگاه بانکی شاپرک با کلیه کارت‌های عضو شبکه شتاب با رمز دوم پویا</small>
+                </div>
+              </div>
+              <span class="pm-logo">شاپرک</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <aside class="cart-summary checkout-summary" id="checkout-summary">
+        <h3>خلاصه فاکتور خرید (${db.cart.reduce((n, x) => n + x.qty, 0).toLocaleString("fa-IR")} کالا)</h3>
+        
+        <div class="checkout-items-preview">
+          ${db.cart.map(i => {
+            let p = product(i.id);
+            return `<div class="checkout-item-line">
+              <div class="item-desc">
+                <b>${esc(p?.name || "")}</b>
+                <small>سایز ${esc(i.size)} · رنگ ${esc(i.color)} × ${i.qty}</small>
+              </div>
+              <span class="item-cost">${toman((p?.price || 0) * i.qty)}</span>
+            </div>`;
+          }).join("")}
+        </div>
+
+        <div class="coupon-box-modern">
+          <label for="checkout-coupon">کد تخفیف</label>
+          <div class="coupon-row">
+            <input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code || "")}">
+            <button type="button" class="btn small" onclick="applyCheckoutCoupon()">ثبت کد</button>
+          </div>
+        </div>
+
+        <div id="checkout-totals" class="checkout-totals-modern">
+          <div class="summary-line">
+            <span>مبلغ کالاها</span>
+            <b>${toman(tot.subtotal)}</b>
+          </div>
+          ${tot.discount ? `
+            <div class="summary-line discount-line">
+              <span>تخفیف</span>
+              <b>− ${toman(tot.discount)}</b>
+            </div>
+          ` : ""}
+          <div class="summary-line">
+            <span>هزینه ارسال</span>
+            <b id="ship-total">${tot.shipping ? toman(tot.shipping) : "رایگان"}</b>
+          </div>
+          <div class="summary-line total">
+            <span>مبلغ قابل پرداخت</span>
+            <b>${toman(tot.total)}</b>
+          </div>
+        </div>
+
+        <button type="submit" class="btn checkout-submit-btn" style="width:100%;margin-top:16px">
+          ادامه به درگاه پرداخت امن ←
+        </button>
+
+        <div class="checkout-trust-features">
+          <span>${uiIcon("shield")} ۷ روز گارانتی تعویض سایز رایگان</span>
+          <span>${uiIcon("truck")} بسته‌بندی ویژه حفظ فرم کفش</span>
+        </div>
+      </aside>
+    </form>
+  </main>${footer()}`;
+}
+
+function modernTracking() {
+  return `${header()}<main class="page container">
+    <div class="breadcrumb"><a href="/">خانه</a>　/　<span>پیگیری سفارش</span></div>
+    
+    <div class="tracking-wrap-modern">
+      <form class="auth-card tracking-card-modern" onsubmit="event.preventDefault();track(this.code.value)">
+        <div class="tracking-icon-emblem">📦</div>
+        <h1>پیگیری وضعیت سفارش</h1>
+        <p class="tracking-desc">شماره سفارش (مانند TB-2408) یا کد رهگیری را وارد نمایید تا آخرین وضعیت ارسال و پردازش انبار نمایش داده شود.</p>
+        
+        <div class="field">
+          <label for="track-code">شماره سفارش یا کد رهگیری پستی</label>
+          <input id="track-code" name="code" required placeholder="مثلاً TB-2408" autocomplete="off">
+        </div>
+        
+        <button class="btn" style="width:100%">استعلام آخرین وضعیت</button>
+        
+        <div id="tracking-result" class="tracking-result-box"></div>
+      </form>
+    </div>
+  </main>${footer()}`;
+}
+
+function modernContentPage(type) {
+  let data = {
+    about: ["درباره کفش طوبی", db.settings.homepage?.aboutText || db.settings.about || "فروشگاه تخصصی کفش و چرم طوبی با سال‌ها سابقه درخشان در طراحی و تولید کفش‌های اداری، روزمره و مجلسی تمام‌چرم. هدف ما خلق قدم‌هایی مطمئن، راحت و برازنده برای شماست."],
+    contact: ["تماس با ما", `تیم پشتیبانی کفش طوبی آماده راهنمایی شما در انتخاب سایز و مدل است.<br><br><b>شماره تماس پشتیبانی:</b> ${esc(db.settings.phone || "۰۲۱-۸۸۸۸۸۸۸")}<br><b>ایمیل:</b> info@toubashoes.ir<br><b>نشانی مرکزی:</b> ${esc(db.settings.address || "تهران، خیابان سپهسالار، پلاک طوبی")}<br><b>ساعات کاری:</b> شنبه تا پنجشنبه از ۹ صبح الی ۲۰ شب`],
+    terms: ["شرایط و قوانین", "ثبت هرگونه سفارش در فروشگاه طوبی به منزله پذیرش کامل شرایط خرید و استانداردهای چرم است. کلیه محصولات پیش از ارسال توسط واحد کنترل کیفیت بررسی می‌شوند. در صورت عدم تطابق سایز یا سلیقه، امکان تعویض یا مرجوعی کالا تا ۷ روز پس از تحویل، در صورت حفظ شرایط اولیه محصول، فراهم است."],
+    privacy: ["حریم خصوصی کاربران", "فروشگاه کفش طوبی به حریم خصوصی شما احترام کامل می‌گذارد. شماره‌های همراه، آدرس و اطلاعات پستی مشتریان صرفاً به منظور پردازش، ثبت و ارسال مرسوله پستی استفاده شده و نزد ما با بالاترین ضریب امنیتی محفوظ است."]
+  }[type] || ["صفحه اطلاعات", "اطلاعات در دسترس نیست"];
+
+  return `${header()}<main class="page container">
+    <div class="breadcrumb"><a href="/">خانه</a>　/　<span>${data[0]}</span></div>
+    
+    <div class="panel content-panel-modern">
+      <h1 class="page-title">${data[0]}</h1>
+      <div class="content-body-modern">
+        <p>${data[1]}</p>
+      </div>
+
+      ${type === "contact" ? `
+        <div class="contact-form-modern">
+          <h3>ارسال پیام سریع به پشتیبانی</h3>
+          <form class="form-grid" onsubmit="event.preventDefault();toast('پیام شما ثبت شد؛ کارشناسان طوبی به زودی با شما تماس می‌گیرند.')">
+            <div class="field">
+              <label>نام و نام خانوادگی</label>
+              <input required placeholder="نام شما">
+            </div>
+            <div class="field">
+              <label>شماره تماس</label>
+              <input required placeholder="۰۹۱۲۳۴۵۶۷۸۹">
+            </div>
+            <div class="field full">
+              <label>پیام شما</label>
+              <textarea required placeholder="متن پیام خود را بنویسید..."></textarea>
+            </div>
+            <button class="btn">ارسال پیام به پشتیبانی</button>
+          </form>
+        </div>
+      ` : ""}
+    </div>
+  </main>${footer()}`;
+}
