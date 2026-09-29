@@ -167,6 +167,12 @@
     if (g.render) g.render();
   }
 
+  async function getAccessToken() {
+    const { data, error } = await requireClient().auth.getSession();
+    if (error) throw error;
+    return data.session?.access_token || '';
+  }
+
   function publicError(error) {
     const message = String(error?.message || 'درخواست انجام نشد.');
     if (/invalid login credentials/i.test(message)) return 'ایمیل یا رمز عبور درست نیست.';
@@ -190,6 +196,7 @@
     signIn,
     sendPasswordReset,
     updatePassword,
+    getAccessToken,
     signOut,
     publicError,
     dispose() { subscription?.unsubscribe?.(); }

@@ -44,6 +44,8 @@ async function main() {
     assert.equal(result.model, MODEL);
     assert.equal(result.provider, 'Cloudflare Workers AI');
     assert.equal(result.dataUrl, `data:image/png;base64,${Buffer.from('image-test').toString('base64')}`);
+    global.fetch = async () => new Response(JSON.stringify({ success:true, result:{ image:Buffer.alloc(3 * 1024 * 1024 + 1).toString('base64') } }), { status:200, headers:{ 'Content-Type':'application/json' } });
+    await assert.rejects(() => generateProductPhoto({ imageBytes:[Buffer.from('front'),Buffer.from('side'),Buffer.from('heel')] }), /سقف امن پاسخ سرور/);
   } finally {
     global.fetch = oldFetch;
     if (oldAccount === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID; else process.env.CLOUDFLARE_ACCOUNT_ID = oldAccount;

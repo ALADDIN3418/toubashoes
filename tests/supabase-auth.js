@@ -7,17 +7,18 @@ const path = require('path');
 (async () => {
   const calls = {};
   let authCallback;
+  let sessionAvailable=false;
   const profile = { id:'user-1', email:'shopper@example.com', display_name:'مشتری طوبی', phone:null, role:'customer', is_active:true };
   const session = { access_token:'test-only-access', refresh_token:'test-only-refresh', user:{ id:'user-1', email:'shopper@example.com', user_metadata:{ display_name:'مشتری طوبی' } } };
   const client = {
     auth: {
-      async getSession(){ return { data:{ session:null }, error:null }; },
+      async getSession(){ return { data:{ session:sessionAvailable?session:null }, error:null }; },
       onAuthStateChange(callback){ authCallback=callback; return { data:{ subscription:{ unsubscribe(){} } } }; },
       async signUp(input){ calls.signUp=input; return { data:{ session:null, user:{id:'user-2'} }, error:null }; },
-      async signInWithPassword(input){ calls.signIn=input; return { data:{ session, user:session.user }, error:null }; },
+      async signInWithPassword(input){ calls.signIn=input; sessionAvailable=true; return { data:{ session, user:session.user }, error:null }; },
       async resetPasswordForEmail(email, options){ calls.reset={email,options}; return {error:null}; },
       async updateUser(input){ calls.updateUser=input; return {error:null}; },
-      async signOut(){ calls.signOut=true; return {error:null}; }
+      async signOut(){ calls.signOut=true; sessionAvailable=false; return {error:null}; }
     },
     from(table){
       assert.equal(table,'profiles');
@@ -49,6 +50,8 @@ const path = require('path');
   assert.equal(user.role,'customer');
   assert.equal(user.authProvider,'supabase');
   assert.equal(calls.profileFilter[1],'user-1');
+  assert.equal(await auth.getAccessToken(),'test-only-access','admin API requests can reuse the authenticated Supabase session token');
+  sessionAvailable=false;
   const removedKeys=[];
   window.db={currentUser:{id:'cached-demo-admin',role:'super_admin',authProvider:'demo'}};
   window.localStorage={removeItem(key){removedKeys.push(key);}};

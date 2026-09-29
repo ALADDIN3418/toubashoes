@@ -4991,3 +4991,21 @@ body {
   0% { border-color: var(--lime, #8cad4b); box-shadow: 0 0 0 3px rgba(140, 173, 75, 0.35); }
   100% { border-color: #dfdfd7; box-shadow: none; }
 }
+
+/* Authenticated admin catalog bulk editing and progressive quick-create flow */
+.admin-catalog-toolbar,.admin-bulk-heading,.admin-catalog-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.admin-catalog-toolbar{margin:0 0 14px}
+.admin-catalog-actions{justify-content:flex-end}
+.admin-bulk-card{border:1px solid #dfe8dc;background:#fbfcf8;border-radius:12px;padding:14px;margin:12px 0 16px}
+.admin-bulk-heading{margin-bottom:12px}
+.admin-bulk-heading>div{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.admin-bulk-heading>div>b{color:#183323}
+.admin-bulk-heading>div>span,.admin-bulk-heading>label,.admin-bulk-controls label{font-size:12px;color:#58675a}
+.admin-bulk-heading input,.data-table input[type=checkbox]{accent-color:#315e3b}
+.admin-bulk-controls{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.admin-bulk-controls label{display:flex;flex-direction:column;gap:5px;min-width:125px}
+.admin-bulk-controls select,.admin-bulk-controls input{height:38px;max-width:190px;border:1px solid #d8dfd5;border-radius:7px;background:#fff;padding:6px 9px;color:#253328}
+.admin-catalog-toolbar .muted{font-size:12px;color:#687468}
+.quick-product-form>h2{margin-top:0}
+.quick-product-form>.muted{line-height:1.8}
+@media(max-width:700px){.admin-bulk-controls{align-items:stretch}.admin-bulk-controls label,.admin-bulk-controls select,.admin-bulk-controls input{width:100%;max-width:none}.admin-bulk-controls button{width:100%}.admin-catalog-actions{width:100%;justify-content:stretch}.admin-catalog-actions button{flex:1}.admin-bulk-card{padding:10px}}

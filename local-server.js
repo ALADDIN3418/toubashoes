@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { generateProductPhoto, MODEL } = require('./services/cloudflare-image.js');
-const { persistentAiQuotaConfig, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
+const { persistentAiQuotaConfig, requireAdminRequest, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
 
@@ -187,11 +187,12 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/ai/status' && req.method === 'GET') {
     const cloudflareConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
     const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
-    return json(res, 200, { configured:cloudflareConfigured, cloudflareConfigured, persistentQuotaConfigured, quotaMode:persistentQuotaConfigured ? 'persistent-utc' : 'process-memory', provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:50, referenceMaxSide:511 });
+    return json(res, 200, { configured:cloudflareConfigured, cloudflareConfigured, persistentQuotaConfigured, quotaMode:persistentQuotaConfigured ? 'persistent-utc' : 'process-memory', provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:50, referenceMaxSide:511, note:persistentQuotaConfigured ? 'Supabase public configuration is present; RPC migration readiness is checked during the reservation request.' : 'Local development uses process-memory quota; production requires the durable Supabase migration.' });
   }
   if (pathname === '/api/ai/describe') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
     if (!requireSameOrigin(req, res)) return;
+    try { await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
     let body;
     try {
       body = await readBody(req, 1024 * 1024);
@@ -207,6 +208,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/ai/product-photo') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
     if (!requireSameOrigin(req, res)) return;
+    let authContext;
+    try { authContext = await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
     if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) {
       return json(res, 503, { error:'سرویس هنوز تنظیم نشده است. Account ID و API Token را فقط در فایل محلی .env وارد کنید؛ این اطلاعات را در گفتگو نفرستید.' });
     }
@@ -221,18 +224,18 @@ const server = http.createServer(async (req, res) => {
     const persistentQuota = persistentAiQuotaConfig();
     let reservationId = null, persistentReservation = false;
     try {
-      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50); persistentReservation = true; }
+      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = true; }
       else reservationId = reserveWindowQuota('local-ai', 50, 24 * 60 * 60 * 1000);
       if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است؛ سهمیه و هزینهٔ Cloudflare نیز جداگانه اعمال می‌شود.' });
-    } catch (error) { return json(res, 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
+    } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
     try {
       const result = await generateProductPhoto({ imageBytes:sourceBytes, style:body.style, productHint:body.productHint });
-      const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true) : finishWindowQuota('local-ai', reservationId, true);
+      const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
       return json(res, 200, result);
     } catch (error) {
       if (reservationId) {
-        try { if (persistentReservation) await finalizePersistentAiQuota(reservationId, false); else finishWindowQuota('local-ai', reservationId, false); } catch { /* expired reservations are reclaimed automatically */ }
+        try { if (persistentReservation) await finalizePersistentAiQuota(reservationId, false, authContext); else finishWindowQuota('local-ai', reservationId, false); } catch { /* expired reservations are reclaimed automatically */ }
       }
       const status = Number(error.status) || 502;
       return json(res, status, { error:error.message || 'ساخت تصویر با Cloudflare انجام نشد.' });
@@ -241,6 +244,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/uploads/product-image') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
     if (!requireSameOrigin(req, res)) return;
+    try { await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
     let body, data;
     try { body = await readBody(req, 3 * 1024 * 1024); data = parseJpegDataUrl(body.image, 2 * 1024 * 1024); }
     catch (error) { return json(res, Number(error.status) || 400, { error:error.message || 'عکس معتبر نیست.' }); }

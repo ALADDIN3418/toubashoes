@@ -7,6 +7,13 @@
     { id:'heel', label:'نمای پاشنه', alt:'خروجی هوش مصنوعی از نمای پاشنه کفش' }
   ];
 
+  async function adminAuthHeaders() {
+    if (!window.ToubaAuth?.configured) return {};
+    const token = await window.ToubaAuth.getAccessToken();
+    if (!token) throw new Error('نشست مدیر منقضی شده است؛ دوباره وارد شوید.');
+    return { Authorization:`Bearer ${token}` };
+  }
+
   function generateLocalDescription({ name, category, brand, sizes, colors, features:providedFeatures, specifications:providedSpecifications }) {
     const n = String(name || 'کفش طوبی').trim();
     const c = String(category || '').toLowerCase();
@@ -83,7 +90,7 @@
       let result = null;
       try {
         const response = await fetch('/api/ai/describe', {
-          method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(input)
+          method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() }, body:JSON.stringify(input)
         });
         if (response.ok) result = await response.json();
       } catch { /* Use the local draft generator when the API is unavailable. */ }
@@ -180,10 +187,10 @@
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
       status.textContent = providerReady
-        ? `سرویس آماده است؛ از سه عکس یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با شمارندهٔ پایدار و سراسری' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
+        ? `سرویس آماده است؛ از سه عکس یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با پیکربندی Supabase برای شمارندهٔ پایدار (اجرای migration هنگام رزرو بررسی می‌شود)' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
         : data.cloudflareConfigured && data.quotaMode === 'unavailable'
-          ? 'برای فعال‌شدن امن تولید تصویر، مهاجرت سهمیهٔ Supabase را اعمال و SUPABASE_SERVICE_ROLE_KEY را فقط در Environment Variables سرور Vercel تنظیم کنید.'
-          : 'برای ساخت تصویر، کلیدهای Cloudflare را در Environment Variables وریسل تنظیم کنید.';
+          ? 'کلیدهای Cloudflare تنظیم شده‌اند؛ برای آماده‌شدن، migration سهمیهٔ پایدار را در Supabase اجرا و SUPABASE_URL همراه SUPABASE_PUBLISHABLE_KEY یا SUPABASE_ANON_KEY را در Environment Variables وریسل تنظیم کنید؛ سپس deploy را بازسازی کنید. Service-role key لازم نیست.'
+          : 'برای ساخت تصویر، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در Environment Variables وریسل تنظیم کنید؛ کلیدها را در مرورگر یا کد قرار ندهید.';
       status.classList.toggle('is-ready', providerReady);
       updateGenerateButton();
     }).catch(() => { status.textContent = 'سرویس تصویر در دسترس نیست.'; });
@@ -246,7 +253,7 @@
         const productHint = [form.elements.name?.value, form.elements.category?.selectedOptions?.[0]?.textContent, form.elements.shortDesc?.value]
           .filter(Boolean).join('؛ ').slice(0, 180);
         const response = await fetch('/api/ai/product-photo', {
-          method:'POST', headers:{ 'Content-Type':'application/json' },
+          method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
           body:JSON.stringify({ images:ANGLES.map(angle => sourceDataUrls[angle.id]), style:styleSelect.value, productHint })
         });
         const payload = await response.json().catch(() => ({}));
@@ -272,7 +279,7 @@
       status.textContent = 'در حال افزودن تصویر نهایی به محصول…';
       try {
         const response = await fetch('/api/uploads/product-image', {
-          method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ image:generatedDataUrl })
+          method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() }, body:JSON.stringify({ image:generatedDataUrl })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || `ذخیره تصویر انجام نشد (${response.status})`);

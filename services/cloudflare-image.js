@@ -2,7 +2,8 @@
 
 const MODEL = '@cf/black-forest-labs/flux-2-klein-9b';
 const DEFAULT_MODEL = MODEL;
-const MAX_OUTPUT_BYTES = 18 * 1024 * 1024;
+// Keep base64 JSON responses below Vercel Functions' response-body ceiling.
+const MAX_OUTPUT_BYTES = 3 * 1024 * 1024;
 
 const REFERENCE_ROLES = Object.freeze(['front three-quarter view', 'outer side profile', 'rear and heel view']);
 
@@ -67,7 +68,7 @@ async function generateProductPhoto({ imageBytes, style = 'warm-studio', product
       const detail = (await response.text().catch(() => '')).slice(0, 500);
       throw Object.assign(new Error(detail || `Cloudflare Workers AI پاسخ نداد (${response.status}).`), { status:response.status === 429 ? 429 : 502 });
     }
-    if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) throw Object.assign(new Error('حجم خروجی مدل غیرمجاز است.'), { status:502 });
+    if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) throw Object.assign(new Error('حجم خروجی مدل از سقف امن پاسخ سرور (۳ مگابایت) بیشتر است؛ تولید را دوباره با خروجی استاندارد امتحان کنید.'), { status:502 });
     return { dataUrl:`data:image/png;base64,${bytes.toString('base64')}`, model, provider:'Cloudflare Workers AI' };
   } catch (error) {
     if (error.name === 'AbortError') throw Object.assign(new Error('زمان پاسخ مدل Cloudflare تمام شد؛ دوباره تلاش کنید.'), { status:504 });

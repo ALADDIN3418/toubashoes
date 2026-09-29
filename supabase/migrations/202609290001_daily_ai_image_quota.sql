@@ -34,6 +34,9 @@ declare
   v_reservation uuid;
   v_has_capacity boolean;
 begin
+  if auth.uid() is null or not public.current_user_is_admin() then
+    raise exception 'Active admin session required' using errcode = '42501';
+  end if;
   if p_limit < 1 or p_limit > 1000 then
     raise exception 'Invalid image quota limit';
   end if;
@@ -82,6 +85,10 @@ as $$
 declare
   v_day date;
 begin
+  if auth.uid() is null or not public.current_user_is_admin() then
+    raise exception 'Active admin session required' using errcode = '42501';
+  end if;
+
   select quota_date into v_day
   from private.ai_image_quota_reservations
   where id = p_reservation_id
@@ -102,7 +109,7 @@ begin
 end;
 $$;
 
-revoke all on function public.reserve_ai_image_quota(integer) from public, anon, authenticated;
-revoke all on function public.finish_ai_image_quota(uuid, boolean) from public, anon, authenticated;
-grant execute on function public.reserve_ai_image_quota(integer) to service_role;
-grant execute on function public.finish_ai_image_quota(uuid, boolean) to service_role;
+revoke all on function public.reserve_ai_image_quota(integer) from public, anon;
+revoke all on function public.finish_ai_image_quota(uuid, boolean) from public, anon;
+grant execute on function public.reserve_ai_image_quota(integer) to authenticated;
+grant execute on function public.finish_ai_image_quota(uuid, boolean) to authenticated;
