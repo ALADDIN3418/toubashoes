@@ -1,6 +1,6 @@
 'use strict';
 
-const MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
+const MODEL = '@cf/black-forest-labs/flux-2-klein-9b';
 const DEFAULT_MODEL = MODEL;
 const MAX_OUTPUT_BYTES = 18 * 1024 * 1024;
 

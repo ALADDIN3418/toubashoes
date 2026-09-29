@@ -59,7 +59,7 @@ async function main() {
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).configured, false);
     assert.equal(payload(res).provider, 'Cloudflare Workers AI');
-    assert.equal(payload(res).model, '@cf/black-forest-labs/flux-2-klein-4b');
+    assert.equal(payload(res).model, '@cf/black-forest-labs/flux-2-klein-9b');
     assert.equal(payload(res).localDailyLimit, 50);
     assert.equal(payload(res).quotaMode, 'process-memory');
 

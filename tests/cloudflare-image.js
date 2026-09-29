@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const { MODEL, DEFAULT_MODEL, REFERENCE_ROLES, promptFor, buildEndpoint, generateProductPhoto } = require('../services/cloudflare-image.js');
 
 async function main() {
-  assert.equal(MODEL, '@cf/black-forest-labs/flux-2-klein-4b');
+  assert.equal(MODEL, '@cf/black-forest-labs/flux-2-klein-9b');
   assert.equal(DEFAULT_MODEL, MODEL);
-  assert.equal(buildEndpoint('0123456789abcdef0123456789abcdef'), 'https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/run/@cf/black-forest-labs/flux-2-klein-4b');
+  assert.equal(buildEndpoint('0123456789abcdef0123456789abcdef'), 'https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/run/@cf/black-forest-labs/flux-2-klein-9b');
   assert.throws(() => buildEndpoint('not-an-account-id'), /۳۲ کاراکتری/);
   assert.throws(() => buildEndpoint('0123456789abcdef0123456789abcdef', 'not-a-model'), /مدل Cloudflare/);
   assert.match(promptFor('dark-luxury'), /dark forest-green/);
@@ -49,6 +49,6 @@ async function main() {
     if (oldAccount === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID; else process.env.CLOUDFLARE_ACCOUNT_ID = oldAccount;
     if (oldToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN; else process.env.CLOUDFLARE_API_TOKEN = oldToken;
   }
-  console.log('PASS: Cloudflare Workers AI FLUX.2 Klein 4B endpoint, multipart reference editing, prompt and validation');
+  console.log('PASS: Cloudflare Workers AI FLUX.2 Klein 9B endpoint, multipart reference editing, prompt and validation');
 }
 main().catch(error => { console.error(error); process.exit(1); });
