@@ -1198,15 +1198,7 @@
       "discountPercent": 0
     }
   ],
-  "cart": [
-    {
-      "id": "p9",
-      "variantId": "۴۰::کرم",
-      "size": "۴۰",
-      "color": "کرم",
-      "qty": 1
-    }
-  ],
+  "cart": [],
   "orders": [
     {
       "id": "TB-2408",
@@ -1366,7 +1358,7 @@
       "id": "b2",
       "title": "تخفیف ویژه",
       "subtitle": "تا ۳۰٪ تخفیف برای همراهان طوبی",
-      "active": false,
+      "active": true,
       "imageUrl": "/hero-shoe.jpg",
       "position": "home-promo"
     }
@@ -1450,7 +1442,7 @@
   "users": [
     {
       "id": "admin-main",
-      "name": "مدیریت ارشد فروشگاه طوبی",
+      "name": "مدیر فروشگاه طوبی",
       "phone": "09121234567",
       "email": "admin@toubashoes.ir",
       "role": "super_admin",
@@ -1458,26 +1450,29 @@
     },
     {
       "id": "demo-customer",
-      "name": "مشتری وفادار طوبی",
+      "name": "مشتری نمونه",
       "phone": "09120000001",
-      "email": "customer@toubashoes.ir",
+      "email": "customer@touba.demo",
       "role": "customer",
+      "demoAccount": true,
       "isActive": true
     },
     {
       "id": "demo-admin",
-      "name": "مدیر فروشگاه طوبی",
+      "name": "مدیر فروشگاه",
       "phone": "09120000002",
-      "email": "admin@touba.ir",
+      "email": "admin@touba.demo",
       "role": "admin",
+      "demoAccount": true,
       "isActive": true
     },
     {
       "id": "demo-super-admin",
-      "name": "مدیر ارشد اجرایی",
+      "name": "مدیر ارشد",
       "phone": "09120000003",
-      "email": "superadmin@toubashoes.ir",
+      "email": "superadmin@touba.demo",
       "role": "super_admin",
+      "demoAccount": true,
       "isActive": true
     }
   ],
@@ -1486,42 +1481,31 @@
     {
       "id": "profile-admin-main",
       "userId": "admin-main",
-      "displayName": "مدیریت ارشد فروشگاه طوبی",
-      "phone": "09121234567",
-      "role": "super_admin"
+      "displayName": "مدیر فروشگاه طوبی",
+      "phone": "09121234567"
     },
     {
       "id": "profile-demo-customer",
       "userId": "demo-customer",
-      "displayName": "مشتری وفادار طوبی",
-      "phone": "09120000001",
-      "role": "customer"
+      "displayName": "مشتری نمونه",
+      "phone": "09120000001"
     },
     {
       "id": "profile-demo-admin",
       "userId": "demo-admin",
-      "displayName": "مدیر فروشگاه طوبی",
-      "phone": "09120000002",
-      "role": "admin"
+      "displayName": "مدیر فروشگاه",
+      "phone": "09120000002"
     },
     {
       "id": "profile-demo-super-admin",
       "userId": "demo-super-admin",
-      "displayName": "مدیر ارشد اجرایی",
-      "phone": "09120000003",
-      "role": "super_admin"
+      "displayName": "مدیر ارشد",
+      "phone": "09120000003"
     }
   ],
   "payments": [],
   "pageContents": [],
   "addresses": [],
   "productImages": [],
-  "currentUser": {
-    "id": "admin-main",
-    "name": "مدیر ارشد فروشگاه طوبی",
-    "email": "admin@toubashoes.ir",
-    "role": "super_admin",
-    "isActive": true,
-    "authProvider": "admin"
-  }
+  "currentUser": null
 }

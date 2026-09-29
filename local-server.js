@@ -187,6 +187,21 @@ const server = http.createServer(async (req, res) => {
     const configured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
     return json(res, 200, { configured, provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:20, referenceMaxSide:511 });
   }
+  if (pathname === '/api/ai/describe') {
+    if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
+    if (!requireSameOrigin(req, res)) return;
+    let body;
+    try {
+      body = await readBody(req, 1024 * 1024);
+    } catch (error) { return json(res, 400, { error:error.message }); }
+    try {
+      const { describeShoeWithGemini } = require('./services/ai-product-desc.js');
+      const result = await describeShoeWithGemini(body || {});
+      return json(res, 200, result);
+    } catch (error) {
+      return json(res, 500, { error:error.message || 'خطا در تولید هوشمند توضیحات محصول' });
+    }
+  }
   if (pathname === '/api/ai/product-photo') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
     if (!requireSameOrigin(req, res)) return;

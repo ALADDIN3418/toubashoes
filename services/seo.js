@@ -4,4 +4,4 @@ function updateSEO(){let p=path(),title=db.settings.storeName||'کفش طوبی'
 function render(){__beforeSeoRender();updateSEO()}
 window.render=render;
 window.addEventListener('error',event=>{console.error(event.error||event.message);toast('مشکلی پیش آمد. لطفاً دوباره تلاش کنید.')});window.addEventListener('unhandledrejection',event=>{console.error(event.reason);toast('عملیات انجام نشد؛ دوباره تلاش کنید.')});
-render();
+if(typeof window!=="undefined"&&!document.querySelector?.('script[src*="stage4.js"]')){render();}
