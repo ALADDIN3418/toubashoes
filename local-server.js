@@ -27,7 +27,7 @@ const productImageSaveTimes = [];
 const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.webp':'image/webp', '.svg':'image/svg+xml', '.json':'application/json', '.xml':'application/xml; charset=utf-8', '.txt':'text/plain; charset=utf-8' };
 
 function json(res, status, value, extraHeaders = {}) {
-  res.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()', ...extraHeaders });
+  res.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()', ...extraHeaders });
   res.end(JSON.stringify(value));
 }
 function readBody(req, limit) {
@@ -85,14 +85,14 @@ const server = http.createServer(async (req, res) => {
     const anonKey = String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
     const safeKey = anonKey && anonKey.length < 4096 ? anonKey : '';
     const publicConfig = { configured:Boolean(url || safeKey), enabled:Boolean(url && safeKey), url, anonKey:safeKey };
-    res.writeHead(200, { 'Content-Type':'application/javascript; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+    res.writeHead(200, { 'Content-Type':'application/javascript; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
     return res.end(`window.TOUBA_PUBLIC_CONFIG=Object.freeze(${JSON.stringify(publicConfig)});`);
   }
 
   if (pathname === '/vendor/supabase.js' && req.method === 'GET') {
     const sdk = path.join(root, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js');
     if (!fs.existsSync(sdk)) return json(res, 503, { error:'Supabase browser SDK is not installed; run npm install.' });
-    res.writeHead(200, { 'Content-Type':types['.js'], 'Cache-Control':'public, max-age=3600', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+    res.writeHead(200, { 'Content-Type':types['.js'], 'Cache-Control':'public, max-age=3600', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
     return fs.createReadStream(sdk).pipe(res);
   }
 
@@ -236,7 +236,7 @@ const server = http.createServer(async (req, res) => {
     let origin; try { origin = new URL(`${protocol}://${host}`).origin; } catch { origin = 'https://localhost'; }
     return fs.readFile(file, 'utf8', (err, content) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }
-      res.writeHead(200, { 'Content-Type':types[path.extname(file)], 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+      res.writeHead(200, { 'Content-Type':types[path.extname(file)], 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
       res.end(content.replaceAll('{{ORIGIN}}', origin));
     });
   }
@@ -245,7 +245,7 @@ const server = http.createServer(async (req, res) => {
   serveFile(file, res);
 });
 function serveFile(file, res) {
-  res.writeHead(200, { 'Content-Type':types[path.extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'DENY', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+  res.writeHead(200, { 'Content-Type':types[path.extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
   fs.createReadStream(file).pipe(res);
 }
 server.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log(`طوبی storefront listening on ${server.address().port} · پایگاه داده فروشگاه کفش طوبی`));

@@ -120,7 +120,7 @@ function toggleMobileCategories(e,link){
     if(parent)parent.classList.toggle('open');
   }
 }
-if(typeof window !== 'undefined' && !window.__navDismissListener){
+if(typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.addEventListener === 'function' && !window.__navDismissListener){
   window.__navDismissListener = true;
   document.addEventListener('click', function(e){
     let nav=document.getElementById('store-nav');
@@ -488,7 +488,7 @@ window.addEventListener('popstate',()=>{
 });
 
 // Intercept clicks on links for smooth client navigation
-if(typeof document!=='undefined'&&!window.__linkInterceptAttached){
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function'&&!window.__linkInterceptAttached){
   window.__linkInterceptAttached=true;
   document.addEventListener('click',function(e){
     let a=e.target.closest('a');
@@ -522,7 +522,7 @@ window.productQty=function(d,id){
   }
 };
 
-const __stage3BaseRender=window.__stage3Render||window.render;
+const __stage3BaseRender=window.render||window.__stage3Render;
 const __stage3Detail=window.detail;
 window.detail=productDetailWithSticky;
 window.cartPage=cartPage;
