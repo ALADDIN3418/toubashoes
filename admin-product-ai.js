@@ -256,14 +256,17 @@
       const currentGenerationId = generationId;
       status.textContent = `${selectedAngles.length.toLocaleString('fa-IR')} تصویر مرجع در حال ارسال و تحلیل است؛ یک تصویر نهایی ساخته می‌شود…`;
       try {
-        const productHint = [form.elements.name?.value, form.elements.category?.selectedOptions?.[0]?.textContent, form.elements.shortDesc?.value]
-          .filter(Boolean).join('؛ ').slice(0, 180);
         const response = await fetch('/api/ai/product-photo', {
           method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
-          body:JSON.stringify({ images:selectedAngles.map(angle => sourceDataUrls[angle.id]), imageRoles:selectedAngles.map(angle => angle.id), style:styleSelect.value, productHint })
+          body:JSON.stringify({ images:selectedAngles.map(angle => sourceDataUrls[angle.id]), imageRoles:selectedAngles.map(angle => angle.id), style:styleSelect.value })
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || `خطای سرویس (${response.status})`);
+        if (!response.ok) {
+          const err = new Error(payload.error || `خطای سرویس (${response.status})`);
+          err.cloudflareId = payload.cloudflareId;
+          err.flagged = payload.flagged;
+          throw err;
+        }
         const output = await resizeImage(payload.dataUrl, 1280, .84);
         if (currentGenerationId !== generationId) return;
         generatedDataUrl = output;

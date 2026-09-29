@@ -230,7 +230,7 @@ const server = http.createServer(async (req, res) => {
       if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است؛ سهمیه و هزینهٔ Cloudflare نیز جداگانه اعمال می‌شود.' });
     } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
     try {
-      const result = await generateProductPhoto({ imageBytes:sourceBytes, imageRoles, style:body.style, productHint:body.productHint });
+      const result = await generateProductPhoto({ imageBytes:sourceBytes, imageRoles, style:body.style });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
       return json(res, 200, result);
@@ -239,7 +239,12 @@ const server = http.createServer(async (req, res) => {
         try { if (persistentReservation) await finalizePersistentAiQuota(reservationId, false, authContext); else finishWindowQuota('local-ai', reservationId, false); } catch { /* expired reservations are reclaimed automatically */ }
       }
       const status = Number(error.status) || 502;
-      return json(res, status, { error:error.message || 'ساخت تصویر با Cloudflare انجام نشد.' });
+      return json(res, status, {
+        error: error.message || 'ساخت تصویر با Cloudflare انجام نشد.',
+        cloudflareId: error.cloudflareId || undefined,
+        flagged: Boolean(error.safetyFlagged),
+        quotaConsumed: false
+      });
     }
   }
   if (pathname === '/api/uploads/product-image') {

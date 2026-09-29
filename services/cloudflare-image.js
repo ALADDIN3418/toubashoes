@@ -8,19 +8,51 @@ const MAX_OUTPUT_BYTES = 3 * 1024 * 1024;
 const REFERENCE_ROLES = Object.freeze(['front three-quarter view', 'outer side profile', 'rear and heel view']);
 const REFERENCE_VIEW_IDS = Object.freeze(['front', 'side', 'heel']);
 const VIEW_LABELS = Object.freeze({ front:REFERENCE_ROLES[0], side:REFERENCE_ROLES[1], heel:REFERENCE_ROLES[2] });
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-function promptFor(style, productHint = '', imageRoles = REFERENCE_VIEW_IDS) {
-  const safeHint = String(productHint || '').replace(/[\r\n<>]/g, ' ').slice(0, 180).trim();
-  const itemGuide = safeHint ? `Product listing context: “${safeHint}”. Use it only to identify the product category.` : '';
+function promptFor(style, imageRoles = REFERENCE_VIEW_IDS) {
+  // Support both (style, imageRoles) and legacy (style, productHint, imageRoles) signatures,
+  // but exclude freeform text from the model prompt (shoe-only ecommerce prompt).
+  const roles = Array.isArray(imageRoles) ? imageRoles : (Array.isArray(arguments[2]) ? arguments[2] : REFERENCE_VIEW_IDS);
   const scenes = {
     'warm-studio':'a premium warm ivory studio with a soft beige plaster backdrop and subtle natural contact shadow',
     'dark-luxury':'a refined dark forest-green and charcoal studio, matte stone surface and restrained warm highlights',
     'natural-stone':'a minimal natural limestone and warm sand setting with soft daylight'
   };
-  const roles = Array.isArray(imageRoles) && imageRoles.length ? imageRoles : REFERENCE_VIEW_IDS;
-  const viewMap = roles.map((role, index) => `image ${index} is the ${VIEW_LABELS[role] || 'shoe reference view'}`).join('; ');
-  const referenceCount = roles.length === 1 ? 'one reference photo' : `${roles.length} complementary reference photos`;
-  return `The ${referenceCount} show the SAME exact shoe. Reference mapping: ${viewMap}. ${itemGuide} Carefully combine every supplied reference to preserve the shoe's true identity, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, stitching, and small visible details. Resolve details using the clearest available view; do not invent or redesign features. Create ONE single, polished, high-detail ecommerce product photograph of that shoe, not a collage or multi-panel layout and not multiple shoes. Show the complete shoe at a flattering front three-quarter camera angle, centered with clean negative space, sharp fine texture and stitching, realistic materials, soft natural contact shadow, professional product lighting. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. No text, props covering the product, duplicate shoes, or extra objects.`;
+  const activeRoles = roles.length ? roles : REFERENCE_VIEW_IDS;
+  const viewMap = activeRoles.map((role, index) => `image ${index} is the ${VIEW_LABELS[role] || 'shoe reference view'}`).join('; ');
+  const referenceCount = activeRoles.length === 1 ? 'one reference photo' : `${activeRoles.length} complementary reference photos`;
+  return `The ${referenceCount} show the SAME exact shoe. Reference mapping: ${viewMap}. Carefully combine every supplied reference to preserve the shoe's true identity, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, stitching, and small visible details. Resolve details using the clearest available view; do not invent or redesign features. Create ONE single, polished, high-detail ecommerce product photograph of that shoe, not a collage or multi-panel layout and not multiple shoes. Show the complete shoe at a flattering front three-quarter camera angle, centered with clean negative space, sharp fine texture and stitching, realistic materials, soft natural contact shadow, professional product lighting. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. No text, props covering the product, duplicate shoes, or extra objects.`;
+}
+
+function extractCloudflareId(text, payload, headers) {
+  const textMatch = String(text || '').match(UUID_REGEX);
+  if (textMatch) return textMatch[0];
+  const payloadStr = JSON.stringify(payload || '');
+  const payloadMatch = payloadStr.match(UUID_REGEX);
+  if (payloadMatch) return payloadMatch[0];
+  const cfRay = headers?.get ? headers.get('cf-ray') : (headers?.['cf-ray'] || headers?.['cf-request-id'] || null);
+  if (cfRay) return String(cfRay).trim();
+  return null;
+}
+
+function isContentFlagged(text, payload) {
+  const code = payload?.errors?.[0]?.code ?? payload?.internalCode ?? payload?.code;
+  if (Number(code) === 3030 || String(code) === '3030') return true;
+  const combined = `${text || ''} ${JSON.stringify(payload || '')}`;
+  return /flagged/i.test(combined);
+}
+
+function formatSafetyFlaggedError(rawMessage, payload, headers) {
+  const cloudflareId = extractCloudflareId(rawMessage, payload, headers);
+  const idText = cloudflareId ? ` (شناسهٔ Cloudflare: ${cloudflareId})` : '';
+  const message = `خروجی توسط فیلتر ایمنی Cloudflare رد شد${idText}. این ردشدن فیلتر ایمنی است، نه خطای Supabase، و نباید راهی برای دورزدن فیلتر اضافه شود؛ سهمیهٔ روزانه محفوظ ماند.`;
+  const error = new Error(message);
+  error.status = 400;
+  error.code = 'CLOUDFLARE_SAFETY_FLAGGED';
+  error.cloudflareId = cloudflareId || null;
+  error.safetyFlagged = true;
+  return error;
 }
 
 function buildEndpoint(accountId, model = MODEL) {
@@ -29,7 +61,7 @@ function buildEndpoint(accountId, model = MODEL) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
 }
 
-async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio', productHint = '' }) {
+async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio' }) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
   const apiToken = process.env.CLOUDFLARE_API_TOKEN || '';
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_MODEL;
@@ -45,7 +77,7 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
   }
 
   const form = new FormData();
-  form.append('prompt', promptFor(style, productHint, roles));
+  form.append('prompt', promptFor(style, roles));
   references.forEach((image, index) => {
     form.append(`input_image_${index}`, new Blob([image], { type:'image/jpeg' }), `shoe-view-${index + 1}.jpg`);
   });
@@ -65,7 +97,11 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
     if (contentType === 'application/json' || contentType.endsWith('+json')) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.success === false || payload.errors?.length) {
-        const message = payload.errors?.[0]?.message || payload.errors?.[0]?.code || payload.messages?.[0]?.message || `Cloudflare Workers AI پاسخ نداد (${response.status}).`;
+        const rawMessage = payload.errors?.[0]?.message || payload.errors?.[0]?.code || payload.messages?.[0]?.message || '';
+        if (isContentFlagged(rawMessage, payload)) {
+          throw formatSafetyFlaggedError(rawMessage, payload, response.headers);
+        }
+        const message = rawMessage || `Cloudflare Workers AI پاسخ نداد (${response.status}).`;
         throw Object.assign(new Error(message), { status:response.status === 429 ? 429 : response.status === 403 ? 403 : 502 });
       }
       const encoded = payload.result?.image || payload.image;
@@ -75,14 +111,32 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
       bytes = Buffer.from(await response.arrayBuffer());
     } else {
       const detail = (await response.text().catch(() => '')).slice(0, 500);
+      if (isContentFlagged(detail, null)) {
+        throw formatSafetyFlaggedError(detail, null, response.headers);
+      }
       throw Object.assign(new Error(detail || `Cloudflare Workers AI پاسخ نداد (${response.status}).`), { status:response.status === 429 ? 429 : 502 });
     }
     if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) throw Object.assign(new Error('حجم خروجی مدل از سقف امن پاسخ سرور (۳ مگابایت) بیشتر است؛ تولید را دوباره با خروجی استاندارد امتحان کنید.'), { status:502 });
     return { dataUrl:`data:image/png;base64,${bytes.toString('base64')}`, model, provider:'Cloudflare Workers AI' };
   } catch (error) {
     if (error.name === 'AbortError') throw Object.assign(new Error('زمان پاسخ مدل Cloudflare تمام شد؛ دوباره تلاش کنید.'), { status:504 });
+    if (error.safetyFlagged) throw error;
+    if (isContentFlagged(error.message, null)) {
+      throw formatSafetyFlaggedError(error.message, null, null);
+    }
     throw error;
   } finally { clearTimeout(timeout); }
 }
 
-module.exports = { generateProductPhoto, promptFor, buildEndpoint, MODEL, DEFAULT_MODEL, REFERENCE_ROLES, REFERENCE_VIEW_IDS };
+module.exports = {
+  generateProductPhoto,
+  promptFor,
+  buildEndpoint,
+  extractCloudflareId,
+  isContentFlagged,
+  formatSafetyFlaggedError,
+  MODEL,
+  DEFAULT_MODEL,
+  REFERENCE_ROLES,
+  REFERENCE_VIEW_IDS
+};

@@ -105,6 +105,42 @@ async function main() {
     await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{} }, res);
     assert.equal(res.statusCode, 503);
 
+    // Verify productPhoto handles Cloudflare safety filter rejection, reports Persian message and ID, and preserves quota
+    process.env.CLOUDFLARE_ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
+    process.env.CLOUDFLARE_API_TOKEN = 'test-only-token';
+    const oldFetchApi = global.fetch;
+    global.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/ai/run/')) {
+        return new Response(JSON.stringify({
+          success: false,
+          errors: [{ code: 3030, message: 'Your output has been flagged (52766dd9-b65a-4b5f-a9f9-a24871006a01)' }]
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+      res = response();
+      await productPhoto({
+        method: 'POST',
+        headers: { origin: 'https://touba.test', host: 'touba.test' },
+        body: { images: [referenceDataUrl], productHint: 'ignored freeform text' }
+      }, res);
+      assert.equal(res.statusCode, 400);
+      assert.equal(payload(res).flagged, true);
+      assert.equal(payload(res).quotaConsumed, false);
+      assert.equal(payload(res).cloudflareId, '52766dd9-b65a-4b5f-a9f9-a24871006a01');
+      assert.match(payload(res).error, /فیلتر ایمنی Cloudflare/);
+      assert.match(payload(res).error, /52766dd9-b65a-4b5f-a9f9-a24871006a01/);
+      assert.match(payload(res).error, /ردشدن فیلتر ایمنی است، نه خطای Supabase/);
+      assert.match(payload(res).error, /نباید راهی برای دورزدن فیلتر اضافه شود/);
+      assert.match(payload(res).error, /سهمیهٔ روزانه محفوظ ماند/);
+    } finally {
+      global.fetch = oldFetchApi;
+      delete process.env.CLOUDFLARE_ACCOUNT_ID;
+      delete process.env.CLOUDFLARE_API_TOKEN;
+    }
+
     const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
     const dataUrl = `data:image/jpeg;base64,${tinyJpeg}`;
     res = response();
