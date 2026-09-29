@@ -1,5 +1,15 @@
 'use strict';
 
+function compactText(value, maxLength) {
+  const text = String(value || '').trim();
+  if (text.length <= maxLength) return text;
+  const prefix = text.slice(0, maxLength - 1);
+  const sentenceEnd = Math.max(prefix.lastIndexOf('.'), prefix.lastIndexOf('۔'), prefix.lastIndexOf('؟'), prefix.lastIndexOf('!'));
+  if (sentenceEnd >= maxLength * 0.65) return prefix.slice(0, sentenceEnd + 1).trim();
+  const wordEnd = prefix.lastIndexOf(' ');
+  return `${prefix.slice(0, wordEnd > 0 ? wordEnd : prefix.length).trim()}…`;
+}
+
 function generateLocalShoeDescription(input = {}) {
   const name = String(input.name || 'کفش طوبی').trim().slice(0, 160);
   const brand = String(input.brand || 'طوبی').trim().slice(0, 100);
@@ -14,18 +24,15 @@ function generateLocalShoeDescription(input = {}) {
   const rawFeatures = Array.isArray(input.features)
     ? input.features
     : String(input.features || '').split(/[\r\n,]+/);
-  const features = rawFeatures.map(value => String(value || '').trim()).filter(Boolean).slice(0, 8);
+  const features = rawFeatures.map(value => String(value || '').trim()).filter(Boolean).slice(0, 4);
   const rawSpecifications = String(input.specifications || '').trim();
   const specifications = rawSpecifications || [
-    input.sizes ? `سایزبندی موجود: ${input.sizes}` : '',
+    input.sizes ? `سایزبندی: ${input.sizes}` : '',
     input.colors ? `رنگ‌بندی: ${input.colors}` : ''
   ].filter(Boolean).join('\n');
-  const shortDesc = `${name} از برند ${brand}، مدلی برای ${usage}. جزئیات و مشخصات درج‌شده را پیش از خرید بررسی کنید.`;
-  const detailText = [
-    input.features ? `ویژگی‌های ثبت‌شده:\n${String(Array.isArray(input.features) ? input.features.join('\n') : input.features).slice(0, 900)}` : '',
-    specifications ? `مشخصات واردشده:\n${specifications.slice(0, 900)}` : ''
-  ].filter(Boolean).join('\n\n');
-  const longDesc = `${name} از برند ${brand}، با توجه به دسته‌بندی و اطلاعات ثبت‌شده برای ${usage} معرفی می‌شود. این متن یک پیش‌نویس عمومی است و فقط ویژگی‌هایی را بازتاب می‌دهد که در فرم محصول وارد شده‌اند.\n\n${detailText || 'هنوز مشخصات فنی یا ویژگی‌های اختصاصی این محصول ثبت نشده‌اند. پیش از انتشار، جنس، ساختار، سایزبندی و سایر جزئیات را از منبع معتبر تکمیل کنید.'}\n\nپیش از انتشار، توضیحات را با کالای واقعی و سیاست‌های فروشگاه تطبیق دهید.`;
+  const shortDesc = compactText(`${name} از برند ${brand}؛ برای ${usage}.`, 120);
+  const detailText = [features.join('، '), specifications.replace(/[\r\n]+/g, '، ')].filter(Boolean).join('؛ ').slice(0, 220);
+  const longDesc = compactText(`${name} از برند ${brand}، مناسب ${usage}.${detailText ? ` اطلاعات ثبت‌شده: ${detailText}.` : ' مشخصات فنی این محصول هنوز تکمیل نشده است.'} پیش از انتشار، جزئیات را با محصول واقعی تطبیق دهید.`, 480);
   return {
     shortDesc,
     longDesc,
@@ -57,9 +64,9 @@ async function describeShoeWithGemini(input = {}) {
 
 فقط یک JSON معتبر با این ساختار برگردان:
 {
-  "shortDesc": "معرفی کوتاه و جذاب، حداکثر ۱۶۰ نویسه و بدون ادعای تأییدنشده",
-  "longDesc": "دو پاراگراف فارسی، فقط بر اساس داده‌های ورودی؛ در صورت کمبود اطلاعات، پیش‌نویس بودن و نیاز به تکمیل را شفاف بگو",
-  "features": ["ویژگی‌هایی که عیناً از داده‌های واردشده پشتیبانی می‌شوند"],
+  "shortDesc": "معرفی کوتاه و جذاب، یک جمله، حداکثر ۱۱۰ نویسه و بدون ادعای تأییدنشده",
+  "longDesc": "حداکثر سه جملهٔ کوتاه و در مجموع کمتر از ۴۵۰ نویسه؛ فقط بر اساس داده‌های ورودی",
+  "features": ["حداکثر چهار ویژگی کوتاه که عیناً از داده‌های واردشده پشتیبانی شوند"],
   "specifications": "مشخصات فنی واردشده، بدون افزودن مورد جدید"
 }`;
     const response = await ai.models.generateContent({
@@ -72,9 +79,9 @@ async function describeShoeWithGemini(input = {}) {
       if (parsed.shortDesc && parsed.longDesc) {
         const parsedFeatures = Array.isArray(parsed.features) ? parsed.features : [parsed.features].filter(Boolean);
         return {
-          shortDesc: String(parsed.shortDesc),
-          longDesc: String(parsed.longDesc),
-          features: parsedFeatures.map(String),
+          shortDesc: compactText(parsed.shortDesc, 120),
+          longDesc: compactText(parsed.longDesc, 480),
+          features: parsedFeatures.slice(0, 4).map(feature => compactText(feature, 100)),
           specifications: typeof parsed.specifications === 'string'
             ? parsed.specifications
             : Object.entries(parsed.specifications || {}).map(([key, value]) => `${key}: ${value}`).join('\n'),

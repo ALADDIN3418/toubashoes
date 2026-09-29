@@ -22,12 +22,12 @@
     } else if (c.includes('women') || c.includes('زنانه') || n.includes('زنانه')) {
       styleDesc = 'طراحی ظریف و زنانه'; usage = 'محیط کار، دورهمی‌ها و استفاده روزانه';
     }
-    const shortDesc = `${n} از برند ${b} با ${styleDesc.toLowerCase()}؛ انتخابی خوش‌استایل برای ${usage}.`;
-    const enteredFeatures = String(providedFeatures || '').split(/[\r\n,]+/).map(value => value.trim()).filter(Boolean);
+    const shortDesc = `${n} از برند ${b}؛ مناسب ${usage}.`;
+    const enteredFeatures = String(providedFeatures || '').split(/[\r\n,]+/).map(value => value.trim()).filter(Boolean).slice(0, 4);
     const enteredSpecifications = String(providedSpecifications || '').trim();
-    const specifications = enteredSpecifications || [sizes ? `سایزبندی موجود: ${sizes}` : '', colors ? `رنگ‌بندی: ${colors}` : ''].filter(Boolean).join('\n');
-    const confirmedDetails = [enteredFeatures.length ? `ویژگی‌های ثبت‌شده: ${enteredFeatures.join('، ')}` : '', specifications ? `مشخصات ثبت‌شده: ${specifications}` : ''].filter(Boolean).join('\n');
-    const longDesc = `${n} از کالکشن کفش ${b}، با ${styleDesc} طراحی شده است. این مدل می‌تواند همراهی مناسب برای ${usage} باشد.\n\n${confirmedDetails || 'مشخصات اختصاصی این محصول هنوز وارد نشده است.'}\n\nپیش از انتشار، متن و جزئیات را با محصول واقعی تطبیق دهید.`;
+    const specifications = enteredSpecifications || [sizes ? `سایزبندی: ${sizes}` : '', colors ? `رنگ‌بندی: ${colors}` : ''].filter(Boolean).join('\n');
+    const confirmedDetails = [enteredFeatures.join('، '), specifications.replace(/[\r\n]+/g, '، ')].filter(Boolean).join('؛ ').slice(0, 220);
+    const longDesc = `${n} از برند ${b}، با ${styleDesc} برای ${usage} معرفی می‌شود.${confirmedDetails ? ` جزئیات ثبت‌شده: ${confirmedDetails}.` : ''} پیش از انتشار، مشخصات را با محصول واقعی تطبیق دهید.`;
     const features = enteredFeatures.length ? enteredFeatures : [styleDesc, `مناسب برای ${usage}`, 'جزئیات را پیش از انتشار با محصول واقعی تطبیق دهید.'];
     return { shortDesc, longDesc, features, specifications };
   }
@@ -180,8 +180,10 @@
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
       status.textContent = providerReady
-        ? 'سرویس آماده است؛ هر بار تولید، یک تصویر نهایی از سه عکس مرجع می‌سازد.'
-        : 'برای ساخت تصویر، کلیدهای Cloudflare را در Environment Variables وریسل تنظیم کنید.';
+        ? `سرویس آماده است؛ از سه عکس یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با شمارندهٔ پایدار و سراسری' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
+        : data.cloudflareConfigured && data.quotaMode === 'unavailable'
+          ? 'برای فعال‌شدن امن تولید تصویر، مهاجرت سهمیهٔ Supabase را اعمال و SUPABASE_SERVICE_ROLE_KEY را فقط در Environment Variables سرور Vercel تنظیم کنید.'
+          : 'برای ساخت تصویر، کلیدهای Cloudflare را در Environment Variables وریسل تنظیم کنید.';
       status.classList.toggle('is-ready', providerReady);
       updateGenerateButton();
     }).catch(() => { status.textContent = 'سرویس تصویر در دسترس نیست.'; });
