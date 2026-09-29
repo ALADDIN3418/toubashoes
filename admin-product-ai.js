@@ -137,8 +137,8 @@
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ استودیوی ساخت عکس محصول از سه زاویه</h3>
-        <p class="ai-studio-note">سه عکس از روبه‌رو، کنار و پشت/پاشنهٔ همان کفش بارگذاری کنید. هوش مصنوعی هر سه مرجع را با هم بررسی می‌کند و فقط یک تصویر نهاییِ یکپارچه می‌سازد.</p>
+        <h3 id="ai-product-title">✨ استودیوی ساخت تصویر محصول</h3>
+        <p class="ai-studio-note">بارگذاری عکس‌ها اختیاری است: دست‌کم یک تصویر از همان کفش لازم دارید و تا سه زاویهٔ روبه‌رو، کنار و پشت/پاشنه می‌توانید اضافه کنید. سه مرجع معمولاً برای حفظ جزئیات نتیجهٔ دقیق‌تری می‌دهند.</p>
       </div>
       <div class="ai-source-grid" id="ai-source-grid">${ANGLES.map(angle => `
         <figure class="ai-source-card" data-source-card="${angle.id}">
@@ -146,7 +146,7 @@
           <input id="ai-product-file-${angle.id}" type="file" accept="image/jpeg,image/png,image/webp" data-source-input="${angle.id}" aria-describedby="ai-studio-status">
           <img data-source-preview="${angle.id}" alt="پیش‌نمایش عکس مرجع ${angle.label}" hidden>
           <div class="ai-source-placeholder" data-source-placeholder="${angle.id}">برای این زاویه عکس انتخاب کنید</div>
-          <div class="ai-source-status" data-source-status="${angle.id}" role="status">عکسی انتخاب نشده</div>
+          <div class="ai-source-status" data-source-status="${angle.id}" role="status">اختیاری · هنوز تصویری انتخاب نشده</div>
         </figure>`).join('')}</div>
       <div class="ai-studio-controls">
         <label for="ai-product-style">سبک پس‌زمینهٔ خروجی</label>
@@ -158,8 +158,8 @@
         <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>تولید یک تصویر نهایی</button>
       </div>
       <figure class="ai-final-output" id="ai-product-output-wrap" hidden>
-        <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از سه عکس مرجع">
-        <figcaption>یک خروجی نهایی از سه زاویهٔ مرجع — پیش از استفاده، جزئیات کفش را بررسی کنید.</figcaption>
+        <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از تصاویر مرجع انتخابی">
+        <figcaption>یک خروجی نهایی از تصاویر مرجع انتخابی — پیش از استفاده، جزئیات کفش را بررسی کنید.</figcaption>
       </figure>
       <div class="ai-studio-actions">
         <button type="button" class="action" id="ai-product-apply" disabled>افزودن تصویر نهایی به تصاویر محصول</button>
@@ -172,8 +172,10 @@
     const applyButton = studio.querySelector('#ai-product-apply');
     const styleSelect = studio.querySelector('#ai-product-style');
 
+    function selectedReferenceAngles() { return ANGLES.filter(angle => Boolean(sourceDataUrls[angle.id])); }
+
     function updateGenerateButton() {
-      generateButton.disabled = !providerReady || ANGLES.some(angle => !sourceDataUrls[angle.id]);
+      generateButton.disabled = !providerReady || selectedReferenceAngles().length === 0;
     }
 
     function clearGenerated() {
@@ -187,7 +189,7 @@
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
       status.textContent = providerReady
-        ? `سرویس آماده است؛ از سه عکس یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با پیکربندی Supabase برای شمارندهٔ پایدار (اجرای migration هنگام رزرو بررسی می‌شود)' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
+        ? `سرویس آماده است؛ از یک تا سه عکس یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با پیکربندی Supabase برای شمارندهٔ پایدار (اجرای migration هنگام رزرو بررسی می‌شود)' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
         : data.cloudflareConfigured && data.quotaMode === 'unavailable'
           ? 'کلیدهای Cloudflare تنظیم شده‌اند؛ برای آماده‌شدن، migration سهمیهٔ پایدار را در Supabase اجرا و SUPABASE_URL همراه SUPABASE_PUBLISHABLE_KEY یا SUPABASE_ANON_KEY را در Environment Variables وریسل تنظیم کنید؛ سپس deploy را بازسازی کنید. Service-role key لازم نیست.'
           : 'برای ساخت تصویر، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در Environment Variables وریسل تنظیم کنید؛ کلیدها را در مرورگر یا کد قرار ندهید.';
@@ -210,7 +212,9 @@
         preview.hidden = true; placeholder.hidden = false;
         if (!file) {
           preview.hidden = true; placeholder.hidden = false;
-          sourceStatus.textContent = 'عکسی انتخاب نشده';
+          sourceStatus.textContent = 'تصویری انتخاب نشده (اختیاری)';
+          const readyCount = selectedReferenceAngles().length;
+          status.textContent = readyCount ? `${readyCount.toLocaleString('fa-IR')} تصویر مرجع آماده است؛ انتخاب عکس‌های بیشتر اختیاری است.` : 'برای شروع، دست‌کم یک عکس مرجع انتخاب کنید؛ دو زاویهٔ دیگر اختیاری‌اند.';
           return;
         }
         if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > MAX_UPLOAD) {
@@ -226,9 +230,10 @@
           preview.src = dataUrl; preview.hidden = false; placeholder.hidden = true;
           sourceStatus.textContent = 'عکس مرجع آماده است.';
           updateGenerateButton();
-          status.textContent = ANGLES.every(angle => sourceDataUrls[angle.id])
-            ? (providerReady ? 'هر سه عکس آماده‌اند؛ یک تصویر نهایی بسازید.' : 'هر سه عکس آماده‌اند؛ سرویس تصویر هنوز تنظیم نشده است.')
-            : 'لطفاً برای هر سه زاویه یک عکس انتخاب کنید.';
+          const readyCount = selectedReferenceAngles().length;
+          status.textContent = providerReady
+            ? `${readyCount.toLocaleString('fa-IR')} تصویر مرجع آماده است؛ می‌توانید همین حالا یک تصویر نهایی بسازید یا زاویه‌های دیگر را هم اضافه کنید.`
+            : `${readyCount.toLocaleString('fa-IR')} تصویر آماده است؛ سرویس تصویر هنوز تنظیم نشده است.`;
         } catch (error) {
           if (sourceId !== sourceLoadIds[angleId]) return;
           sourceStatus.textContent = error.message || 'خواندن عکس انجام نشد.';
@@ -239,8 +244,9 @@
 
     styleSelect.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
     generateButton.addEventListener('click', async () => {
-      if (ANGLES.some(angle => !sourceDataUrls[angle.id])) {
-        status.textContent = 'برای هر سه زاویه یک عکس از همان کفش انتخاب کنید.';
+      const selectedAngles = selectedReferenceAngles();
+      if (!selectedAngles.length) {
+        status.textContent = 'برای ساخت تصویر، دست‌کم یک عکس از همان کفش انتخاب کنید.';
         updateGenerateButton();
         return;
       }
@@ -248,13 +254,13 @@
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      status.textContent = 'هر سه عکس در حال ارسال و تحلیل‌اند؛ یک تصویر نهایی ساخته می‌شود…';
+      status.textContent = `${selectedAngles.length.toLocaleString('fa-IR')} تصویر مرجع در حال ارسال و تحلیل است؛ یک تصویر نهایی ساخته می‌شود…`;
       try {
         const productHint = [form.elements.name?.value, form.elements.category?.selectedOptions?.[0]?.textContent, form.elements.shortDesc?.value]
           .filter(Boolean).join('؛ ').slice(0, 180);
         const response = await fetch('/api/ai/product-photo', {
           method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
-          body:JSON.stringify({ images:ANGLES.map(angle => sourceDataUrls[angle.id]), style:styleSelect.value, productHint })
+          body:JSON.stringify({ images:selectedAngles.map(angle => sourceDataUrls[angle.id]), imageRoles:selectedAngles.map(angle => angle.id), style:styleSelect.value, productHint })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || `خطای سرویس (${response.status})`);
@@ -264,7 +270,7 @@
         studio.querySelector('#ai-product-output-preview').src = output;
         studio.querySelector('#ai-product-output-wrap').hidden = false;
         applyButton.disabled = false;
-        status.textContent = 'یک تصویر نهایی از هر سه زاویه آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.';
+        status.textContent = `یک تصویر نهایی از ${selectedAngles.length.toLocaleString('fa-IR')} تصویر مرجع آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.`;
       } catch (error) {
         if (currentGenerationId !== generationId) return;
         status.textContent = error.message || 'ساخت تصویر انجام نشد.';

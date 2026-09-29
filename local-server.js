@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { generateProductPhoto, MODEL } = require('./services/cloudflare-image.js');
-const { persistentAiQuotaConfig, requireAdminRequest, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
+const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
 
@@ -213,13 +213,14 @@ const server = http.createServer(async (req, res) => {
     if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) {
       return json(res, 503, { error:'سرویس هنوز تنظیم نشده است. Account ID و API Token را فقط در فایل محلی .env وارد کنید؛ این اطلاعات را در گفتگو نفرستید.' });
     }
-    let body, sourceBytes;
+    let body, sourceBytes, imageRoles;
     try {
       body = await readBody(req, 4 * 1024 * 1024);
-      if (!Array.isArray(body.images) || body.images.length !== 3) {
-        throw Object.assign(new Error('سه عکس مرجع لازم است: نمای روبه‌رو، جانبی و پشت/پاشنه.'), { status:400 });
+      if (!Array.isArray(body.images) || body.images.length < 1 || body.images.length > 3) {
+        throw Object.assign(new Error('دست‌کم یک و حداکثر سه عکس مرجع لازم است.'), { status:400 });
       }
       sourceBytes = body.images.map(image => parseJpegDataUrl(image, 768 * 1024));
+      imageRoles = parseProductReferenceRoles(body, sourceBytes.length);
     } catch (error) { return json(res, Number(error.status) || 400, { error:error.message }); }
     const persistentQuota = persistentAiQuotaConfig();
     let reservationId = null, persistentReservation = false;
@@ -229,7 +230,7 @@ const server = http.createServer(async (req, res) => {
       if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است؛ سهمیه و هزینهٔ Cloudflare نیز جداگانه اعمال می‌شود.' });
     } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
     try {
-      const result = await generateProductPhoto({ imageBytes:sourceBytes, style:body.style, productHint:body.productHint });
+      const result = await generateProductPhoto({ imageBytes:sourceBytes, imageRoles, style:body.style, productHint:body.productHint });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
       return json(res, 200, result);

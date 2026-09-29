@@ -1,11 +1,13 @@
 'use strict';
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const aiStatus = require('../api/ai/status.js');
 const productPhoto = require('../api/ai/product-photo.js');
 const productImageUpload = require('../api/uploads/product-image.js');
 const productDescription = require('../api/ai/describe.js');
 const { generateLocalShoeDescription } = require('../app/applet/lib/gemini-describer.js');
-const { parseProductReferenceImages, takeWindowQuota, reserveWindowQuota, finishWindowQuota, persistentAiQuotaConfig, requireAdminRequest, reservePersistentAiQuota, finalizePersistentAiQuota } = require('../lib/vercel-api.js');
+const { parseProductReferenceImages, parseProductReferenceRoles, takeWindowQuota, reserveWindowQuota, finishWindowQuota, persistentAiQuotaConfig, requireAdminRequest, reservePersistentAiQuota, finalizePersistentAiQuota } = require('../lib/vercel-api.js');
 
 function response() {
   return {
@@ -17,9 +19,17 @@ function response() {
 function payload(res) { return JSON.parse(res.body); }
 
 async function main() {
+  const quotaCompatibilityMigration=fs.readFileSync(path.join(__dirname,'../supabase/migrations/202609300001_daily_ai_image_quota_rpc_compat.sql'),'utf8');
+  assert.match(quotaCompatibilityMigration,/function public\.reserve_ai_image_quota\(\)/);
+  assert.match(quotaCompatibilityMigration,/successful_count \+ reserved_count < 50/);
+  assert.match(quotaCompatibilityMigration,/notify pgrst, 'reload schema'/i);
   const referenceDataUrl=`data:image/jpeg;base64,${Buffer.from([0xff,0xd8,0xff,0x00]).toString('base64')}`;
   assert.equal(parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl]}).length,3);
-  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl]}),/سه عکس مرجع/);
+  assert.equal(parseProductReferenceImages({images:[referenceDataUrl]}).length,1,'one optional reference is supported');
+  assert.deepEqual(parseProductReferenceRoles({imageRoles:['heel']},1),['heel']);
+  assert.throws(()=>parseProductReferenceImages({images:[]}),/دست‌کم یک/);
+  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl,referenceDataUrl]}),/دست‌کم یک/);
+  assert.throws(()=>parseProductReferenceRoles({imageRoles:['side','side']},2),/زاویهٔ یکتا/);
   const draft = generateLocalShoeDescription({ name:'کفش نمونه', category:'formal' });
   assert.equal(draft.model,'local-draft');
   assert(draft.shortDesc.length <= 120);
@@ -46,7 +56,10 @@ async function main() {
     const reservation=await reservePersistentAiQuota(50,authContext);assert.equal(reservation,'123e4567-e89b-42d3-a456-426614174000');
     assert.equal(await finalizePersistentAiQuota(reservation,true,authContext),true);
     assert.match(quotaCalls[2].url,/rpc\/reserve_ai_image_quota$/);
+    assert.deepEqual(JSON.parse(quotaCalls[2].options.body),{},'reserve RPC relies on its fixed SQL default and avoids a stale p_limit argument signature');
     assert.equal(quotaCalls[2].options.headers.apikey,'publishable-test-key');
+    global.fetch=async(url)=>String(url).includes('/rpc/reserve_ai_image_quota')?{ok:false,status:404,text:async()=>JSON.stringify({code:'PGRST202',message:'function not found'})}:{ok:true,json:async()=>true};
+    await assert.rejects(()=>reservePersistentAiQuota(50,authContext),/PGRST202.*Migrationهای سهمیه/);
     assert.match(quotaCalls[2].options.headers.Authorization,/Bearer 0123456789/);
   } finally {global.fetch=oldFetch;if(oldSupabaseUrl===undefined)delete process.env.SUPABASE_URL;else process.env.SUPABASE_URL=oldSupabaseUrl;if(oldPublicKey===undefined)delete process.env.SUPABASE_PUBLISHABLE_KEY;else process.env.SUPABASE_PUBLISHABLE_KEY=oldPublicKey;if(oldAnonKey===undefined)delete process.env.SUPABASE_ANON_KEY;else process.env.SUPABASE_ANON_KEY=oldAnonKey;if(oldServiceKey===undefined)delete process.env.SUPABASE_SERVICE_ROLE_KEY;else process.env.SUPABASE_SERVICE_ROLE_KEY=oldServiceKey;}
   const oldAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
