@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const aiStatus = require('../api/ai/status.js');
 const productPhoto = require('../api/ai/product-photo.js');
 const productImageUpload = require('../api/uploads/product-image.js');
+const productDescription = require('../api/ai/describe.js');
 
 function response() {
   return {
@@ -44,6 +45,20 @@ async function main() {
     assert.equal(res.statusCode, 201);
     assert.equal(payload(res).url, dataUrl);
     assert.equal(payload(res).storage, 'browser-local');
+
+    res = response();
+    await productDescription({ method:'GET', headers:{} }, res);
+    assert.equal(res.statusCode, 405);
+
+    res = response();
+    await productDescription({ method:'POST', headers:{}, body:{} }, res);
+    assert.equal(res.statusCode, 403);
+
+    res = response();
+    await productDescription({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{ name:'کفش تبریز چرم', category:'formal' } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(typeof payload(res).shortDesc, 'string');
+    assert.equal(typeof payload(res).longDesc, 'string');
   } finally {
     if (oldAccount === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID; else process.env.CLOUDFLARE_ACCOUNT_ID = oldAccount;
     if (oldToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN; else process.env.CLOUDFLARE_API_TOKEN = oldToken;
