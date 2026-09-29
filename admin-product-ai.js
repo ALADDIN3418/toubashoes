@@ -126,41 +126,42 @@
     const field = images?.closest('.field');
     if (!field || form.querySelector('.ai-product-studio')) return;
 
-    const sourceDataUrls = Object.create(null);
+    let sourceDataUrl = '';
     let generatedDataUrl = '';
     let providerReady = false;
     let generationId = 0;
-    const sourceLoadIds = Object.create(null);
 
     const studio = document.createElement('section');
     studio.className = 'ai-product-studio field full';
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ استودیوی ساخت تصویر محصول</h3>
-        <p class="ai-studio-note">بارگذاری عکس‌ها اختیاری است: دست‌کم یک تصویر از همان کفش لازم دارید و تا سه زاویهٔ روبه‌رو، کنار و پشت/پاشنه می‌توانید اضافه کنید. سه مرجع معمولاً برای حفظ جزئیات نتیجهٔ دقیق‌تری می‌دهند.</p>
+        <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی</h3>
+        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. هوش مصنوعی یک تصویر نهاییِ باکیفیت برای کاتالوگ تولید می‌کند.</p>
       </div>
-      <div class="ai-source-grid" id="ai-source-grid">${ANGLES.map(angle => `
-        <figure class="ai-source-card" data-source-card="${angle.id}">
-          <label for="ai-product-file-${angle.id}">${angle.label} · عکس مرجع</label>
-          <input id="ai-product-file-${angle.id}" type="file" accept="image/jpeg,image/png,image/webp" data-source-input="${angle.id}" aria-describedby="ai-studio-status">
-          <img data-source-preview="${angle.id}" alt="پیش‌نمایش عکس مرجع ${angle.label}" hidden>
-          <div class="ai-source-placeholder" data-source-placeholder="${angle.id}">برای این زاویه عکس انتخاب کنید</div>
-          <div class="ai-source-status" data-source-status="${angle.id}" role="status">اختیاری · هنوز تصویری انتخاب نشده</div>
-        </figure>`).join('')}</div>
       <div class="ai-studio-controls">
+        <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
+        <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
         <label for="ai-product-style">سبک پس‌زمینهٔ خروجی</label>
-        <select id="ai-product-style">
-          <option value="warm-studio">استودیوی گرم و روشن</option>
-          <option value="dark-luxury">لوکس تیره و سبز</option>
+        <select id="ai-product-style" class="ai-studio-select">
+          <option value="warm-studio">استودیوی کرم و ملایم</option>
+          <option value="dark-luxury">استودیوی دارک و لوکس</option>
           <option value="natural-stone">سنگ طبیعی و نور روز</option>
         </select>
         <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>تولید یک تصویر نهایی</button>
       </div>
-      <figure class="ai-final-output" id="ai-product-output-wrap" hidden>
-        <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از تصاویر مرجع انتخابی">
-        <figcaption>یک خروجی نهایی از تصاویر مرجع انتخابی — پیش از استفاده، جزئیات کفش را بررسی کنید.</figcaption>
-      </figure>
+      <div class="ai-source-grid" id="ai-product-previews-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <figure class="ai-source-card" id="ai-product-source-wrap" hidden>
+          <label>عکس واضح انتخابی</label>
+          <img id="ai-product-source-preview" alt="پیش‌نمایش عکس واضح انتخابی محصول">
+          <figcaption class="ai-source-status">عکس مرجع آماده است</figcaption>
+        </figure>
+        <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin: 0; width: 100%;">
+          <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی تولیدشده</label>
+          <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از عکس مرجع">
+          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">یک خروجی نهایی از تصویر مرجع</figcaption>
+        </figure>
+      </div>
       <div class="ai-studio-actions">
         <button type="button" class="action" id="ai-product-apply" disabled>افزودن تصویر نهایی به تصاویر محصول</button>
         <span id="ai-studio-status" role="status" aria-live="polite">در حال بررسی سرویس تصویر…</span>
@@ -170,12 +171,13 @@
     const status = studio.querySelector('#ai-studio-status');
     const generateButton = studio.querySelector('#ai-product-generate');
     const applyButton = studio.querySelector('#ai-product-apply');
+    const fileInput = studio.querySelector('#ai-product-file');
     const styleSelect = studio.querySelector('#ai-product-style');
-
-    function selectedReferenceAngles() { return ANGLES.filter(angle => Boolean(sourceDataUrls[angle.id])); }
+    const sourceWrap = studio.querySelector('#ai-product-source-wrap');
+    const sourcePreview = studio.querySelector('#ai-product-source-preview');
 
     function updateGenerateButton() {
-      generateButton.disabled = !providerReady || selectedReferenceAngles().length === 0;
+      generateButton.disabled = !providerReady || !sourceDataUrl;
     }
 
     function clearGenerated() {
@@ -189,7 +191,7 @@
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
       status.textContent = providerReady
-        ? `سرویس آماده است؛ از یک تا سه عکس یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با پیکربندی Supabase برای شمارندهٔ پایدار (اجرای migration هنگام رزرو بررسی می‌شود)' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
+        ? `سرویس آماده است؛ از یک تصویر واضح یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با پیکربندی Supabase برای شمارندهٔ پایدار' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
         : data.cloudflareConfigured && data.quotaMode === 'unavailable'
           ? 'کلیدهای Cloudflare تنظیم شده‌اند؛ برای آماده‌شدن، migration سهمیهٔ پایدار را در Supabase اجرا و SUPABASE_URL همراه SUPABASE_PUBLISHABLE_KEY یا SUPABASE_ANON_KEY را در Environment Variables وریسل تنظیم کنید؛ سپس deploy را بازسازی کنید. Service-role key لازم نیست.'
           : 'برای ساخت تصویر، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در Environment Variables وریسل تنظیم کنید؛ کلیدها را در مرورگر یا کد قرار ندهید.';
@@ -197,56 +199,41 @@
       updateGenerateButton();
     }).catch(() => { status.textContent = 'سرویس تصویر در دسترس نیست.'; });
 
-    studio.querySelectorAll('[data-source-input]').forEach(input => {
-      input.addEventListener('change', async () => {
-        const angleId = input.dataset.sourceInput;
-        const sourceId = (sourceLoadIds[angleId] || 0) + 1;
-        sourceLoadIds[angleId] = sourceId;
-        delete sourceDataUrls[angleId];
-        clearGenerated();
+    fileInput.addEventListener('change', async () => {
+      sourceDataUrl = '';
+      clearGenerated();
+      updateGenerateButton();
+      const file = fileInput.files?.[0];
+      if (!file) {
+        sourceWrap.hidden = true;
+        sourcePreview.removeAttribute('src');
+        status.textContent = 'یک تصویر واضح از محصول انتخاب کنید.';
+        return;
+      }
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > MAX_UPLOAD) {
+        status.textContent = 'فقط عکس JPG، PNG یا WebP با حجم حداکثر ۱۵ مگابایت انتخاب کنید.';
+        fileInput.value = '';
+        return;
+      }
+      status.textContent = 'در حال آماده‌سازی عکس…';
+      try {
+        sourceDataUrl = await resizeImage(file, 511, .84);
+        sourcePreview.src = sourceDataUrl;
+        sourceWrap.hidden = false;
         updateGenerateButton();
-        const preview = studio.querySelector(`[data-source-preview="${angleId}"]`);
-        const placeholder = studio.querySelector(`[data-source-placeholder="${angleId}"]`);
-        const sourceStatus = studio.querySelector(`[data-source-status="${angleId}"]`);
-        const file = input.files?.[0];
-        preview.hidden = true; placeholder.hidden = false;
-        if (!file) {
-          preview.hidden = true; placeholder.hidden = false;
-          sourceStatus.textContent = 'تصویری انتخاب نشده (اختیاری)';
-          const readyCount = selectedReferenceAngles().length;
-          status.textContent = readyCount ? `${readyCount.toLocaleString('fa-IR')} تصویر مرجع آماده است؛ انتخاب عکس‌های بیشتر اختیاری است.` : 'برای شروع، دست‌کم یک عکس مرجع انتخاب کنید؛ دو زاویهٔ دیگر اختیاری‌اند.';
-          return;
-        }
-        if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > MAX_UPLOAD) {
-          sourceStatus.textContent = 'فقط عکس JPG، PNG یا WebP با حجم حداکثر ۱۵ مگابایت انتخاب کنید.';
-          input.value = '';
-          return;
-        }
-        sourceStatus.textContent = 'در حال آماده‌سازی عکس…';
-        try {
-          const dataUrl = await resizeImage(file, 511, .84);
-          if (sourceId !== sourceLoadIds[angleId]) return;
-          sourceDataUrls[angleId] = dataUrl;
-          preview.src = dataUrl; preview.hidden = false; placeholder.hidden = true;
-          sourceStatus.textContent = 'عکس مرجع آماده است.';
-          updateGenerateButton();
-          const readyCount = selectedReferenceAngles().length;
-          status.textContent = providerReady
-            ? `${readyCount.toLocaleString('fa-IR')} تصویر مرجع آماده است؛ می‌توانید همین حالا یک تصویر نهایی بسازید یا زاویه‌های دیگر را هم اضافه کنید.`
-            : `${readyCount.toLocaleString('fa-IR')} تصویر آماده است؛ سرویس تصویر هنوز تنظیم نشده است.`;
-        } catch (error) {
-          if (sourceId !== sourceLoadIds[angleId]) return;
-          sourceStatus.textContent = error.message || 'خواندن عکس انجام نشد.';
-          input.value = '';
-        }
-      });
+        status.textContent = providerReady
+          ? 'عکس واضح محصول آماده است؛ دکمهٔ «تولید یک تصویر نهایی» را بزنید.'
+          : 'عکس آماده است؛ سرویس تصویر هنوز تنظیم نشده است.';
+      } catch (error) {
+        status.textContent = error.message || 'خواندن عکس انجام نشد.';
+        fileInput.value = '';
+      }
     });
 
     styleSelect.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
     generateButton.addEventListener('click', async () => {
-      const selectedAngles = selectedReferenceAngles();
-      if (!selectedAngles.length) {
-        status.textContent = 'برای ساخت تصویر، دست‌کم یک عکس از همان کفش انتخاب کنید.';
+      if (!sourceDataUrl) {
+        status.textContent = 'برای ساخت تصویر، یک تصویر واضح از همان کفش انتخاب کنید.';
         updateGenerateButton();
         return;
       }
@@ -254,11 +241,11 @@
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      status.textContent = `${selectedAngles.length.toLocaleString('fa-IR')} تصویر مرجع در حال ارسال و تحلیل است؛ یک تصویر نهایی ساخته می‌شود…`;
+      status.textContent = 'تصویر مرجع در حال ارسال و تحلیل است؛ یک تصویر نهایی ساخته می‌شود…';
       try {
         const response = await fetch('/api/ai/product-photo', {
           method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
-          body:JSON.stringify({ images:selectedAngles.map(angle => sourceDataUrls[angle.id]), imageRoles:selectedAngles.map(angle => angle.id), style:styleSelect.value })
+          body:JSON.stringify({ image:sourceDataUrl, images:[sourceDataUrl], style:styleSelect.value })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -273,7 +260,7 @@
         studio.querySelector('#ai-product-output-preview').src = output;
         studio.querySelector('#ai-product-output-wrap').hidden = false;
         applyButton.disabled = false;
-        status.textContent = `یک تصویر نهایی از ${selectedAngles.length.toLocaleString('fa-IR')} تصویر مرجع آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.`;
+        status.textContent = 'یک تصویر نهایی با موفقیت آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.';
       } catch (error) {
         if (currentGenerationId !== generationId) return;
         status.textContent = error.message || 'ساخت تصویر انجام نشد.';

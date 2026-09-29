@@ -216,10 +216,11 @@ const server = http.createServer(async (req, res) => {
     let body, sourceBytes, imageRoles;
     try {
       body = await readBody(req, 4 * 1024 * 1024);
-      if (!Array.isArray(body.images) || body.images.length < 1 || body.images.length > 3) {
-        throw Object.assign(new Error('دست‌کم یک و حداکثر سه عکس مرجع لازم است.'), { status:400 });
+      const list = body?.image ? [body.image] : (Array.isArray(body?.images) ? body.images : []);
+      if (list.length < 1 || list.length > 3) {
+        throw Object.assign(new Error('برای ساخت تصویر، یک تصویر واضح از محصول لازم است.'), { status:400 });
       }
-      sourceBytes = body.images.map(image => parseJpegDataUrl(image, 768 * 1024));
+      sourceBytes = list.map(image => parseJpegDataUrl(image, 768 * 1024));
       imageRoles = parseProductReferenceRoles(body, sourceBytes.length);
     } catch (error) { return json(res, Number(error.status) || 400, { error:error.message }); }
     const persistentQuota = persistentAiQuotaConfig();

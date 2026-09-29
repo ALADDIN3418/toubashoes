@@ -24,11 +24,11 @@ async function main() {
   assert.match(quotaCompatibilityMigration,/successful_count \+ reserved_count < 50/);
   assert.match(quotaCompatibilityMigration,/notify pgrst, 'reload schema'/i);
   const referenceDataUrl=`data:image/jpeg;base64,${Buffer.from([0xff,0xd8,0xff,0x00]).toString('base64')}`;
-  assert.equal(parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl]}).length,3);
-  assert.equal(parseProductReferenceImages({images:[referenceDataUrl]}).length,1,'one optional reference is supported');
-  assert.deepEqual(parseProductReferenceRoles({imageRoles:['heel']},1),['heel']);
-  assert.throws(()=>parseProductReferenceImages({images:[]}),/دست‌کم یک/);
-  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl,referenceDataUrl]}),/دست‌کم یک/);
+  assert.equal(parseProductReferenceImages({image:referenceDataUrl}).length,1,'one clear image is supported');
+  assert.equal(parseProductReferenceImages({images:[referenceDataUrl]}).length,1,'array format with one image is supported');
+  assert.deepEqual(parseProductReferenceRoles({imageRoles:['front']},1),['front']);
+  assert.throws(()=>parseProductReferenceImages({images:[]}),/یک تصویر واضح/);
+  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl,referenceDataUrl]}),/یک تصویر واضح/);
   assert.throws(()=>parseProductReferenceRoles({imageRoles:['side','side']},2),/زاویهٔ یکتا/);
   const draft = generateLocalShoeDescription({ name:'کفش نمونه', category:'formal' });
   assert.equal(draft.model,'local-draft');
@@ -124,7 +124,7 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { images: [referenceDataUrl], productHint: 'ignored freeform text' }
+        body: { image: referenceDataUrl, productHint: 'ignored freeform text' }
       }, res);
       assert.equal(res.statusCode, 400);
       assert.equal(payload(res).flagged, true);

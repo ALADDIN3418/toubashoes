@@ -27,16 +27,16 @@ async function main() {
   assert.doesNotMatch(safeShoePrompt, /کفش چرمی مردانه دو سگک/, 'freeform product text must not enter model prompt');
   assert.doesNotMatch(safeShoePrompt, /Product listing context/, 'legacy context wrapper must be absent');
   assert.match(safeShoePrompt, /do not invent or redesign features/);
-  assert.match(safeShoePrompt, /The 3 complementary reference photos show the SAME exact shoe/);
+  assert.match(safeShoePrompt, /exact shoe shown in input image 0/);
   assert.match(safeShoePrompt, /ONE single, polished, high-detail ecommerce product photograph/);
-  assert.match(safeShoePrompt, /not a collage or multi-panel layout/);
 
   assert.deepEqual(REFERENCE_ROLES, ['front three-quarter view', 'outer side profile', 'rear and heel view']);
   assert.deepEqual(REFERENCE_VIEW_IDS, ['front','side','heel']);
-  const singleViewPrompt = promptFor('warm-studio', ['heel']);
-  assert.match(singleViewPrompt, /one reference photo/);
-  assert.match(singleViewPrompt, /image 0 is the rear and heel view/);
-  assert.doesNotMatch(singleViewPrompt, /image 1 is the outer side profile/);
+  const multiPrompt = promptFor('warm-studio', ['front', 'side', 'heel']);
+  assert.match(multiPrompt, /The 3 complementary reference photos show the SAME exact shoe/);
+  assert.match(multiPrompt, /image 0 is the front three-quarter view/);
+  assert.match(multiPrompt, /image 1 is the outer side profile/);
+  assert.match(multiPrompt, /image 2 is the rear and heel view/);
 
   // Safety filter detection & Cloudflare ID extraction
   const flaggedMessageWithId = 'Your output has been flagged (52766dd9-b65a-4b5f-a9f9-a24871006a01)';
@@ -92,12 +92,11 @@ async function main() {
       assert.equal(options.body.get('input_image_1'), null);
       return new Response(JSON.stringify({ success:true, result:{ image:Buffer.from('single-image').toString('base64') } }), { status:200, headers:{ 'Content-Type':'application/json' } });
     };
-    const oneView = await generateProductPhoto({ imageBytes:[Buffer.from('side')], imageRoles:['side'] });
+    const oneView = await generateProductPhoto({ imageBytes:Buffer.from('side') });
     assert.equal(oneView.model, MODEL);
-    assert.match(singlePrompt, /one reference photo/);
-    assert.match(singlePrompt, /image 0 is the outer side profile/);
-    await assert.rejects(() => generateProductPhoto({ imageBytes:[] }), /دست‌کم یک/);
-    await assert.rejects(() => generateProductPhoto({ imageBytes:[Buffer.from('1'),Buffer.from('2'),Buffer.from('3'),Buffer.from('4')] }), /دست‌کم یک/);
+    assert.match(singlePrompt, /exact shoe shown in input image 0/);
+    await assert.rejects(() => generateProductPhoto({ imageBytes:[] }), /یک تصویر واضح/);
+    await assert.rejects(() => generateProductPhoto({ imageBytes:[Buffer.from('1'),Buffer.from('2'),Buffer.from('3'),Buffer.from('4')] }), /یک تصویر واضح/);
 
     // Verify Cloudflare flagged safety filter rejection translates into Persian message with Cloudflare ID
     global.fetch = async () => new Response(JSON.stringify({

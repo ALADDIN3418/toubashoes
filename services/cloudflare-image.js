@@ -13,16 +13,18 @@ const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 function promptFor(style, imageRoles = REFERENCE_VIEW_IDS) {
   // Support both (style, imageRoles) and legacy (style, productHint, imageRoles) signatures,
   // but exclude freeform text from the model prompt (shoe-only ecommerce prompt).
-  const roles = Array.isArray(imageRoles) ? imageRoles : (Array.isArray(arguments[2]) ? arguments[2] : REFERENCE_VIEW_IDS);
+  const roles = Array.isArray(imageRoles) ? imageRoles : (Array.isArray(arguments[2]) ? arguments[2] : (Array.isArray(arguments[1]) ? arguments[1] : []));
   const scenes = {
     'warm-studio':'a premium warm ivory studio with a soft beige plaster backdrop and subtle natural contact shadow',
     'dark-luxury':'a refined dark forest-green and charcoal studio, matte stone surface and restrained warm highlights',
     'natural-stone':'a minimal natural limestone and warm sand setting with soft daylight'
   };
-  const activeRoles = roles.length ? roles : REFERENCE_VIEW_IDS;
+  const activeRoles = roles.length ? roles : ['front'];
+  if (activeRoles.length === 1) {
+    return `Create ONE single, polished, high-detail ecommerce product photograph of the exact shoe shown in input image 0. Preserve the shoe's true identity, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, stitching, and fine visible details; do not invent or redesign features. Show the complete shoe at a flattering front three-quarter camera angle, centered with clean negative space, sharp fine texture and stitching, realistic materials, soft natural contact shadow, professional product lighting. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. No text, props covering the product, duplicate shoes, or extra objects.`;
+  }
   const viewMap = activeRoles.map((role, index) => `image ${index} is the ${VIEW_LABELS[role] || 'shoe reference view'}`).join('; ');
-  const referenceCount = activeRoles.length === 1 ? 'one reference photo' : `${activeRoles.length} complementary reference photos`;
-  return `The ${referenceCount} show the SAME exact shoe. Reference mapping: ${viewMap}. Carefully combine every supplied reference to preserve the shoe's true identity, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, stitching, and small visible details. Resolve details using the clearest available view; do not invent or redesign features. Create ONE single, polished, high-detail ecommerce product photograph of that shoe, not a collage or multi-panel layout and not multiple shoes. Show the complete shoe at a flattering front three-quarter camera angle, centered with clean negative space, sharp fine texture and stitching, realistic materials, soft natural contact shadow, professional product lighting. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. No text, props covering the product, duplicate shoes, or extra objects.`;
+  return `The ${activeRoles.length} complementary reference photos show the SAME exact shoe. Reference mapping: ${viewMap}. Carefully combine every supplied reference to preserve the shoe's true identity, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, stitching, and small visible details. Resolve details using the clearest available view; do not invent or redesign features. Create ONE single, polished, high-detail ecommerce product photograph of that shoe, not a collage or multi-panel layout and not multiple shoes. Show the complete shoe at a flattering front three-quarter camera angle, centered with clean negative space, sharp fine texture and stitching, realistic materials, soft natural contact shadow, professional product lighting. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. No text, props covering the product, duplicate shoes, or extra objects.`;
 }
 
 function extractCloudflareId(text, payload, headers) {
@@ -68,13 +70,10 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
   if (!accountId || !apiToken) throw Object.assign(new Error('برای فعال‌سازی رایگان روزانه، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در فایل محلی .env تنظیم کنید.'), { status:503 });
 
   const references = Array.isArray(imageBytes) ? imageBytes : [imageBytes];
-  const roles = Array.isArray(imageRoles) ? imageRoles : REFERENCE_VIEW_IDS.slice(0, references.length);
   if (references.length < 1 || references.length > 3 || references.some(image => !image?.length)) {
-    throw Object.assign(new Error('برای ساخت تصویر، دست‌کم یک و حداکثر سه عکس مرجع لازم است.'), { status:400 });
+    throw Object.assign(new Error('برای ساخت تصویر، یک تصویر واضح از محصول لازم است.'), { status:400 });
   }
-  if (roles.length !== references.length || roles.some(role => !REFERENCE_VIEW_IDS.includes(role)) || new Set(roles).size !== roles.length) {
-    throw Object.assign(new Error('زاویه‌های تصاویر مرجع معتبر نیستند؛ برای هر عکس یک زاویهٔ یکتا انتخاب کنید.'), { status:400 });
-  }
+  const roles = Array.isArray(imageRoles) ? imageRoles : (references.length === 1 ? ['front'] : REFERENCE_VIEW_IDS.slice(0, references.length));
 
   const form = new FormData();
   form.append('prompt', promptFor(style, roles));
