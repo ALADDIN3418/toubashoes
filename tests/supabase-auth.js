@@ -7,17 +7,18 @@ const path = require('path');
 (async () => {
   const calls = {};
   let authCallback;
+  let sessionAvailable=false;
   const profile = { id:'user-1', email:'shopper@example.com', display_name:'مشتری طوبی', phone:null, role:'customer', is_active:true };
   const session = { access_token:'test-only-access', refresh_token:'test-only-refresh', user:{ id:'user-1', email:'shopper@example.com', user_metadata:{ display_name:'مشتری طوبی' } } };
   const client = {
     auth: {
-      async getSession(){ return { data:{ session:null }, error:null }; },
+      async getSession(){ return { data:{ session:sessionAvailable?session:null }, error:null }; },
       onAuthStateChange(callback){ authCallback=callback; return { data:{ subscription:{ unsubscribe(){} } } }; },
       async signUp(input){ calls.signUp=input; return { data:{ session:null, user:{id:'user-2'} }, error:null }; },
-      async signInWithPassword(input){ calls.signIn=input; return { data:{ session, user:session.user }, error:null }; },
+      async signInWithPassword(input){ calls.signIn=input; sessionAvailable=true; return { data:{ session, user:session.user }, error:null }; },
       async resetPasswordForEmail(email, options){ calls.reset={email,options}; return {error:null}; },
       async updateUser(input){ calls.updateUser=input; return {error:null}; },
-      async signOut(){ calls.signOut=true; return {error:null}; }
+      async signOut(){ calls.signOut=true; sessionAvailable=false; return {error:null}; }
     },
     from(table){
       assert.equal(table,'profiles');
@@ -49,7 +50,14 @@ const path = require('path');
   assert.equal(user.role,'customer');
   assert.equal(user.authProvider,'supabase');
   assert.equal(calls.profileFilter[1],'user-1');
+  assert.equal(await auth.getAccessToken(),'test-only-access','admin API requests can reuse the authenticated Supabase session token');
+  sessionAvailable=false;
+  const removedKeys=[];
+  window.db={currentUser:{id:'cached-demo-admin',role:'super_admin',authProvider:'demo'}};
+  window.localStorage={removeItem(key){removedKeys.push(key);}};
   await auth.start();
+  assert.equal(window.db.currentUser,null,'Supabase mode clears cached local/demo identities');
+  assert(removedKeys.includes('touba_admin_session'),'legacy local admin bypass key is removed');
   const profileReadsBeforeEvents=calls.profileReads;
   authCallback('SIGNED_IN',session);
   authCallback('INITIAL_SESSION',session);
@@ -76,12 +84,16 @@ const path = require('path');
     if(v===undefined) delete process.env[k]; else process.env[k]=v;
   }
   const uiApp={innerHTML:'',insertAdjacentHTML(position,html){this.innerHTML=html+this.innerHTML;}};
+  let uiAuthenticatedUser=null;
+  let submittedCredentials=null;
+  const uiAuth={configured:true,get currentUser(){return uiAuthenticatedUser;},set currentUser(value){uiAuthenticatedUser=value;},start:async()=>null,publicError:()=> 'auth error',signIn:async credentials=>{submittedCredentials=credentials;uiAuthenticatedUser={id:'admin-1',email:credentials.email,name:'مدیر',role:'super_admin',isActive:true,authProvider:'supabase'};return uiAuthenticatedUser;},signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{uiAuthenticatedUser=null;}};
   const uiWindow={
-    ToubaAuth:{configured:true,currentUser:{id:'admin-1',email:'owner@example.com',name:'مدیر',role:'super_admin',isActive:true},start:async()=>null,publicError:()=> 'auth error',signIn:async()=>({role:'super_admin'}),signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{}},
+    ToubaAuth:uiAuth,
+    db:{currentUser:{id:'cached-demo-admin',role:'super_admin',authProvider:'demo'}},
     location:{pathname:'/login',search:'?mode=signup',origin:'https://shop.example'},
     document:{body:{classList:{remove(){}}},querySelector(selector){return selector==='#app'?uiApp:null;}},
     history:null,
-    header:()=>'<header/>',footer:()=>'<footer/>',esc:value=>String(value),toast:value=>{uiWindow.lastToast=value;},go:value=>{uiWindow.lastGo=value;},
+    header:()=>'<header/>',footer:()=>'</footer>',esc:value=>String(value),toast:value=>{uiWindow.lastToast=value;},go:value=>{uiWindow.lastGo=value;},
     render:null,login:null,loginUser:null,demoLogin:null,adminLogin:null,logout:null,account:null,ordersPage:null,
     setTimeout,URLSearchParams
   };
@@ -93,15 +105,25 @@ const path = require('path');
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../services/auth-ui.js'),'utf8'),uiContext);
   assert.match(uiApp.innerHTML,/ساخت حساب کاربری/);
   assert.match(uiApp.innerHTML,/name="email"/);
+  uiWindow.location.search='';uiWindow.render();
+  assert.match(uiApp.innerHTML,/placeholder="ایمیل حساب کاربری"/);
+  assert.doesNotMatch(uiApp.innerHTML,/admin@toubashoes\.ir/);
   const submitButton={disabled:false,textContent:'ورود',dataset:{}};
   const loginForm={fields:{email:'owner@example.com',password:'strong-password'},querySelector(){return submitButton;}};
   await uiWindow.ToubaAuthUI.signIn(loginForm);
+  assert.equal(submittedCredentials.email,'owner@example.com');
+  assert.equal(submittedCredentials.password,'strong-password','admin-like email still requires real password authentication');
   assert.equal(uiWindow.lastPush,'/admin');
   assert.match(uiApp.innerHTML,/پنل امن Supabase/);
   uiWindow.location.pathname='/admin';uiWindow.location.search='';uiWindow.render();
   assert.match(uiApp.innerHTML,/پنل امن Supabase/);
   assert.match(uiApp.innerHTML,/مدیریت طوبی/);
+  uiAuthenticatedUser=null;
+  uiWindow.render();
+  assert.match(uiApp.innerHTML,/ورود به حساب کاربری/,'cached demo-admin state alone must not unlock the Supabase admin panel');
+  uiWindow.ToubaAuthUI.quickAdminLogin();
+  assert.equal(uiAuthenticatedUser,null,'quick admin login must not create an authenticated session');
   uiWindow.demoLogin('admin');
   assert.match(uiWindow.lastToast,/غیرفعال است/);
-  console.log('PASS: Supabase signup/login/profile mapping/password reset, public-only config and demo-login lockout');
+  console.log('PASS: Supabase auth/profile, admin-like email requires password, no cached/quick-admin bypass, no admin email in login UI');
 })().catch(error=>{console.error(error);process.exit(1);});

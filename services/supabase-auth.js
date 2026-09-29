@@ -64,7 +64,7 @@
   async function setSession(session, { render = true } = {}) {
     applying = applying.catch(() => null).then(async () => {
       if (!session?.user) {
-        if (g.db && g.db.currentUser?.authProvider === 'supabase') g.db.currentUser = null;
+        if (g.db) g.db.currentUser = null;
         return null;
       }
       try {
@@ -88,7 +88,9 @@
     if (!enabled) throw new Error('کتابخانهٔ Supabase بارگذاری نشد؛ اتصال امن را دوباره بارگذاری کنید.');
     if (started) return null;
     started = true;
-    if (g.db && g.db.currentUser?.authProvider === 'supabase') g.db.currentUser = null;
+    // Never trust a cached demo/admin user when Supabase Auth is enabled.
+    if (g.db) g.db.currentUser = null;
+    try { g.localStorage?.removeItem('touba_admin_session'); } catch { /* legacy demo key */ }
     const { data, error } = await requireClient().auth.getSession();
     if (error) throw error;
     if (data.session) {
@@ -165,6 +167,12 @@
     if (g.render) g.render();
   }
 
+  async function getAccessToken() {
+    const { data, error } = await requireClient().auth.getSession();
+    if (error) throw error;
+    return data.session?.access_token || '';
+  }
+
   function publicError(error) {
     const message = String(error?.message || 'درخواست انجام نشد.');
     if (/invalid login credentials/i.test(message)) return 'ایمیل یا رمز عبور درست نیست.';
@@ -188,6 +196,7 @@
     signIn,
     sendPasswordReset,
     updatePassword,
+    getAccessToken,
     signOut,
     publicError,
     dispose() { subscription?.unsubscribe?.(); }

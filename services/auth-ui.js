@@ -35,19 +35,6 @@
     } catch (e) {}
   }
 
-  // Restore saved admin session if present
-  if (typeof localStorage !== 'undefined') {
-    try {
-      const savedAdmin = localStorage.getItem('touba_admin_session');
-      if (savedAdmin) {
-        const parsed = JSON.parse(savedAdmin);
-        if (parsed && ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(parsed.role)) {
-          setCurrentUser(parsed);
-        }
-      }
-    } catch (e) {}
-  }
-
   function messageBox(text, kind = 'notice') {
     return `<div class="${kind}" role="status" aria-live="polite">${esc(text)}</div>`;
   }
@@ -70,7 +57,7 @@
     if (mode === 'forgot') {
       return `${g.header()}<main class="page container"><section class="auth-card"><h1>بازیابی رمز عبور</h1><p class="muted">پیوند بازیابی به ایمیل حسابتان ارسال می‌شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.resetPassword(this)"><div class="field"><label for="reset-email">ایمیل حساب</label><input id="reset-email" name="email" type="email" autocomplete="email" required maxlength="254"></div><button class="btn" style="width:100%">ارسال پیوند بازیابی</button></form><p><a class="text-link" href="/login">بازگشت به ورود</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
     }
-    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="admin@toubashoes.ir یا ایمیل شما"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="ایمیل حساب کاربری"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
   }
 
   async function runForm(form, action, successText) {
@@ -93,59 +80,16 @@
   }
 
   function quickAdminLogin() {
-    const adminUser = {
-      id: 'admin-main',
-      name: 'مدیر ارشد فروشگاه طوبی',
-      email: 'admin@toubashoes.ir',
-      role: 'super_admin',
-      isActive: true,
-      authProvider: 'admin'
-    };
-    setCurrentUser(adminUser);
-    if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem('touba_admin_session', JSON.stringify(adminUser)); } catch (e) {}
-    }
-    g.toast('ورود موفق مدیر فروشگاه');
-    navigate('/admin');
+    g.toast('ورود مدیر فقط با ایمیل و رمز عبور معتبر و حساب تأییدشده انجام می‌شود.');
+    return null;
   }
 
   async function signIn(form) {
     const data = new FormData(form);
     const email = String(data.get('email') || '').trim();
     const password = String(data.get('password') || '');
-
-    // Immediate admin authentication for store manager
-    if (email.toLowerCase().includes('admin') || email.toLowerCase() === 'owner@example.com' || email.toLowerCase() === 'admin@toubashoes.ir' || email.toLowerCase() === 'admin@touba.demo') {
-      return runForm(form, async () => {
-        const adminUser = {
-          id: 'admin-main',
-          name: 'مدیر ارشد فروشگاه طوبی',
-          email: email || 'admin@toubashoes.ir',
-          role: 'super_admin',
-          isActive: true,
-          authProvider: 'admin'
-        };
-        setCurrentUser(adminUser);
-        if (typeof localStorage !== 'undefined') {
-          try { localStorage.setItem('touba_admin_session', JSON.stringify(adminUser)); } catch (e) {}
-        }
-        navigate('/admin');
-        return adminUser;
-      }, () => 'ورود با موفقیت انجام شد؛ در حال انتقال به پنل مدیریت…');
-    }
-
     return runForm(form, async () => {
-      let user = null;
-      try {
-        user = await auth.signIn({ email, password });
-      } catch (err) {
-        if (email.toLowerCase().includes('admin')) {
-          user = { id: 'admin-main', email, role: 'super_admin', name: 'مدیر فروشگاه', isActive: true };
-          setCurrentUser(user);
-        } else {
-          throw err;
-        }
-      }
+      const user = await auth.signIn({ email, password });
       navigate(user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/account');
       return user;
     }, () => 'ورود انجام شد؛ در حال انتقال به حساب کاربری…');
@@ -273,24 +217,10 @@
   ];
 
   function adminPage() {
-    const database = getDb();
-    let user = auth?.currentUser || database?.currentUser;
-    if (!user || !['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      if (typeof localStorage !== 'undefined') {
-        try {
-          const savedAdmin = localStorage.getItem('touba_admin_session');
-          if (savedAdmin) {
-            const parsed = JSON.parse(savedAdmin);
-            if (parsed && ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(parsed.role)) {
-              setCurrentUser(parsed);
-              user = parsed;
-            }
-          }
-        } catch (e) {}
-      }
-    }
-    if (!user || !['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">🔒</div><h1>دسترسی مدیریت</h1>${messageBox('برای دسترسی به پنل مدیریت، لطفاً ابتدا از طریق فرم ورود با حساب کاربری مدیر وارد شوید.')}<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><a class="btn" style="flex:1;text-align:center" href="/login">ورود با نام کاربری و رمز مدیر</a><a class="btn outline" style="flex:1;text-align:center" href="/">بازگشت به فروشگاه</a></div></section></main>${g.footer()}`;
+    const user = auth?.currentUser;
+    const isAuthenticatedAdmin = user?.authProvider === 'supabase' && ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role);
+    if (!isAuthenticatedAdmin) {
+      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">🔒</div><h1>دسترسی مدیریت</h1>${messageBox('برای دسترسی به پنل مدیریت، با حساب معتبر خود وارد شوید.')}<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><a class="btn" style="flex:1;text-align:center" href="/login">ورود به حساب کاربری</a><a class="btn outline" style="flex:1;text-align:center" href="/">بازگشت به فروشگاه</a></div></section></main>${g.footer()}`;
     }
     const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
     const selected = Object.hasOwn(adminSections, section) ? section : 'dashboard';
@@ -299,11 +229,11 @@
       loadAdminSection(selected);
     }, 15);
 
-    return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || 'admin@toubashoes.ir')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions"><button class="btn small" onclick="productModal()">＋ محصول جدید</button><button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button><button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem">❧</span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || '')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions"><button class="btn small" onclick="quickProductModal()">＋ افزودن سریع محصول</button><button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button><button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem">❧</span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
   }
 
   function adminTable(headers, rows) {
-    return `<div class="table-wrap"><table class="data-table"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="table-wrap"><table id="admin-table" class="data-table"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   g.deleteProduct = function (id) {
@@ -510,6 +440,73 @@
     }
   };
 
+  function selectAllCatalogRows(kind, checked) {
+    g.document.querySelectorAll(`[data-bulk-${kind}]`).forEach(input => { input.checked = Boolean(checked); });
+    updateCatalogSelectionCount(kind);
+  }
+
+  function updateCatalogSelectionCount(kind) {
+    const count = g.document.querySelectorAll(`[data-bulk-${kind}]:checked`).length;
+    const output = g.document.querySelector(`#bulk-${kind}-selected-count`);
+    if (output) output.textContent = `${count.toLocaleString('fa-IR')} مورد انتخاب‌شده`;
+  }
+
+  async function saveBulkRows(rows, repository) {
+    if (repository?.update) {
+      for (const row of rows) await repository.update(row.id, row);
+    } else if (typeof g.save === 'function') g.save();
+  }
+
+  async function bulkApplyProducts() {
+    const database = getDb();
+    const ids = new Set([...g.document.querySelectorAll('[data-bulk-product]:checked')].map(input => input.value));
+    if (!ids.size) { g.toast('ابتدا یک یا چند محصول را انتخاب کنید.'); return; }
+    const category = g.document.querySelector('#bulk-product-category')?.value || '';
+    const active = g.document.querySelector('#bulk-product-active')?.value || '';
+    const featured = g.document.querySelector('#bulk-product-featured')?.value || '';
+    const bestSeller = g.document.querySelector('#bulk-product-bestseller')?.value || '';
+    const rawPercent = String(g.document.querySelector('#bulk-product-price-percent')?.value || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/,/g, '');
+    const percent = rawPercent.trim() === '' ? null : Number(rawPercent);
+    if (percent !== null && (!Number.isFinite(percent) || percent < -90 || percent > 500)) { g.toast('درصد تغییر قیمت باید بین ۹۰- تا ۵۰۰ باشد.'); return; }
+    if (!category && !active && !featured && !bestSeller && percent === null) { g.toast('حداقل یک تغییر گروهی انتخاب کنید.'); return; }
+    const changed = (database?.products || []).filter(product => ids.has(String(product.id)));
+    for (const product of changed) {
+      if (category) product.category = category;
+      if (active) product.active = active === 'true';
+      if (featured) product.featured = featured === 'true';
+      if (bestSeller) product.bestSeller = bestSeller === 'true';
+      if (percent !== null) product.price = Math.max(0, Math.round(Number(product.price || 0) * (1 + percent / 100)));
+      product.updatedAt = new Date().toISOString();
+    }
+    try {
+      await saveBulkRows(changed, g.DataRepositories?.products);
+      if (typeof g.save === 'function') g.save();
+      g.toast(`تغییرات ${changed.length.toLocaleString('fa-IR')} محصول ذخیره شد.`);
+      await loadAdminSection('products');
+    } catch (error) { g.toast(error.message || 'ذخیرهٔ گروهی محصولات انجام نشد.'); }
+  }
+
+  async function bulkApplyCategories() {
+    const database = getDb();
+    const ids = new Set([...g.document.querySelectorAll('[data-bulk-category]:checked')].map(input => input.value));
+    if (!ids.size) { g.toast('ابتدا یک یا چند دسته‌بندی را انتخاب کنید.'); return; }
+    const active = g.document.querySelector('#bulk-category-active')?.value || '';
+    const icon = String(g.document.querySelector('#bulk-category-icon')?.value || '').trim().slice(0, 12);
+    if (!active && !icon) { g.toast('برای اعمال گروهی، وضعیت یا آیکون را انتخاب کنید.'); return; }
+    const changed = (database?.categories || []).filter(category => ids.has(String(category.id)));
+    for (const category of changed) {
+      if (active) category.active = active === 'true';
+      if (icon) category.icon = icon;
+      category.updatedAt = new Date().toISOString();
+    }
+    try {
+      await saveBulkRows(changed, g.DataRepositories?.categories);
+      if (typeof g.save === 'function') g.save();
+      g.toast(`تغییرات ${changed.length.toLocaleString('fa-IR')} دسته‌بندی ذخیره شد.`);
+      await loadAdminSection('categories');
+    } catch (error) { g.toast(error.message || 'ذخیرهٔ گروهی دسته‌بندی‌ها انجام نشد.'); }
+  }
+
   async function loadAdminSection(section) {
     const target = g.document?.querySelector ? g.document.querySelector('#admin-live-content') : null;
     if (!target) return;
@@ -549,14 +546,25 @@
 
       if (section === 'products') {
         const prods = (database && database.products) || [];
-        target.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <h2 style="font-size:18px;margin:0">کاتالوگ محصولات (${prods.length})</h2>
-          <button class="btn small" onclick="productModal()">＋ افزودن محصول جدید</button>
-        </div>` + adminTable(['نام محصول', 'SKU', 'قیمت (تومان)', 'موجودی', 'وضعیت', 'عملیات'], prods.map(p => `<tr><td><b>${esc(p.name)}</b></td><td><code>${esc(p.sku || '—')}</code></td><td>${toman(p.price)}</td><td>${(p.variants || []).reduce((n, v) => n + Number(v.stock || 0), Number(p.stock || 0)).toLocaleString('fa-IR')}</td><td><span class="badge ${p.active ? 'green' : 'red'}">${p.active ? 'فعال' : 'پیش‌نویس'}</span></td><td><button class="action" onclick="productModal('${p.id}')">ویرایش</button> <button class="action danger" onclick="deleteProduct('${p.id}')">حذف</button></td></tr>`).join(''));
+        const cats = (database && database.categories) || [];
+        const toolbar = `<section class="admin-bulk-card" aria-label="ویرایش گروهی محصولات">
+          <div class="admin-bulk-heading"><div><b>ویرایش گروهی</b><span id="bulk-product-selected-count">۰ مورد انتخاب‌شده</span></div><label><input type="checkbox" onchange="ToubaAuthUI.selectAllCatalogRows('product',this.checked)"> انتخاب همه</label></div>
+          <div class="admin-bulk-controls">
+            <label>انتقال به دسته<select id="bulk-product-category"><option value="">بدون تغییر</option>${cats.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
+            <label>انتشار<select id="bulk-product-active"><option value="">بدون تغییر</option><option value="true">فعال‌سازی</option><option value="false">پیش‌نویس</option></select></label>
+            <label>محصول ویژه<select id="bulk-product-featured"><option value="">بدون تغییر</option><option value="true">بله</option><option value="false">خیر</option></select></label>
+            <label>پرفروش<select id="bulk-product-bestseller"><option value="">بدون تغییر</option><option value="true">بله</option><option value="false">خیر</option></select></label>
+            <label>تغییر قیمت ٪<input id="bulk-product-price-percent" type="number" min="-90" max="500" step="1" placeholder="مثلاً ۱۰ یا -۵"></label>
+            <button class="btn small" type="button" onclick="ToubaAuthUI.bulkApplyProducts()">اعمال به انتخاب‌شده‌ها</button>
+          </div>
+        </section>`;
+        target.innerHTML = `<div class="admin-catalog-toolbar">
+          <div><h2 style="font-size:18px;margin:0">کاتالوگ محصولات (${prods.length})</h2><p class="muted" style="margin:4px 0 0">برای تغییر چند محصول، موارد را انتخاب کنید؛ عملیات گروهی محصولی را حذف نمی‌کند.</p><p class="notice" style="margin:6px 0 0">کاتالوگ فعلی از db و Mock Repository می‌آید؛ در Vercel تغییرها فقط در LocalStorage همین مرورگر می‌مانند و به Supabase همگام نیستند.</p></div>
+          <div class="admin-catalog-actions"><button class="btn small" onclick="quickProductModal()">＋ افزودن سریع محصول</button><button class="btn outline small" onclick="productModal()">فرم کامل محصول</button></div>
+        </div>${toolbar}<div class="shop-toolbar"><input class="select" style="max-width:300px" placeholder="جستجوی نام، SKU یا برند" oninput="filterAdminTable(this.value)"><span>${prods.length.toLocaleString('fa-IR')} محصول · ${(database?.products||[]).filter(p=>p.active).length.toLocaleString('fa-IR')} فعال</span></div>`
+        + adminTable(['انتخاب','نام محصول','SKU','دسته‌بندی','قیمت (تومان)','موجودی','وضعیت','عملیات'], prods.map(p => `<tr data-search="${esc(`${p.name||''} ${p.sku||''} ${p.brand||''}`.toLocaleLowerCase())}"><td><input type="checkbox" data-bulk-product value="${esc(p.id)}" aria-label="انتخاب ${esc(p.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('product')"></td><td><b>${esc(p.name)}</b></td><td><code>${esc(p.sku || '—')}</code></td><td>${esc(catName(p.category))}</td><td>${toman(p.price)}</td><td>${(p.variants || []).reduce((n, v) => n + Number(v.stock || 0), Number(p.stock || 0)).toLocaleString('fa-IR')}</td><td><span class="badge ${p.active ? 'green' : 'red'}">${p.active ? 'فعال' : 'پیش‌نویس'}</span></td><td><button class="action" onclick="productModal('${esc(p.id)}')">ویرایش کامل</button> <button class="action danger" onclick="deleteProduct('${esc(p.id)}')">حذف</button></td></tr>`).join(''));
         return;
       }
-
       if (section === 'orders') {
         const ords = (database && database.orders) || [];
         target.innerHTML = `
@@ -568,14 +576,14 @@
 
       if (section === 'categories') {
         const cats = (database && database.categories) || [];
-        target.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <h2 style="font-size:18px;margin:0">دسته‌بندی‌های فروشگاه (${cats.length})</h2>
-          <button class="btn small" onclick="categoryModal()">＋ دسته‌بندی جدید</button>
-        </div>` + adminTable(['آیکون', 'نام دسته‌بندی', 'شناسه لاتین', 'وضعیت', 'عملیات'], cats.map(c => `<tr><td style="font-size:20px">${c.icon || '◈'}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="categoryModal('${c.id}')">ویرایش</button> <button class="action danger" onclick="deleteCategory('${c.id}')">حذف</button></td></tr>`).join(''));
+        const bulk = `<section class="admin-bulk-card" aria-label="ویرایش گروهی دسته‌بندی‌ها">
+          <div class="admin-bulk-heading"><div><b>ویرایش گروهی دسته‌بندی‌ها</b><span id="bulk-category-selected-count">۰ مورد انتخاب‌شده</span></div><label><input type="checkbox" onchange="ToubaAuthUI.selectAllCatalogRows('category',this.checked)"> انتخاب همه</label></div>
+          <div class="admin-bulk-controls"><label>وضعیت<select id="bulk-category-active"><option value="">بدون تغییر</option><option value="true">فعال‌سازی</option><option value="false">غیرفعال‌سازی</option></select></label><label>آیکون مشترک (اختیاری)<input id="bulk-category-icon" maxlength="12" placeholder="مثلاً 👟"></label><button class="btn small" type="button" onclick="ToubaAuthUI.bulkApplyCategories()">اعمال به دسته‌های انتخاب‌شده</button></div>
+        </section>`;
+        target.innerHTML = `<div class="admin-catalog-toolbar"><div><h2 style="font-size:18px;margin:0">دسته‌بندی‌های فروشگاه (${cats.length})</h2><p class="muted" style="margin:4px 0 0">دسته‌های موجود حفظ می‌شوند؛ می‌توانید چند مورد را هم‌زمان فعال/غیرفعال یا آیکون‌گذاری کنید.</p><p class="notice" style="margin:6px 0 0">این عملیات روی دادهٔ Demo در همین مرورگر ذخیره می‌شود؛ CRUD دسته‌بندی هنوز به جدول‌های Supabase وصل نیست.</p></div><button class="btn small" onclick="categoryModal()">＋ دسته‌بندی جدید</button></div>${bulk}`
+        + adminTable(['انتخاب','آیکون','نام دسته‌بندی','شناسه لاتین','محصولات','وضعیت','عملیات'], cats.map(c => `<tr><td><input type="checkbox" data-bulk-category value="${esc(c.id)}" aria-label="انتخاب دسته ${esc(c.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('category')"></td><td style="font-size:20px">${esc(c.icon || '◈')}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td>${(database?.products||[]).filter(p=>p.category===c.id).length.toLocaleString('fa-IR')}</td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="categoryModal('${esc(c.id)}')">ویرایش</button> <button class="action danger" onclick="deleteCategory('${esc(c.id)}')">حذف</button></td></tr>`).join(''));
         return;
       }
-
       if (section === 'coupons') {
         const coups = (database && database.coupons) || [];
         target.innerHTML = `
@@ -855,6 +863,10 @@
     resetPassword,
     updatePassword,
     loadAdminSection,
+    bulkApplyProducts,
+    bulkApplyCategories,
+    selectAllCatalogRows,
+    updateCatalogSelectionCount,
     switchAdminSection,
     toggleAdminDrawer,
     closeAdminDrawer,
@@ -880,7 +892,7 @@
 
   g.login = authLogin;
   g.loginUser = function (form) { return signIn(form); };
-  g.demoLogin = function () { g.toast('ورود آزمایشی غیرفعال است؛ از دکمه ورود مدیر استفاده کنید.'); };
+  g.demoLogin = function () { g.toast('ورود نمایشی هنگام فعال‌بودن Supabase غیرفعال است؛ با حساب تأییدشده وارد شوید.'); };
   g.adminLogin = function () { return quickAdminLogin(); };
   g.logout = function () { return g.ToubaAuthUI.signOut(); };
   g.account = accountPage;

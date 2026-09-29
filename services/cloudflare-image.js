@@ -1,18 +1,26 @@
 'use strict';
 
-const MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
+const MODEL = '@cf/black-forest-labs/flux-2-klein-9b';
 const DEFAULT_MODEL = MODEL;
-const MAX_OUTPUT_BYTES = 18 * 1024 * 1024;
+// Keep base64 JSON responses below Vercel Functions' response-body ceiling.
+const MAX_OUTPUT_BYTES = 3 * 1024 * 1024;
 
-function promptFor(style, productHint = '') {
+const REFERENCE_ROLES = Object.freeze(['front three-quarter view', 'outer side profile', 'rear and heel view']);
+const REFERENCE_VIEW_IDS = Object.freeze(['front', 'side', 'heel']);
+const VIEW_LABELS = Object.freeze({ front:REFERENCE_ROLES[0], side:REFERENCE_ROLES[1], heel:REFERENCE_ROLES[2] });
+
+function promptFor(style, productHint = '', imageRoles = REFERENCE_VIEW_IDS) {
   const safeHint = String(productHint || '').replace(/[\r\n<>]/g, ' ').slice(0, 180).trim();
-  const itemGuide = safeHint ? `Product listing context: “${safeHint}”. Use this only to help identify the category; input image 0 is authoritative for the product's visual appearance.` : '';
+  const itemGuide = safeHint ? `Product listing context: “${safeHint}”. Use it only to identify the product category.` : '';
   const scenes = {
     'warm-studio':'a premium warm ivory studio with a soft beige plaster backdrop and subtle natural contact shadow',
     'dark-luxury':'a refined dark forest-green and charcoal studio, matte stone surface and restrained warm highlights',
     'natural-stone':'a minimal natural limestone and warm sand setting with soft daylight'
   };
-  return `Create a polished ecommerce reshoot of the exact shoe shown in input image 0. ${itemGuide} Preserve the shoe's recognizable category, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, and visible details. Do not substitute a different type of shoe or redesign it. Change only the background, lighting, surface, and natural shadow. Scene: ${scenes[style] || scenes['warm-studio']}. Show one full product, centered with clean negative space, photorealistic, no extra shoes, no text.`;
+  const roles = Array.isArray(imageRoles) && imageRoles.length ? imageRoles : REFERENCE_VIEW_IDS;
+  const viewMap = roles.map((role, index) => `image ${index} is the ${VIEW_LABELS[role] || 'shoe reference view'}`).join('; ');
+  const referenceCount = roles.length === 1 ? 'one reference photo' : `${roles.length} complementary reference photos`;
+  return `The ${referenceCount} show the SAME exact shoe. Reference mapping: ${viewMap}. ${itemGuide} Carefully combine every supplied reference to preserve the shoe's true identity, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, stitching, and small visible details. Resolve details using the clearest available view; do not invent or redesign features. Create ONE single, polished, high-detail ecommerce product photograph of that shoe, not a collage or multi-panel layout and not multiple shoes. Show the complete shoe at a flattering front three-quarter camera angle, centered with clean negative space, sharp fine texture and stitching, realistic materials, soft natural contact shadow, professional product lighting. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. No text, props covering the product, duplicate shoes, or extra objects.`;
 }
 
 function buildEndpoint(accountId, model = MODEL) {
@@ -21,15 +29,26 @@ function buildEndpoint(accountId, model = MODEL) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
 }
 
-async function generateProductPhoto({ imageBytes, style = 'warm-studio', productHint = '' }) {
+async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio', productHint = '' }) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
   const apiToken = process.env.CLOUDFLARE_API_TOKEN || '';
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_MODEL;
   if (!accountId || !apiToken) throw Object.assign(new Error('برای فعال‌سازی رایگان روزانه، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در فایل محلی .env تنظیم کنید.'), { status:503 });
 
+  const references = Array.isArray(imageBytes) ? imageBytes : [imageBytes];
+  const roles = Array.isArray(imageRoles) ? imageRoles : REFERENCE_VIEW_IDS.slice(0, references.length);
+  if (references.length < 1 || references.length > 3 || references.some(image => !image?.length)) {
+    throw Object.assign(new Error('برای ساخت تصویر، دست‌کم یک و حداکثر سه عکس مرجع لازم است.'), { status:400 });
+  }
+  if (roles.length !== references.length || roles.some(role => !REFERENCE_VIEW_IDS.includes(role)) || new Set(roles).size !== roles.length) {
+    throw Object.assign(new Error('زاویه‌های تصاویر مرجع معتبر نیستند؛ برای هر عکس یک زاویهٔ یکتا انتخاب کنید.'), { status:400 });
+  }
+
   const form = new FormData();
-  form.append('prompt', promptFor(style, productHint));
-  form.append('input_image_0', new Blob([imageBytes], { type:'image/jpeg' }), 'product-reference.jpg');
+  form.append('prompt', promptFor(style, productHint, roles));
+  references.forEach((image, index) => {
+    form.append(`input_image_${index}`, new Blob([image], { type:'image/jpeg' }), `shoe-view-${index + 1}.jpg`);
+  });
   form.append('width', '1024');
   form.append('height', '1024');
   const controller = new AbortController();
@@ -58,7 +77,7 @@ async function generateProductPhoto({ imageBytes, style = 'warm-studio', product
       const detail = (await response.text().catch(() => '')).slice(0, 500);
       throw Object.assign(new Error(detail || `Cloudflare Workers AI پاسخ نداد (${response.status}).`), { status:response.status === 429 ? 429 : 502 });
     }
-    if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) throw Object.assign(new Error('حجم خروجی مدل غیرمجاز است.'), { status:502 });
+    if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) throw Object.assign(new Error('حجم خروجی مدل از سقف امن پاسخ سرور (۳ مگابایت) بیشتر است؛ تولید را دوباره با خروجی استاندارد امتحان کنید.'), { status:502 });
     return { dataUrl:`data:image/png;base64,${bytes.toString('base64')}`, model, provider:'Cloudflare Workers AI' };
   } catch (error) {
     if (error.name === 'AbortError') throw Object.assign(new Error('زمان پاسخ مدل Cloudflare تمام شد؛ دوباره تلاش کنید.'), { status:504 });
@@ -66,4 +85,4 @@ async function generateProductPhoto({ imageBytes, style = 'warm-studio', product
   } finally { clearTimeout(timeout); }
 }
 
-module.exports = { generateProductPhoto, promptFor, buildEndpoint, MODEL, DEFAULT_MODEL };
+module.exports = { generateProductPhoto, promptFor, buildEndpoint, MODEL, DEFAULT_MODEL, REFERENCE_ROLES, REFERENCE_VIEW_IDS };

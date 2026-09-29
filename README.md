@@ -1,6 +1,6 @@
 # کفش طوبی — فروشگاه فارسی RTL با Supabase Auth و حالت Demo
 
-فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های Demo در LocalStorage و Repository/Service layer. اتصال ورود/ثبت‌نام ایمیلی Supabase به‌صورت اختیاری از تنظیمات عمومی پروژه فعال می‌شود؛ کاتالوگ، مدیریت فروشگاه، سفارش و موجودی هنوز به دیتابیس وصل نیستند و پرداخت همچنان mock است. ابزار اختیاری عکس محصول از Cloudflare Workers AI و مدل FLUX.2 [klein] 4B با تصویر مرجع استفاده می‌کند.
+فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های Demo در LocalStorage و Repository/Service layer. اتصال ورود/ثبت‌نام ایمیلی Supabase به‌صورت اختیاری از تنظیمات عمومی پروژه فعال می‌شود؛ کاتالوگ، مدیریت فروشگاه، سفارش و موجودی هنوز به دیتابیس وصل نیستند و پرداخت همچنان mock است. پنل محصول، دستیار نگارش توضیحات با Gemini (به‌همراه پیش‌نویس محلی در نبود کلید) و استودیوی تولید تصویر سه‌زاویه‌ای دارد. تصویرها از Cloudflare Workers AI و مدل FLUX.2 [klein] 9B با سه تصویر مرجع ساخته می‌شوند.
 
 ## اجرا
 - نیازمندی: Node.js 22+ (Supabase JS SDK در build بسته‌بندی می‌شود).
@@ -10,8 +10,8 @@
 
 ## انتشار روی Vercel
 - مخزن را در Vercel دوباره Deploy کنید (یا پس از push منتظر deploy خودکار GitHub بمانید). `vercel.json`، preset را روی Other/static قرار می‌دهد؛ `npm run build` فقط فایل‌های لازم وب را در `public/` آماده می‌کند، مسیرهای SPA به `index.html` می‌روند و endpointها به Vercel Functions متصل می‌شوند.
-- صفحه فروشگاه بدون کلید Cloudflare هم بالا می‌آید؛ فقط ساخت تصویر تا زمان تنظیم Environment Variables غیرفعال می‌ماند. برای فعال‌سازی تصویر، در Vercel → Project → Settings → Environment Variables، `CLOUDFLARE_ACCOUNT_ID` و یک `CLOUDFLARE_API_TOKEN` تازه با دسترسی محدود `Workers AI: Read` اضافه و سپس Redeploy کنید. توکن افشاشده در گفتگو را استفاده نکنید.
-- این Vercel deployment تا اتصال کاتالوگ/سفارش/موجودی و درگاه واقعی Demo می‌ماند. ورود/ثبت‌نام ایمیلی فقط وقتی فعال است که `SUPABASE_URL` و `SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY` را در Environment Variables پروژهٔ Vercel قرار دهید؛ پرداخت و checkout واقعی همچنان غیرفعال‌اند.
+- صفحهٔ فروشگاه بدون کلیدهای AI هم بالا می‌آید. برای Gemini، `GEMINI_API_KEY` را فقط به‌صورت Environment Variable سمت‌سرور در Vercel تنظیم کنید. برای تصویر، Vercel به `CLOUDFLARE_ACCOUNT_ID` و `CLOUDFLARE_API_TOKEN` نیاز دارد. سهمیهٔ پایدار تصویر، Supabase URL و کلید عمومی (`SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY`) را به‌همراه migration سهمیه می‌خواهد؛ service-role key لازم نیست. تا زمان merge و اجرای migration، endpoint در Vercel عمداً fail-closed است. هیچ کلیدی را در کد/مرورگر یا گفتگو قرار ندهید.
+- احراز هویت ایمیلی Supabase اختیاری است. پرداخت و checkout واقعی خاموش‌اند؛ کاتالوگ/سفارش/موجودی فعلاً از Repository محلی و LocalStorage خوانده می‌شوند و CRUD آن‌ها هنوز به Supabase متصل نیست، بنابراین تغییرات مدیریت کاتالوگ سراسری یا همگام‌شده بین مرورگرها نیستند.
 
 ### اتصال Auth ایمیل/رمز Supabase
 
@@ -22,20 +22,25 @@
 
 این endpoint عمداً فقط URL و کلید عمومی را به مرورگر می‌دهد؛ `service_role`, database password و GitHub migration token را اضافه نکنید. بعد از افزودن متغیرها Redeploy کنید. در Supabase → **Authentication → URL Configuration**، Site URL را روی `https://toubashoes.vercel.app` بگذارید و Redirect URLهای `/login?verified=1` و `/reset-password` را مجاز کنید (پس از اتصال دامنهٔ نهایی، دامنهٔ همان‌جا هم اضافه شود). در Authentication → Providers، Email را فعال و تأیید ایمیل را روشن کنید؛ برای ارسال قابل‌اعتماد Production باید SMTP دامنهٔ تأییدشده را تنظیم کنید.
 
-در حالت Supabase، حساب Demo و ورود مدیر نمایشی غیرفعال‌اند؛ signup فقط نقش `customer` می‌سازد. حساب مدیر را پس از ثبت‌نام/تأیید، فقط مالک از SQL Editor و با بررسی ایمیل به `super_admin` ارتقا دهد. در حالت Supabase مدیر تأییدشده می‌تواند داشبورد و فهرست‌های فقط‌خواندنی محصولات/سفارش‌ها/کاربران را با RLS ببیند؛ افزودن/ویرایش، تغییر وضعیت سفارش و Checkout واقعی تا اتصال عملیات امن و تراکنشی غیرفعال‌اند و پرداخت Mock به مشتری Supabase ارائه نمی‌شود. در نبود متغیرهای Supabase، Demo محلی بدون تغییر کار می‌کند.
+در حالت Supabase، حساب Demo و ورود مدیر نمایشی غیرفعال‌اند؛ signup فقط نقش `customer` می‌سازد. حساب مدیر را پس از ثبت‌نام/تأیید، فقط مالک از SQL Editor و با بررسی ایمیل به `super_admin` ارتقا دهد. ورود به پنل به پروفایل فعال Supabase وابسته است، اما مدیریت کاتالوگ/سفارش در حال حاضر از `g.db` و Mock Repository می‌خواند: فرم کامل، افزودن سریع و عملیات دسته‌جمعی می‌توانند همان Demo را ویرایش کنند، نه جداول Supabase. در Vercel این تغییرها فقط در LocalStorage همان مرورگر می‌مانند و نباید برای سفارش یا کاتالوگ واقعی استفاده شوند؛ در اجرای local server یک فایل Demo جدا نیز نگهداری می‌شود. Checkout و پرداخت مشتری Supabase واقعی/فعال نیستند.
 
-### ابزار اختیاری عکس محصول با Cloudflare Workers AI
-در Products عکس را انتخاب کنید و سبک پس‌زمینه را برگزینید. مدل پیش‌فرض `@cf/black-forest-labs/flux-2-klein-4b` از ویرایش با تصویر مرجع پشتیبانی می‌کند؛ وزن‌های 4B در مجوز Apache-2.0 معرفی شده‌اند. Cloudflare Workers AI پلن رایگان با ۱۰٬۰۰۰ Neurons در روز دارد (سهمیه در ۰۰:۰۰ UTC بازنشانی می‌شود). این سهمیه بین استفاده‌های همان حساب مشترک است؛ ابزار به‌عنوان محافظ داخلی حداکثر ۲۰ تصویر در هر ۲۴ ساعت می‌سازد. استفادهٔ بالاتر از سهمیهٔ رایگان در حساب‌های دارای billing ممکن است هزینه‌دار شود؛ قبل از اجرا وضعیت پلن و مصرف حساب را بررسی کنید. این endpoint کنترل دسترسی production نیست و فقط same-origin، سقف محلی و ورود نمایشی فعلی را دارد.
+### دستیار توضیحات محصول
+در پنل Products فرم محصول را باز کنید و «تولید هوشمند توضیحات» را بزنید. با `GEMINI_API_KEY`، API از Gemini 3.8 Flash متن پیشنهادی کوتاه/کامل، ویژگی‌ها و مشخصات را می‌گیرد؛ در نبود کلید یا اختلال API، یک پیش‌نویس محلیِ محافظه‌کارانه ارائه می‌شود. متن و ادعاهای فنی را پیش از ذخیره با مشخصات واقعی کالا بررسی کنید. کلید Gemini فقط در Vercel Environment Variables یا `.env` محلی قرار گیرد.
+
+### استودیوی عکس محصول سه‌زاویه‌ای با Cloudflare Workers AI
+در پنل Products برای همان کفش دست‌کم یک و تا سه عکس از نمای روبه‌رو/سه‌رخ، جانبی و پشت/پاشنه بارگذاری کنید؛ هر جایگاه عکس اختیاری است و فقط یک عکس هم برای ساخت کافی است. عکس‌های انتخاب‌شده با نام‌های `input_image_0..2` و نگاشت زاویهٔ درست، در یک درخواست multipart به مدل `@cf/black-forest-labs/flux-2-klein-9b` می‌روند؛ ورودی‌ها پیش از ارسال به حداکثر ۵۱۱×۵۱۱ کوچک می‌شوند و مدل یک تصویر نهایی واحد می‌سازد. سه زاویه معمولاً برای وفاداری بهتر پیشنهاد می‌شوند. خروجی را پیش‌نمایش کنید و فقط در صورت تأیید به فرم محصول اضافه کنید. سقف اپلیکیشن ۵۰ خروجی موفق در هر روز UTC است (بازنشانی ساعت ۰۰:۰۰ UTC)؛ reservation در SQL اتمی است و شکست تولید، سهمیهٔ موفق را مصرف نمی‌کند. این سقف به معنی ۵۰ تصویر رایگان نیست و سهمیه/هزینهٔ Cloudflare برای 9B ممکن است زودتر اثر کند.
+
+برای Vercel، پس از merge، اجرای migrationها و deploy، در **Project → Settings → Environment Variables** تنظیم کنید: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SUPABASE_URL`, و `SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY`. خطای `PGRST202` برای `p_limit` با migration `202609300001_daily_ai_image_quota_rpc_compat.sql` برطرف می‌شود: تابع رزرو بدون پارامتر ورودی و سقف ثابت ۵۰ دارد و migration، schema cache مربوط به PostgREST را reload می‌کند. از توکن آمادهٔ Workers AI API در داشبورد Cloudflare استفاده کنید؛ رازها فقط server-side باشند و service-role key لازم نیست. برای عیب‌یابی، ابتدا `https://toubashoes.vercel.app/api/ai/status` را باز کنید: `configured:false` همراه `cloudflareConfigured:false` یعنی تنظیمات Cloudflare غایب‌اند؛ `quotaMode:"unavailable"` یعنی تنظیمات عمومی Supabase در Vercel ناقص‌اند. اگر هر دو آماده‌اند اما رزرو سهمیه خطا می‌دهد، تاریخچهٔ migration را در Supabase بررسی کنید؛ پاسخ API در استودیو جزئیات خطا را نمایش می‌دهد. `configured:true` فقط وجود Environment Variables را می‌سنجد، نه اعتبار خود Cloudflare token؛ درخواست واقعی سه عکس آن را تأیید می‌کند. سرور محلی بدون تنظیم سهمیهٔ Supabase از شمارندهٔ process-memory استفاده می‌کند که پایدار/سراسری نیست. شرایط استفادهٔ Cloudflare و Black Forest Labs را پیش از استفادهٔ تجاری بررسی کنید.
 
 #### راه‌اندازی Cloudflare
 1. یک حساب Cloudflare بسازید و Account ID آن را از داشبورد بردارید.
-2. یک API Token با دسترسی `Workers AI: Read` بسازید.
-3. `.env.example` را به `.env` محلی کپی کنید و `CLOUDFLARE_ACCOUNT_ID` و `CLOUDFLARE_API_TOKEN` را فقط در فایل `.env` وارد کنید؛ کلید را در چت یا فایل‌های commit‌شده قرار ندهید.
-4. سرور را دوباره اجرا کنید. تا وقتی مشخصات تنظیم نشده باشند، ابزار ساخت تصویر غیرفعال می‌ماند.
+2. از صفحهٔ Workers AI یک Workers AI API Token بسازید؛ برای REST endpoint باید دسترسی مدل‌های Workers AI را داشته باشد.
+3. `.env.example` را به `.env` محلی کپی کنید و `CLOUDFLARE_ACCOUNT_ID` و `CLOUDFLARE_API_TOKEN` را فقط در فایل `.env` وارد کنید؛ برای Vercel همان‌ها را در Environment Variables قرار دهید. کلید را در چت یا فایل‌های commit‌شده نگذارید.
+4. روی Vercel، `SUPABASE_URL` و کلید عمومی Supabase را هم اضافه کنید و پس از اجرای migration سهمیه دوباره deploy کنید. endpoint `/api/ai/status` وضعیت پیکربندی را نشان می‌دهد؛ هیچگاه token واقعی را از مرورگر یا لاگ عمومی بررسی نکنید.
 
 تصویر ورودی مستقیم از سرور به Cloudflare فرستاده می‌شود و دیگر روی میزبان موقت عمومی آپلود نمی‌شود. ورودی برای API به ضلع حداکثر ۵۱۱ پیکسل کاهش می‌یابد. عکس اصلی عوض نمی‌شود مگر مدیر خروجی را پیش‌نمایش و اعمال کند؛ خروجی در مرورگر به JPEG با ضلع حداکثر ۱۲۸۰ پیکسل فشرده می‌شود. در اجرای محلی فایل در `uploads/products/` ذخیره می‌شود؛ روی Vercel فایل‌سیستم پایدار نیست، بنابراین نسخهٔ تأییدشده به‌صورت data URL در LocalStorage همان مرورگر ذخیره می‌شود. این رفتار فقط برای Demo است و جایگزین object storage واقعی نیست. هیچ مدل مولدی حفظ دقیق کفش، رنگ، بند، لوگو یا جزئیات را تضمین نمی‌کند؛ خروجی‌ها را با عکس واقعی بررسی کنید.
 
-**مجوز مدل:** 4B برای این کاربرد تجاری انتخاب شده چون مستندات Black Forest Labs آن را Apache-2.0 معرفی می‌کنند. از 9B با مجوز FLUX NCL/غیرتجاری برای فروشگاه استفاده نکنید مگر مجوزش را مستقلاً بررسی کرده باشید.
+**مجوز و هزینه:** مدل 9B اکنون با انتخاب آگاهانهٔ مالک فعال است. وزن‌های متن‌باز FLUX.2 Klein 9B زیر مجوز FLUX Non-Commercial منتشر شده‌اند؛ صفحهٔ مدل Cloudflare به شرایط عمومی BFL پیوند می‌دهد، اما در منابع عمومیِ بررسی‌شده مجوز تجاریِ صریح و مختص endpoint میزبانی‌شدهٔ Cloudflare روشن نبود. این انتخاب را مجوز تجاریِ تأییدشده تلقی نکنید؛ پیش از استفادهٔ تجاریِ گسترده، تأیید کتبی BFL/Cloudflare بگیرید و شرایط سرویس را بازبینی کنید ([Cloudflare model terms](https://developers.cloudflare.com/workers-ai/models/flux-2-klein-9b/)، [BFL model card](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)، [Cloudflare data terms](https://developers.cloudflare.com/workers-ai/platform/data-usage/)). هزینهٔ 9B و سهمیهٔ رایگان Cloudflare را جداگانه پایش کنید.
 
 ## نقش‌های Demo (فقط وقتی Supabase Auth پیکربندی نشده)
 در حالت آفلاین `/login` روی حساب نمونه کلیک کنید:
@@ -56,7 +61,7 @@
 - `types/domain.js`: JSDoc contracts؛ `prisma/schema.prisma` مدل relational معادل PostgreSQL/Supabase.
 - `repositories/supabase-repository.stub.js`: فعلاً interface آینده؛ import یا اجرا نمی‌شود.
 - `supabase/migrations/202609280001_initial_schema.sql` و migrationهای بعدی: schema/RLS نسخه‌بندی‌شده؛ مالک تأیید کرده اجرای اولیه در Actions سبز شده است. migration جدید `202609280002_active_profile_rls.sql` با push به `main` خودکار اجرا می‌شود.
-- `.env.example`: placeholderهای تنظیم عمومی Supabase و Cloudflare؛ فایل واقعی `.env` از git خارج است. فقط URL/کلید public برای Auth هستند؛ هیچ `service_role` وارد مرورگر نکنید.
+- `.env.example`: placeholderهای تنظیم عمومی Supabase، Cloudflare و Gemini؛ فایل واقعی `.env` از git خارج است. فقط URL/کلید public برای Auth به مرورگر می‌رسند؛ کلیدهای AI و هر `service_role` باید سروری بمانند.
 
 UI از state snapshot محلی استفاده می‌کند و persistence فقط از `DataProvider` عبور می‌کند؛ operations حساس فروش از `DemoServices` و Repositoryها انجام می‌شوند. در مرحله اتصال، composition root و adapter جایگزین می‌شوند؛ در صورت نیاز APIهای کاملاً async می‌توانند همان قرارداد repository را حفظ کنند.
 
