@@ -47,6 +47,7 @@
 - Supabase Auth frontend integration (email/password, email confirmation redirect, password reset, PKCE, profile role lookup) اضافه شده؛ آخرین بررسی قبلی `/api/supabase-config` در دامنهٔ زنده `enabled=true` برگرداند. تغییرات تازهٔ role redirect و پنل read-only هنوز Deploy/Live-test نشده‌اند؛ SMTP و redirectهای Supabase نیز باید بررسی شوند.
 - در Supabase Auth mode ورود Demo و checkout mock عمداً مسدود می‌شوند تا نقش‌های نمایشی یا پرداخت ساختگی به‌عنوان واقعی دیده نشوند. Admin dashboard/list view فقط‌خواندنی است؛ Commerce catalog/order/admin CRUD هنوز Mock است.
 - `.env` و آپلودهای محلی در Git نادیده گرفته می‌شوند؛ از commitکردن token خودداری شود.
+- **به‌روزرسانی workspace در 2026-09-29:** bypass ورود مدیر بر پایهٔ متن ایمیل و نشست ادمین LocalStorage از UI حالت Supabase حذف شد؛ ورود مدیر اکنون به Auth و نقش فعال در `profiles` وابسته است. دستیار توضیحات با Gemini 3.8 Flash و پیش‌نویس محلیِ بدون ادعاهای فنی ساختگی تکمیل شد؛ استودیوی تصویر سه درخواست نمای روبه‌رو، جانبی و پاشنه تولید می‌کند. تست و build محلی اجرا شده‌اند؛ این تغییرها تا push/deploy و تنظیم Environment Variables روی دامنهٔ زنده فعال نیستند. **APIهای AI تصویر همچنان احراز هویت سروری مدیر/سقف مصرف پایدار ندارند** و نباید کلیدهای AI را بدون کنترل هزینه و دسترسی در Production عمومی فعال کرد.
 
 ## تصمیم‌های مالک و موارد باقی‌مانده
 

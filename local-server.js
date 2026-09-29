@@ -217,7 +217,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 429, { error:'سقف محافظ داخلی فروشگاه (۲۰ تصویر در ۲۴ ساعت) پر شده است تا مصرف سهمیهٔ رایگان Cloudflare کنترل شود.' }, { 'Retry-After':'86400' });
     }
     try {
-      const result = await generateProductPhoto({ imageBytes:sourceBytes, style:body.style, productHint:body.productHint });
+      const result = await generateProductPhoto({ imageBytes:sourceBytes, style:body.style, angle:body.angle, productHint:body.productHint });
       return json(res, 200, result);
     } catch (error) {
       const status = Number(error.status) || 502;

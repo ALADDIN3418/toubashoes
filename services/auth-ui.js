@@ -35,19 +35,6 @@
     } catch (e) {}
   }
 
-  // Restore saved admin session if present
-  if (typeof localStorage !== 'undefined') {
-    try {
-      const savedAdmin = localStorage.getItem('touba_admin_session');
-      if (savedAdmin) {
-        const parsed = JSON.parse(savedAdmin);
-        if (parsed && ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(parsed.role)) {
-          setCurrentUser(parsed);
-        }
-      }
-    } catch (e) {}
-  }
-
   function messageBox(text, kind = 'notice') {
     return `<div class="${kind}" role="status" aria-live="polite">${esc(text)}</div>`;
   }
@@ -70,7 +57,7 @@
     if (mode === 'forgot') {
       return `${g.header()}<main class="page container"><section class="auth-card"><h1>بازیابی رمز عبور</h1><p class="muted">پیوند بازیابی به ایمیل حسابتان ارسال می‌شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.resetPassword(this)"><div class="field"><label for="reset-email">ایمیل حساب</label><input id="reset-email" name="email" type="email" autocomplete="email" required maxlength="254"></div><button class="btn" style="width:100%">ارسال پیوند بازیابی</button></form><p><a class="text-link" href="/login">بازگشت به ورود</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
     }
-    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="admin@toubashoes.ir یا ایمیل شما"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="ایمیل حساب کاربری"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
   }
 
   async function runForm(form, action, successText) {
@@ -93,59 +80,16 @@
   }
 
   function quickAdminLogin() {
-    const adminUser = {
-      id: 'admin-main',
-      name: 'مدیر ارشد فروشگاه طوبی',
-      email: 'admin@toubashoes.ir',
-      role: 'super_admin',
-      isActive: true,
-      authProvider: 'admin'
-    };
-    setCurrentUser(adminUser);
-    if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem('touba_admin_session', JSON.stringify(adminUser)); } catch (e) {}
-    }
-    g.toast('ورود موفق مدیر فروشگاه');
-    navigate('/admin');
+    g.toast('ورود مدیر فقط با ایمیل و رمز عبور معتبر و حساب تأییدشده انجام می‌شود.');
+    return null;
   }
 
   async function signIn(form) {
     const data = new FormData(form);
     const email = String(data.get('email') || '').trim();
     const password = String(data.get('password') || '');
-
-    // Immediate admin authentication for store manager
-    if (email.toLowerCase().includes('admin') || email.toLowerCase() === 'owner@example.com' || email.toLowerCase() === 'admin@toubashoes.ir' || email.toLowerCase() === 'admin@touba.demo') {
-      return runForm(form, async () => {
-        const adminUser = {
-          id: 'admin-main',
-          name: 'مدیر ارشد فروشگاه طوبی',
-          email: email || 'admin@toubashoes.ir',
-          role: 'super_admin',
-          isActive: true,
-          authProvider: 'admin'
-        };
-        setCurrentUser(adminUser);
-        if (typeof localStorage !== 'undefined') {
-          try { localStorage.setItem('touba_admin_session', JSON.stringify(adminUser)); } catch (e) {}
-        }
-        navigate('/admin');
-        return adminUser;
-      }, () => 'ورود با موفقیت انجام شد؛ در حال انتقال به پنل مدیریت…');
-    }
-
     return runForm(form, async () => {
-      let user = null;
-      try {
-        user = await auth.signIn({ email, password });
-      } catch (err) {
-        if (email.toLowerCase().includes('admin')) {
-          user = { id: 'admin-main', email, role: 'super_admin', name: 'مدیر فروشگاه', isActive: true };
-          setCurrentUser(user);
-        } else {
-          throw err;
-        }
-      }
+      const user = await auth.signIn({ email, password });
       navigate(user?.role === 'admin' || user?.role === 'super_admin' ? '/admin' : '/account');
       return user;
     }, () => 'ورود انجام شد؛ در حال انتقال به حساب کاربری…');
@@ -273,24 +217,10 @@
   ];
 
   function adminPage() {
-    const database = getDb();
-    let user = auth?.currentUser || database?.currentUser;
-    if (!user || !['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      if (typeof localStorage !== 'undefined') {
-        try {
-          const savedAdmin = localStorage.getItem('touba_admin_session');
-          if (savedAdmin) {
-            const parsed = JSON.parse(savedAdmin);
-            if (parsed && ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(parsed.role)) {
-              setCurrentUser(parsed);
-              user = parsed;
-            }
-          }
-        } catch (e) {}
-      }
-    }
-    if (!user || !['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">🔒</div><h1>دسترسی مدیریت</h1>${messageBox('برای دسترسی به پنل مدیریت، لطفاً ابتدا از طریق فرم ورود با حساب کاربری مدیر وارد شوید.')}<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><a class="btn" style="flex:1;text-align:center" href="/login">ورود با نام کاربری و رمز مدیر</a><a class="btn outline" style="flex:1;text-align:center" href="/">بازگشت به فروشگاه</a></div></section></main>${g.footer()}`;
+    const user = auth?.currentUser;
+    const isAuthenticatedAdmin = user?.authProvider === 'supabase' && ['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role);
+    if (!isAuthenticatedAdmin) {
+      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">🔒</div><h1>دسترسی مدیریت</h1>${messageBox('برای دسترسی به پنل مدیریت، با حساب معتبر خود وارد شوید.')}<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><a class="btn" style="flex:1;text-align:center" href="/login">ورود به حساب کاربری</a><a class="btn outline" style="flex:1;text-align:center" href="/">بازگشت به فروشگاه</a></div></section></main>${g.footer()}`;
     }
     const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
     const selected = Object.hasOwn(adminSections, section) ? section : 'dashboard';
@@ -299,7 +229,7 @@
       loadAdminSection(selected);
     }, 15);
 
-    return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || 'admin@toubashoes.ir')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions"><button class="btn small" onclick="productModal()">＋ محصول جدید</button><button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button><button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem">❧</span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || '')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions"><button class="btn small" onclick="productModal()">＋ محصول جدید</button><button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button><button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem">❧</span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
   }
 
   function adminTable(headers, rows) {
@@ -880,7 +810,7 @@
 
   g.login = authLogin;
   g.loginUser = function (form) { return signIn(form); };
-  g.demoLogin = function () { g.toast('ورود آزمایشی غیرفعال است؛ از دکمه ورود مدیر استفاده کنید.'); };
+  g.demoLogin = function () { g.toast('ورود نمایشی هنگام فعال‌بودن Supabase غیرفعال است؛ با حساب تأییدشده وارد شوید.'); };
   g.adminLogin = function () { return quickAdminLogin(); };
   g.logout = function () { return g.ToubaAuthUI.signOut(); };
   g.account = accountPage;

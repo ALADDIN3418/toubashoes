@@ -4796,10 +4796,16 @@ body {
   margin: 12px 0 16px;
 }
 .ai-studio-heading h3 {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-size: 14px;
   color: var(--green, #13261b);
   font-weight: 600;
+}
+.ai-studio-note {
+  margin: 0 0 12px;
+  color: #68756a;
+  font-size: 11px;
+  line-height: 1.8;
 }
 .ai-studio-controls {
   display: flex;
@@ -4830,6 +4836,60 @@ body {
 #ai-studio-status {
   font-size: 12px;
   color: #556956;
+}
+.ai-angle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.ai-angle-card {
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #dce4da;
+  border-radius: 12px;
+  background: #fff;
+}
+.ai-angle-card img,
+.ai-angle-placeholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #f0f2ed;
+}
+.ai-angle-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: #718071;
+  font-size: 12px;
+  text-align: center;
+}
+.ai-angle-card figcaption {
+  margin-top: 8px;
+  color: #26382a;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ai-angle-status {
+  min-height: 36px;
+  margin: 6px 0;
+  color: #68756a;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.ai-angle-apply {
+  width: 100%;
+  white-space: normal;
+}
+.ai-angle-apply:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+@media (max-width: 680px) {
+  .ai-angle-grid { grid-template-columns: 1fr; }
 }
 
 /* AI Description Assistant */

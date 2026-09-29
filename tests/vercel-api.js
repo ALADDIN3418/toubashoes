@@ -4,6 +4,7 @@ const aiStatus = require('../api/ai/status.js');
 const productPhoto = require('../api/ai/product-photo.js');
 const productImageUpload = require('../api/uploads/product-image.js');
 const productDescription = require('../api/ai/describe.js');
+const { generateLocalShoeDescription } = require('../app/applet/lib/gemini-describer.js');
 
 function response() {
   return {
@@ -15,6 +16,11 @@ function response() {
 function payload(res) { return JSON.parse(res.body); }
 
 async function main() {
+  const draft = generateLocalShoeDescription({ name:'کفش نمونه', category:'formal' });
+  assert.equal(draft.model,'local-draft');
+  assert.doesNotMatch(`${draft.shortDesc} ${draft.longDesc} ${draft.features.join(' ')}`, /چرم طبیعی|طبی ارگونومیک|ضدباکتری|درجه یک|PU/i);
+  const informedDraft = generateLocalShoeDescription({ name:'کفش ثبت‌شده', features:['رویه چرم مصنوعی'], specifications:'جنس رویه: چرم مصنوعی' });
+  assert.match(informedDraft.longDesc,/چرم مصنوعی/);
   const oldAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
   const oldToken = process.env.CLOUDFLARE_API_TOKEN;
   delete process.env.CLOUDFLARE_ACCOUNT_ID;

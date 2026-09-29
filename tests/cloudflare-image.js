@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { MODEL, DEFAULT_MODEL, promptFor, buildEndpoint, generateProductPhoto } = require('../services/cloudflare-image.js');
+const { MODEL, DEFAULT_MODEL, ANGLES, promptFor, buildEndpoint, generateProductPhoto } = require('../services/cloudflare-image.js');
 
 async function main() {
   assert.equal(MODEL, '@cf/black-forest-labs/flux-2-klein-4b');
@@ -13,6 +13,10 @@ async function main() {
   assert.match(promptFor('warm-studio', 'کفش چرمی مردانه دو سگک'), /کفش چرمی مردانه دو سگک/);
   assert.match(promptFor('warm-studio', 'کفش چرمی مردانه دو سگک'), /input image 0 is authoritative/);
   assert.match(promptFor('warm-studio'), /Do not substitute a different type of shoe/);
+  assert.deepEqual(Object.keys(ANGLES), ['front', 'side', 'heel']);
+  assert.match(promptFor('warm-studio', '', 'front'), /front three-quarter view/);
+  assert.match(promptFor('warm-studio', '', 'side'), /true outer side profile/);
+  assert.match(promptFor('warm-studio', '', 'heel'), /rear three-quarter view/);
 
   const oldFetch = global.fetch;
   const oldAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -25,13 +29,14 @@ async function main() {
     assert.equal(url, buildEndpoint(process.env.CLOUDFLARE_ACCOUNT_ID));
     assert.equal(options.headers.Authorization, 'Bearer test-token-only');
     assert.equal(options.body.get('prompt').includes('input image 0'), true);
+    assert.match(options.body.get('prompt'), /true outer side profile/);
     assert.equal(options.body.get('width'), '1024');
     assert.equal(options.body.get('height'), '1024');
     assert.equal(options.body.get('input_image_0').type, 'image/jpeg');
     return new Response(JSON.stringify({ success:true, result:{ image:Buffer.from('image-test').toString('base64') } }), { status:200, headers:{ 'Content-Type':'application/json' } });
   };
   try {
-    const result = await generateProductPhoto({ imageBytes:Buffer.from('reference'), style:'warm-studio' });
+    const result = await generateProductPhoto({ imageBytes:Buffer.from('reference'), style:'warm-studio', angle:'side' });
     assert.equal(requested, true);
     assert.equal(result.model, MODEL);
     assert.equal(result.provider, 'Cloudflare Workers AI');

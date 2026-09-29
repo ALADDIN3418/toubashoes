@@ -4,7 +4,13 @@ const MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
 const DEFAULT_MODEL = MODEL;
 const MAX_OUTPUT_BYTES = 18 * 1024 * 1024;
 
-function promptFor(style, productHint = '') {
+const ANGLES = Object.freeze({
+  front: 'front three-quarter view, showing the toe and outer side of the same shoe',
+  side: 'true outer side profile, showing the complete length of the same shoe',
+  heel: 'rear three-quarter view, emphasizing the heel and back construction of the same shoe'
+});
+
+function promptFor(style, productHint = '', angle = 'front') {
   const safeHint = String(productHint || '').replace(/[\r\n<>]/g, ' ').slice(0, 180).trim();
   const itemGuide = safeHint ? `Product listing context: “${safeHint}”. Use this only to help identify the category; input image 0 is authoritative for the product's visual appearance.` : '';
   const scenes = {
@@ -12,7 +18,8 @@ function promptFor(style, productHint = '') {
     'dark-luxury':'a refined dark forest-green and charcoal studio, matte stone surface and restrained warm highlights',
     'natural-stone':'a minimal natural limestone and warm sand setting with soft daylight'
   };
-  return `Create a polished ecommerce reshoot of the exact shoe shown in input image 0. ${itemGuide} Preserve the shoe's recognizable category, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, and visible details. Do not substitute a different type of shoe or redesign it. Change only the background, lighting, surface, and natural shadow. Scene: ${scenes[style] || scenes['warm-studio']}. Show one full product, centered with clean negative space, photorealistic, no extra shoes, no text.`;
+  const requestedAngle = ANGLES[angle] || ANGLES.front;
+  return `Create a polished ecommerce reshoot of the exact shoe shown in input image 0. ${itemGuide} Preserve the shoe's recognizable category, silhouette, proportions, color, material, construction, sole, straps, buckles, laces, logos, and visible details. Do not substitute a different type of shoe or redesign it. Requested camera angle: ${requestedAngle}. Change only the background, lighting, surface, and camera viewpoint. Scene: ${scenes[style] || scenes['warm-studio']}. Show one full product, centered with clean negative space, photorealistic, no extra shoes, no text.`;
 }
 
 function buildEndpoint(accountId, model = MODEL) {
@@ -21,14 +28,14 @@ function buildEndpoint(accountId, model = MODEL) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
 }
 
-async function generateProductPhoto({ imageBytes, style = 'warm-studio', productHint = '' }) {
+async function generateProductPhoto({ imageBytes, style = 'warm-studio', angle = 'front', productHint = '' }) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
   const apiToken = process.env.CLOUDFLARE_API_TOKEN || '';
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_MODEL;
   if (!accountId || !apiToken) throw Object.assign(new Error('برای فعال‌سازی رایگان روزانه، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در فایل محلی .env تنظیم کنید.'), { status:503 });
 
   const form = new FormData();
-  form.append('prompt', promptFor(style, productHint));
+  form.append('prompt', promptFor(style, productHint, angle));
   form.append('input_image_0', new Blob([imageBytes], { type:'image/jpeg' }), 'product-reference.jpg');
   form.append('width', '1024');
   form.append('height', '1024');
@@ -66,4 +73,4 @@ async function generateProductPhoto({ imageBytes, style = 'warm-studio', product
   } finally { clearTimeout(timeout); }
 }
 
-module.exports = { generateProductPhoto, promptFor, buildEndpoint, MODEL, DEFAULT_MODEL };
+module.exports = { generateProductPhoto, promptFor, buildEndpoint, MODEL, DEFAULT_MODEL, ANGLES };

@@ -1,6 +1,6 @@
 # کفش طوبی — فروشگاه فارسی RTL با Supabase Auth و حالت Demo
 
-فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های Demo در LocalStorage و Repository/Service layer. اتصال ورود/ثبت‌نام ایمیلی Supabase به‌صورت اختیاری از تنظیمات عمومی پروژه فعال می‌شود؛ کاتالوگ، مدیریت فروشگاه، سفارش و موجودی هنوز به دیتابیس وصل نیستند و پرداخت همچنان mock است. ابزار اختیاری عکس محصول از Cloudflare Workers AI و مدل FLUX.2 [klein] 4B با تصویر مرجع استفاده می‌کند.
+فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های Demo در LocalStorage و Repository/Service layer. اتصال ورود/ثبت‌نام ایمیلی Supabase به‌صورت اختیاری از تنظیمات عمومی پروژه فعال می‌شود؛ کاتالوگ، مدیریت فروشگاه، سفارش و موجودی هنوز به دیتابیس وصل نیستند و پرداخت همچنان mock است. پنل محصول، دستیار نگارش توضیحات با Gemini (به‌همراه پیش‌نویس محلی در نبود کلید) و استودیوی تولید تصویر سه‌زاویه‌ای دارد. تصویرها از Cloudflare Workers AI و مدل FLUX.2 [klein] 4B با تصویر مرجع ساخته می‌شوند.
 
 ## اجرا
 - نیازمندی: Node.js 22+ (Supabase JS SDK در build بسته‌بندی می‌شود).
@@ -10,7 +10,7 @@
 
 ## انتشار روی Vercel
 - مخزن را در Vercel دوباره Deploy کنید (یا پس از push منتظر deploy خودکار GitHub بمانید). `vercel.json`، preset را روی Other/static قرار می‌دهد؛ `npm run build` فقط فایل‌های لازم وب را در `public/` آماده می‌کند، مسیرهای SPA به `index.html` می‌روند و endpointها به Vercel Functions متصل می‌شوند.
-- صفحه فروشگاه بدون کلید Cloudflare هم بالا می‌آید؛ فقط ساخت تصویر تا زمان تنظیم Environment Variables غیرفعال می‌ماند. برای فعال‌سازی تصویر، در Vercel → Project → Settings → Environment Variables، `CLOUDFLARE_ACCOUNT_ID` و یک `CLOUDFLARE_API_TOKEN` تازه با دسترسی محدود `Workers AI: Read` اضافه و سپس Redeploy کنید. توکن افشاشده در گفتگو را استفاده نکنید.
+- صفحه فروشگاه بدون کلیدهای AI هم بالا می‌آید. برای تولید توضیحات با Gemini، `GEMINI_API_KEY` را از Google AI Studio به‌صورت Environment Variable سمت‌سرور در Vercel اضافه کنید؛ بدون آن دستیار یک پیش‌نویس محلی می‌سازد. برای تولید تصویر، `CLOUDFLARE_ACCOUNT_ID` و یک `CLOUDFLARE_API_TOKEN` تازه با دسترسی محدود `Workers AI: Read` اضافه کنید. سپس Redeploy کنید. کلیدهای AI فقط در Vercel Environment Variables بمانند و هرگز در کد/مرورگر یا گفتگو قرار نگیرند.
 - این Vercel deployment تا اتصال کاتالوگ/سفارش/موجودی و درگاه واقعی Demo می‌ماند. ورود/ثبت‌نام ایمیلی فقط وقتی فعال است که `SUPABASE_URL` و `SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY` را در Environment Variables پروژهٔ Vercel قرار دهید؛ پرداخت و checkout واقعی همچنان غیرفعال‌اند.
 
 ### اتصال Auth ایمیل/رمز Supabase
@@ -24,8 +24,11 @@
 
 در حالت Supabase، حساب Demo و ورود مدیر نمایشی غیرفعال‌اند؛ signup فقط نقش `customer` می‌سازد. حساب مدیر را پس از ثبت‌نام/تأیید، فقط مالک از SQL Editor و با بررسی ایمیل به `super_admin` ارتقا دهد. در حالت Supabase مدیر تأییدشده می‌تواند داشبورد و فهرست‌های فقط‌خواندنی محصولات/سفارش‌ها/کاربران را با RLS ببیند؛ افزودن/ویرایش، تغییر وضعیت سفارش و Checkout واقعی تا اتصال عملیات امن و تراکنشی غیرفعال‌اند و پرداخت Mock به مشتری Supabase ارائه نمی‌شود. در نبود متغیرهای Supabase، Demo محلی بدون تغییر کار می‌کند.
 
-### ابزار اختیاری عکس محصول با Cloudflare Workers AI
-در Products عکس را انتخاب کنید و سبک پس‌زمینه را برگزینید. مدل پیش‌فرض `@cf/black-forest-labs/flux-2-klein-4b` از ویرایش با تصویر مرجع پشتیبانی می‌کند؛ وزن‌های 4B در مجوز Apache-2.0 معرفی شده‌اند. Cloudflare Workers AI پلن رایگان با ۱۰٬۰۰۰ Neurons در روز دارد (سهمیه در ۰۰:۰۰ UTC بازنشانی می‌شود). این سهمیه بین استفاده‌های همان حساب مشترک است؛ ابزار به‌عنوان محافظ داخلی حداکثر ۲۰ تصویر در هر ۲۴ ساعت می‌سازد. استفادهٔ بالاتر از سهمیهٔ رایگان در حساب‌های دارای billing ممکن است هزینه‌دار شود؛ قبل از اجرا وضعیت پلن و مصرف حساب را بررسی کنید. این endpoint کنترل دسترسی production نیست و فقط same-origin، سقف محلی و ورود نمایشی فعلی را دارد.
+### دستیار توضیحات محصول
+در پنل Products فرم محصول را باز کنید و «تولید هوشمند توضیحات» را بزنید. با `GEMINI_API_KEY`، API از Gemini 3.8 Flash متن پیشنهادی کوتاه/کامل، ویژگی‌ها و مشخصات را می‌گیرد؛ در نبود کلید یا اختلال API، یک پیش‌نویس محلیِ محافظه‌کارانه ارائه می‌شود. متن و ادعاهای فنی را پیش از ذخیره با مشخصات واقعی کالا بررسی کنید. کلید Gemini فقط در Vercel Environment Variables یا `.env` محلی قرار گیرد.
+
+### استودیوی عکس محصول سه‌زاویه‌ای با Cloudflare Workers AI
+در پنل Products یک عکس مرجع و سبک صحنه انتخاب کنید. «ساخت هر سه زاویه» سه درخواست مجزا برای نمای روبه‌رو/سه‌رخ، جانبی و پاشنه می‌فرستد؛ هر نما را جداگانه پیش‌نمایش و در صورت تأیید به تصاویر محصول اضافه کنید. مدل پیش‌فرض `@cf/black-forest-labs/flux-2-klein-4b` از ویرایش با تصویر مرجع پشتیبانی می‌کند؛ وزن‌های 4B در مجوز Apache-2.0 معرفی شده‌اند. Cloudflare Workers AI پلن رایگان با ۱۰٬۰۰۰ Neurons در روز دارد (سهمیه در ۰۰:۰۰ UTC بازنشانی می‌شود). این ابزار حداکثر ۲۰ تصویر در هر ۲۴ ساعت محدود می‌کند؛ ساخت یک مجموعهٔ سه‌نما ۳ تصویر از این سقف مصرف می‌کند. مصرف بالاتر از سهمیهٔ رایگان در حساب‌های دارای billing ممکن است هزینه‌دار شود؛ پیش از استفاده پلن و مصرف حساب را بررسی کنید. endpointهای تصویر هنوز احراز هویت مدیر و سهمیهٔ پایدار/سراسری ندارند؛ same-origin و سقف حافظه‌ای کنترل دسترسی یا سقف هزینهٔ تضمین‌شده نیستند.
 
 #### راه‌اندازی Cloudflare
 1. یک حساب Cloudflare بسازید و Account ID آن را از داشبورد بردارید.
@@ -56,7 +59,7 @@
 - `types/domain.js`: JSDoc contracts؛ `prisma/schema.prisma` مدل relational معادل PostgreSQL/Supabase.
 - `repositories/supabase-repository.stub.js`: فعلاً interface آینده؛ import یا اجرا نمی‌شود.
 - `supabase/migrations/202609280001_initial_schema.sql` و migrationهای بعدی: schema/RLS نسخه‌بندی‌شده؛ مالک تأیید کرده اجرای اولیه در Actions سبز شده است. migration جدید `202609280002_active_profile_rls.sql` با push به `main` خودکار اجرا می‌شود.
-- `.env.example`: placeholderهای تنظیم عمومی Supabase و Cloudflare؛ فایل واقعی `.env` از git خارج است. فقط URL/کلید public برای Auth هستند؛ هیچ `service_role` وارد مرورگر نکنید.
+- `.env.example`: placeholderهای تنظیم عمومی Supabase، Cloudflare و Gemini؛ فایل واقعی `.env` از git خارج است. فقط URL/کلید public برای Auth به مرورگر می‌رسند؛ کلیدهای AI و هر `service_role` باید سروری بمانند.
 
 UI از state snapshot محلی استفاده می‌کند و persistence فقط از `DataProvider` عبور می‌کند؛ operations حساس فروش از `DemoServices` و Repositoryها انجام می‌شوند. در مرحله اتصال، composition root و adapter جایگزین می‌شوند؛ در صورت نیاز APIهای کاملاً async می‌توانند همان قرارداد repository را حفظ کنند.
 

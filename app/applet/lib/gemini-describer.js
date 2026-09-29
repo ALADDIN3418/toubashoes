@@ -1,131 +1,91 @@
 'use strict';
 
-function generateLocalShoeDescription({ name, category, brand, features, specifications, sizes, colors }) {
-  const n = String(name || 'کفش چرم طبیعی طوبی').trim();
-  const c = String(category || '').toLowerCase();
-  const b = String(brand || 'طوبی').trim();
-
-  let styleDesc = '';
-  let usage = '';
-  let sole = 'پلی‌یورتان (PU) تزریق مستقیم سبک و منعطف با اصطکاک بالا';
-  let insole = 'کفی طبی ارگونومیک با فوم ضدخستگی و روکش چرم طبیعی';
-
-  if (c.includes('sport') || c.includes('اسپرت') || n.includes('کتانی') || n.includes('اسپرت')) {
-    styleDesc = 'طراحی مدرن و ارگونومیک با قابلیت تنفس‌پذیری فوق‌العاده';
-    usage = 'پیاده‌روی روزانه، محیط‌های کاری پرتحرک، ورزش سبک و استایل‌های کژوال شیک';
-  } else if (c.includes('formal') || c.includes('رسمی') || c.includes('مجلسی') || n.includes('مجلسی') || n.includes('کلاسیک')) {
-    styleDesc = 'برش‌های دست‌دوز اصیل، پولیش چشم‌نواز چرم و قالب کلاسیک مجلسی';
-    usage = 'جلسات اداری و مدیریتی، قرارهای رسمی، مراسم‌ها و مهمانی‌های فاخر';
-  } else if (c.includes('sandal') || c.includes('صندل')) {
-    styleDesc = 'طراحی خنک و سبک با گردش هوای آزاد و بندهای بادوام چرمی';
-    usage = 'فصول گرم، سفرهای تفریحی و راحتی روزمره';
-  } else if (c.includes('women') || c.includes('زنانه') || n.includes('زنانه')) {
-    styleDesc = 'ظرافت مثال‌زدنی در طراحی، پاشنه ارگونومیک استاندارد و ایستایی بسیار زیبا';
-    usage = 'محیط کار، مجالس، دورهمی‌ها و استفاده روزمره بدون ایجاد فشار بر کمر و پاشنه';
-  } else {
-    styleDesc = 'طراحی ارگونومیک مهندسی‌شده همراه با دوخت محکم چرم طبیعی';
-    usage = 'استفاده روزمره، محیط‌های کاری و اداری و پیاده‌روی طولانی‌مدت';
-  }
-
-  const shortDesc = `${n} از برند ${b}؛ ساخته‌شده از چرم طبیعی باکیفیت و زیره طبی سبک، انتخابی ایده‌آل برای راحتی پا و استایل شیک در طول روز.`;
-
-  const longDesc = `${n} یکی از تولیدات برجسته و محبوب در کالکشن تخصصی کفش ${b} است که با تکیه بر استانداردهای ارگونومی پا و هنر دست‌دوز چرم طراحی شده است. ${styleDesc} باعث شده تا این مدل علاوه بر جلوه بصری شیک و برازنده، فشارهای وارده به ستون فقرات و پاشنه پا را در طول ساعت‌های طولانی به حداقل برساند.
-
-رویه این محصول از چرم طبیعی درجه یک فرآوری شده که علاوه بر انعطاف‌پذیری و مقاومت بالا در برابر سایش، با حفظ جریان تنفس طبیعی، از تعریق پا و بوی نامطبوع جلوگیری می‌کند. زیره این کفش از جنس ${sole} بوده که خاصیت جذب ضربه (Shock Absorption) بسیار بالایی دارد و کفی داخلی طبی آن متناسب با قوس کف پای استاندارد طراحی شده است.
-
-این کفش گزینه‌ای بی‌نقص برای ${usage} است و با دوام ماندگار خود، همراهی مطمئن در هر قدم شما خواهد بود. جهت حفظ زیبایی و ماندگاری چرم، توصیه می‌شود از واکس‌های روغنی استاندارد مخصوص چرم طبیعی و دور از تابش مستقیم آفتاب و رطوبت مداوم نگهداری شود.`;
-
-  const featureList = [
-    `رویه تمام‌چرم طبیعی باکیفیت و بافت انعطاف‌پذیر`,
-    `${insole} با قابلیت پخش یکنواخت وزن بدن`,
-    `زیره سبک و منعطف از جنس ${sole}`,
-    `آستر داخلی نرم با دوخت دست‌دوز بدون ایجاد تاول و فشار بر انگشتان`,
-    `مناسب برای ${usage}`
-  ];
-
-  const specLines = [
-    `جنس رویه: چرم طبیعی درجه یک`,
-    `جنس زیره: ${sole}`,
-    `کفی داخلی: طبی ضدخستگی با روکش چرمی`,
-    `آستر داخلی: چرم طبیعی ضدتعریق و ضدباکتری`,
-    `نوع قالب: استاندارد پای ایرانی`,
-    `کشور سازنده: ایران - کارگاه تخصصی کفش طوبی`,
-    sizes ? `سایزبندی موجود: ${sizes}` : '',
-    colors ? `رنگ‌بندی: ${colors}` : ''
+function generateLocalShoeDescription(input = {}) {
+  const name = String(input.name || 'کفش طوبی').trim().slice(0, 160);
+  const brand = String(input.brand || 'طوبی').trim().slice(0, 100);
+  const category = String(input.category || '').trim().toLowerCase();
+  const usage = category.includes('sport') || category.includes('اسپرت') || name.includes('اسپرت') || name.includes('کتانی')
+    ? 'استفاده روزمره و استایل‌های کژوال'
+    : category.includes('formal') || category.includes('رسمی') || category.includes('مجلسی') || name.includes('مجلسی')
+      ? 'محیط کار و موقعیت‌های رسمی'
+      : category.includes('sandal') || category.includes('صندل') || name.includes('صندل')
+        ? 'روزهای گرم و استفاده روزمره'
+        : 'استفاده روزمره';
+  const rawFeatures = Array.isArray(input.features)
+    ? input.features
+    : String(input.features || '').split(/[\r\n,]+/);
+  const features = rawFeatures.map(value => String(value || '').trim()).filter(Boolean).slice(0, 8);
+  const rawSpecifications = String(input.specifications || '').trim();
+  const specifications = rawSpecifications || [
+    input.sizes ? `سایزبندی موجود: ${input.sizes}` : '',
+    input.colors ? `رنگ‌بندی: ${input.colors}` : ''
   ].filter(Boolean).join('\n');
-
+  const shortDesc = `${name} از برند ${brand}، مدلی برای ${usage}. جزئیات و مشخصات درج‌شده را پیش از خرید بررسی کنید.`;
+  const detailText = [
+    input.features ? `ویژگی‌های ثبت‌شده:\n${String(Array.isArray(input.features) ? input.features.join('\n') : input.features).slice(0, 900)}` : '',
+    specifications ? `مشخصات واردشده:\n${specifications.slice(0, 900)}` : ''
+  ].filter(Boolean).join('\n\n');
+  const longDesc = `${name} از برند ${brand}، با توجه به دسته‌بندی و اطلاعات ثبت‌شده برای ${usage} معرفی می‌شود. این متن یک پیش‌نویس عمومی است و فقط ویژگی‌هایی را بازتاب می‌دهد که در فرم محصول وارد شده‌اند.\n\n${detailText || 'هنوز مشخصات فنی یا ویژگی‌های اختصاصی این محصول ثبت نشده‌اند. پیش از انتشار، جنس، ساختار، سایزبندی و سایر جزئیات را از منبع معتبر تکمیل کنید.'}\n\nپیش از انتشار، توضیحات را با کالای واقعی و سیاست‌های فروشگاه تطبیق دهید.`;
   return {
     shortDesc,
     longDesc,
-    features: featureList,
-    specifications: specLines,
-    model: 'gemini-3.8-flash'
+    features: features.length ? features : [`مناسب برای ${usage}`, 'جزئیات محصول را با اطلاعات ثبت‌شده در فروشگاه بررسی کنید.'],
+    specifications,
+    model: 'local-draft'
   };
 }
 
-async function describeShoeWithGemini(input) {
+async function describeShoeWithGemini(input = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return generateLocalShoeDescription(input);
-  }
+  if (!apiKey) return generateLocalShoeDescription(input);
 
   try {
     const { GoogleGenAI } = require('@google/genai');
     const ai = new GoogleGenAI({
       apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
+    const prompt = `شما نویسندهٔ توضیحات محصول فروشگاه کفش طوبی هستید. یک پیش‌نویس دقیق و خوش‌خوان فارسی تولید کنید.
+فقط اطلاعات موجود در ورودی را به‌عنوان واقعیت بیان کنید. دربارهٔ جنس چرم، زیره، کفی طبی، راحتی، دوام، سلامت پا، کشور سازنده یا مزایای فنی چیزی را حدس نزنید. اگر مشخصه‌ای وارد نشده، آن را حذف کنید و از مشتری بخواهید جزئیات را پیش از انتشار بررسی کند.
+نام: ${input.name || ''}
+دسته‌بندی: ${input.category || ''}
+برند: ${input.brand || ''}
+رنگ‌ها: ${input.colors || ''}
+سایزها: ${input.sizes || ''}
+ویژگی‌های ثبت‌شده: ${input.features || ''}
+مشخصات فنی ثبت‌شده: ${input.specifications || ''}
 
-    const prompt = `شما کارشناس حرفه‌ای معرفی محصول و کپی‌رایتر تخصصی فروشگاه کفش و چرم طوبی هستید.
-با توجه به مشخصات محصول زیر، یک معرفی کامل و جذاب به زبان فارسی بنویسید:
-- نام محصول: ${input.name || 'کفش طوبی'}
-- دسته‌بندی: ${input.category || 'کفش چرم'}
-- برند: ${input.brand || 'طوبی'}
-- رنگ‌ها: ${input.colors || ''}
-- سایزها: ${input.sizes || ''}
-- نکات تکمیلی: ${input.features || ''}
-- مشخصات فنی: ${input.specifications || ''}
-
-خروجی شما باید منحصراً یک آبجکت JSON معتبر به شکل زیر باشد:
+فقط یک JSON معتبر با این ساختار برگردان:
 {
-  "shortDesc": "یک یا دو جمله جذاب و متقاعدکننده درباره کفش برای کارت محصول و سئو (حداکثر ۱۶۰ حرف)",
-  "longDesc": "توضیح کامل در ۲ الی ۳ پاراگراف شیوا شامل معرفی، جنس چرم طبیعی، کفی طبی ارگونومیک، موارد مصرف (روزمره، اداری، مجلسی) و نحوه مراقبت",
-  "features": ["ویژگی ۱", "ویژگی ۲", "ویژگی ۳", "ویژگی ۴"],
-  "specifications": "جنس رویه: چرم طبیعی\\nجنس زیره: پلی‌یورتان طبی سبک\\nکفی: طبی ارگونومیک\\nآستر: چرم طبیعی ضدتعریق\\nنوع قالب: استاندارد"
+  "shortDesc": "معرفی کوتاه و جذاب، حداکثر ۱۶۰ نویسه و بدون ادعای تأییدنشده",
+  "longDesc": "دو پاراگراف فارسی، فقط بر اساس داده‌های ورودی؛ در صورت کمبود اطلاعات، پیش‌نویس بودن و نیاز به تکمیل را شفاف بگو",
+  "features": ["ویژگی‌هایی که عیناً از داده‌های واردشده پشتیبانی می‌شوند"],
+  "specifications": "مشخصات فنی واردشده، بدون افزودن مورد جدید"
 }`;
-
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
+      config: { responseMimeType: 'application/json' }
     });
-
-    if (response && response.text) {
+    if (response?.text) {
       const parsed = JSON.parse(response.text.trim());
       if (parsed.shortDesc && parsed.longDesc) {
+        const parsedFeatures = Array.isArray(parsed.features) ? parsed.features : [parsed.features].filter(Boolean);
         return {
-          shortDesc: parsed.shortDesc,
-          longDesc: parsed.longDesc,
-          features: Array.isArray(parsed.features) ? parsed.features : [parsed.features],
-          specifications: typeof parsed.specifications === 'string' ? parsed.specifications : Object.entries(parsed.specifications || {}).map(([k,v]) => `${k}: ${v}`).join('\n'),
+          shortDesc: String(parsed.shortDesc),
+          longDesc: String(parsed.longDesc),
+          features: parsedFeatures.map(String),
+          specifications: typeof parsed.specifications === 'string'
+            ? parsed.specifications
+            : Object.entries(parsed.specifications || {}).map(([key, value]) => `${key}: ${value}`).join('\n'),
           model: 'gemini-3.8-flash'
         };
       }
     }
-  } catch (err) {
-    console.warn('Gemini description generation fallback:', err.message);
+  } catch (error) {
+    console.warn('Gemini description generation fallback:', error.message);
   }
-
   return generateLocalShoeDescription(input);
 }
 
-module.exports = {
-  describeShoeWithGemini,
-  generateLocalShoeDescription
-};
+module.exports = { describeShoeWithGemini, generateLocalShoeDescription };

@@ -4,7 +4,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
-    "api/ai/product-photo.js": { "maxDuration": 120 }
+    "api/ai/product-photo.js": { "maxDuration": 120 },
+    "api/ai/describe.js": { "maxDuration": 60 }
   },
   "headers": [
     {
