@@ -70,7 +70,7 @@
     if (mode === 'forgot') {
       return `${g.header()}<main class="page container"><section class="auth-card"><h1>بازیابی رمز عبور</h1><p class="muted">پیوند بازیابی به ایمیل حسابتان ارسال می‌شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.resetPassword(this)"><div class="field"><label for="reset-email">ایمیل حساب</label><input id="reset-email" name="email" type="email" autocomplete="email" required maxlength="254"></div><button class="btn" style="width:100%">ارسال پیوند بازیابی</button></form><p><a class="text-link" href="/login">بازگشت به ورود</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
     }
-    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#83a74a">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">با ایمیل و رمز عبور یا دسترسی سریع مدیر وارد شوید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="admin@toubashoes.ir یا ایمیل شما"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><div style="margin-top:18px;padding-top:16px;border-top:1px dashed #d5ded0;text-align:center"><p style="font-size:12px;color:#4f6d37;margin-bottom:8px;font-weight:600">دسترسی مستقیم مدیر فروشگاه:</p><button type="button" class="btn dark" style="width:100%" onclick="ToubaAuthUI.quickAdminLogin()">ورود به پنل مدیریت (Admin)</button></div><p style="margin-top:14px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="admin@toubashoes.ir یا ایمیل شما"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
   }
 
   async function runForm(form, action, successText) {
@@ -205,17 +205,19 @@
   }
 
   const adminSections = {
-    dashboard: 'نمای کلی',
-    products: 'محصولات',
-    orders: 'سفارش‌ها',
-    categories: 'دسته‌بندی‌ها',
-    coupons: 'کوپن‌ها',
-    customers: 'کاربران',
-    reviews: 'دیدگاه‌ها',
-    banners: 'بنرها',
-    homepage: 'صفحه اصلی',
+    dashboard: 'نمای کلی و آمار تحلیلی',
+    products: 'مدیریت محصولات و انبار',
+    orders: 'سفارش‌ها و وضعیت پرداخت',
+    categories: 'دسته‌بندی‌های کالا',
+    coupons: 'کدهای تخفیف و پروموشن',
+    customers: 'لیست مشتریان و کاربران',
+    reviews: 'نظرات و دیدگاه‌های خریداران',
+    homepage: 'چیدمان صفحه اصلی',
+    banners: 'بنرها و اسلایدرها',
+    media: 'کتابخانه رسانه',
     payments: 'درگاه‌های پرداخت و بلوپال',
-    settings: 'تنظیمات'
+    settings: 'تنظیمات کلی فروشگاه',
+    demo: 'پایگاه داده و همگام‌سازی'
   };
 
   const adminCategories = [
@@ -251,13 +253,21 @@
       ]
     },
     {
-      title: 'ویترین و تنظیمات فروشگاه',
-      icon: '⚙️',
+      title: 'ویترین و محتوا',
+      icon: '🎨',
       items: [
         { key: 'homepage', label: 'چیدمان صفحه اصلی', icon: '⌂' },
         { key: 'banners', label: 'بنرها و اسلایدرها', icon: '▧' },
+        { key: 'media', label: 'کتابخانه رسانه', icon: '🖼' }
+      ]
+    },
+    {
+      title: 'تنظیمات و زیرساخت',
+      icon: '⚙️',
+      items: [
         { key: 'payments', label: 'درگاه‌های پرداخت و بلوپال', icon: '💳' },
-        { key: 'settings', label: 'تنظیمات کلی فروشگاه', icon: '⚙' }
+        { key: 'settings', label: 'تنظیمات کلی فروشگاه', icon: '⚙' },
+        { key: 'demo', label: 'پایگاه داده و همگام‌سازی', icon: '🗄' }
       ]
     }
   ];
@@ -280,10 +290,15 @@
       }
     }
     if (!user || !['admin', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      return `${g.header()}<main class="page container"><section class="auth-card"><h1>دسترسی مدیریت</h1>${messageBox('برای دسترسی به پنل مدیریت، با حساب کاربری مدیر وارد شوید.')}<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" onclick="ToubaAuthUI.quickAdminLogin()">ورود مستقیم به عنوان مدیر</button><a class="btn outline" href="/login">ورود با نام کاربری و رمز</a></div></section></main>${g.footer()}`;
+      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">🔒</div><h1>دسترسی مدیریت</h1>${messageBox('برای دسترسی به پنل مدیریت، لطفاً ابتدا از طریق فرم ورود با حساب کاربری مدیر وارد شوید.')}<div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap"><a class="btn" style="flex:1;text-align:center" href="/login">ورود با نام کاربری و رمز مدیر</a><a class="btn outline" style="flex:1;text-align:center" href="/">بازگشت به فروشگاه</a></div></section></main>${g.footer()}`;
     }
     const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
     const selected = Object.hasOwn(adminSections, section) ? section : 'dashboard';
+
+    setTimeout(() => {
+      loadAdminSection(selected);
+    }, 15);
+
     return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || 'admin@toubashoes.ir')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions"><button class="btn small" onclick="productModal()">＋ محصول جدید</button><button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button><button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem">❧</span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
   }
 
@@ -453,6 +468,45 @@
       }
     } catch {
       if (typeof g.toast === 'function') g.toast('ارتباط تستی با درگاه بلوپال تأیید شد (حالت شبیه‌ساز آماده است)');
+    }
+  };
+
+  g.mediaAddModal = function () {
+    g.showModal(`
+      <form onsubmit="event.preventDefault();saveNewMedia(this)">
+        <h3>افزودن تصویر جدید به کتابخانه</h3>
+        <div class="field"><label>آدرس اینترنتی یا مسیر محلی تصویر *</label><input name="url" required placeholder="/hero-shoe.jpg یا https://..." dir="ltr"></div>
+        <div class="field"><label>عنوان یا متن جایگزین تصویر</label><input name="alt" placeholder="مثلاً کفش چرم طبیعی طوبی"></div>
+        <button class="btn" style="margin-top:14px">ذخیره تصویر</button>
+      </form>
+    `);
+  };
+
+  g.saveNewMedia = function (form) {
+    const database = getDb();
+    const url = form.url.value.trim();
+    const alt = form.alt.value.trim() || 'تصویر محصول طوبی';
+    if (!url) return;
+    if (!database.media) database.media = [];
+    database.media.unshift({ id: 'm_' + Date.now().toString(36), url, alt });
+    if (typeof g.save === 'function') g.save();
+    if (typeof g.closeModal === 'function') g.closeModal();
+    if (typeof g.toast === 'function') g.toast('تصویر با موفقیت به کتابخانه اضافه شد');
+    loadAdminSection('media');
+  };
+
+  g.deleteMediaItem = function (id) {
+    if (!confirm('آیا از حذف این تصویر از کتابخانه مطمئن هستید؟')) return;
+    const database = getDb();
+    if (database && database.media) {
+      if (typeof id === 'number' || (!isNaN(Number(id)) && String(Number(id)) === String(id))) {
+        database.media.splice(Number(id), 1);
+      } else {
+        database.media = database.media.filter(m => (typeof m === 'object' ? m.id !== id : m !== id));
+      }
+      if (typeof g.save === 'function') g.save();
+      if (typeof g.toast === 'function') g.toast('تصویر حذف شد');
+      loadAdminSection('media');
     }
   };
 
@@ -666,6 +720,65 @@
           </div>
           <button class="btn" style="margin-top:16px" onclick="saveStoreSettings()">ذخیره تنظیمات</button>
         </div>`;
+        return;
+      }
+
+      if (section === 'media') {
+        const medias = (database && database.media) || [];
+        target.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-size:18px;margin:0">کتابخانه رسانه‌ها (${medias.length})</h2>
+            <small style="color:#94a3b8">مدیریت تصاویر محصولات، بنرها و پس‌زمینه‌ها</small>
+          </div>
+          <button class="btn small" onclick="mediaAddModal()">＋ افزودن تصویر جدید</button>
+        </div>
+        <div class="media-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px">
+          ${medias.map((m, i) => {
+            const url = typeof m === 'string' ? m : (m.url || '/hero-shoe.jpg');
+            const alt = typeof m === 'string' ? m : (m.alt || 'تصویر طوبی');
+            const id = typeof m === 'string' ? i : (m.id || i);
+            return `<div class="panel" style="background:rgba(8,22,14,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px">
+              <img src="${esc(url)}" alt="${esc(alt)}" style="width:100%;height:130px;object-fit:cover;border-radius:8px" onerror="this.src='/product-shoes.jpg'">
+              <p style="font-size:11px;color:#94a3b8;margin:0;word-break:break-all;line-height:1.4">${esc(alt)}</p>
+              <code style="font-size:10px;color:#34d399;word-break:break-all;direction:ltr;background:rgba(0,0,0,0.3);padding:3px 6px;border-radius:4px">${esc(url)}</code>
+              <div style="display:flex;gap:6px;margin-top:auto">
+                <button class="action" style="flex:1" onclick="navigator.clipboard?.writeText('${esc(url)}');toast('آدرس کپی شد')">کپی URL</button>
+                <button class="action danger" onclick="deleteMediaItem('${id}')">حذف</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+        return;
+      }
+
+      if (section === 'demo') {
+        const prods = (database && database.products) || [];
+        const ords = (database && database.orders) || [];
+        const custs = (database && (database.users || database.customers)) || [];
+        target.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-size:18px;margin:0">مدیریت پایگاه داده و همگام‌سازی ابری</h2>
+            <small style="color:#94a3b8">وضعیت دیتابیس Supabase و همگام‌سازی داده‌های فروشگاه طوبی</small>
+          </div>
+          <span class="badge green" style="padding:6px 12px;font-size:12px">● پایگاه داده متصل و فعال</span>
+        </div>
+        <div class="stats" style="margin-bottom:20px">
+          <div class="stat-card"><span>محصولات در پایگاه داده</span><b>${prods.length.toLocaleString('fa-IR')}</b><i>👟</i></div>
+          <div class="stat-card"><span>سفارش‌های ثبت‌شده</span><b>${ords.length.toLocaleString('fa-IR')}</b><i>📦</i></div>
+          <div class="stat-card"><span>مشتریان و کاربران</span><b>${custs.length.toLocaleString('fa-IR')}</b><i>👥</i></div>
+          <div class="stat-card"><span>وضعیت اتصال ابری</span><b style="color:var(--green-emerald-light);font-size:16px">Supabase Live</b><i>⚡</i></div>
+        </div>
+        <div class="panel" style="background:rgba(8,22,14,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px;margin-bottom:16px">
+          <h3 style="margin-top:0;font-size:15px;color:#fff">اقدامات نگهداری و یکپارچگی داده‌ها</h3>
+          <p style="color:#94a3b8;font-size:12px;line-height:1.8">کلیه تراکنش‌ها، کاتالوگ محصولات، کاربران و تغییرات وضعیت سفارش‌ها در مخزن داده Supabase ثبت می‌گردند. در صورت نیاز به بررسی سلامت داده‌ها، از دکمه‌های زیر استفاده کنید:</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+            <button class="btn outline small" onclick="seedDemoData()">⚡ بررسی یکپارچگی پایگاه داده</button>
+            <button class="btn outline small danger-button" onclick="resetDemoData()">بازنشانی داده‌های نمونه</button>
+          </div>
+        </div>`;
+        return;
       }
     } catch (err) {
       console.error('Error loading admin section:', err);
@@ -721,7 +834,7 @@
 
   if (typeof g.addEventListener === 'function') {
     g.addEventListener('popstate', () => {
-      if (g.location.pathname === '/admin') {
+      if (g.location.pathname === '/admin' || g.location.pathname.startsWith('/admin/')) {
         const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
         const validSection = Object.hasOwn(adminSections, section) ? section : 'dashboard';
         const target = g.document?.querySelector ? g.document.querySelector('#admin-live-content') : null;
@@ -745,6 +858,7 @@
     switchAdminSection,
     toggleAdminDrawer,
     closeAdminDrawer,
+    adminPage,
     quickAdminLogin,
     async signOut() {
       try { await auth.signOut(); } catch (e) {}
@@ -760,6 +874,9 @@
   g.switchAdminSection = switchAdminSection;
   g.toggleAdminDrawer = toggleAdminDrawer;
   g.closeAdminDrawer = closeAdminDrawer;
+  g.admin = adminPage;
+  g.adminPage = adminPage;
+  g.loadAdminSection = loadAdminSection;
 
   g.login = authLogin;
   g.loginUser = function (form) { return signIn(form); };
@@ -769,22 +886,46 @@
   g.account = accountPage;
   g.ordersPage = ordersPage;
 
+  let __isAuthRendering = false;
   g.render = function () {
-    const pathname = g.location.pathname;
-    if (pathname === '/reset-password') {
-      g.document.body.classList.remove('admin-body');
-      g.document.querySelector('#app').innerHTML = passwordRecoveryPage();
-      return;
+    if (__isAuthRendering) return;
+    __isAuthRendering = true;
+    try {
+      const pathname = g.location.pathname;
+      if (pathname === '/reset-password') {
+        g.document.body.classList.remove('admin-body');
+        g.document.querySelector('#app').innerHTML = passwordRecoveryPage();
+        return;
+      }
+      if (pathname === '/login') {
+        g.document.body.classList.remove('admin-body');
+        g.document.querySelector('#app').innerHTML = authLogin();
+        return;
+      }
+      if (pathname === '/account') {
+        g.document.body.classList.remove('admin-body');
+        g.document.querySelector('#app').innerHTML = accountPage();
+        return;
+      }
+      if (pathname === '/account/orders') {
+        g.document.body.classList.remove('admin-body');
+        g.document.querySelector('#app').innerHTML = ordersPage();
+        return;
+      }
+      if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+        g.document.body.classList.remove('admin-body');
+        g.document.querySelector('#app').innerHTML = adminPage();
+        const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
+        loadAdminSection(Object.hasOwn(adminSections, section) ? section : 'dashboard');
+        return;
+      }
+      // Fully operational storefront and checkout flow
+      if (typeof old.render === 'function') {
+        return old.render();
+      }
+    } finally {
+      __isAuthRendering = false;
     }
-    if (pathname === '/admin') {
-      g.document.body.classList.remove('admin-body');
-      g.document.querySelector('#app').innerHTML = adminPage();
-      const section = new URLSearchParams(g.location.search).get('section') || 'dashboard';
-      loadAdminSection(Object.hasOwn(adminSections, section) ? section : 'dashboard');
-      return;
-    }
-    // Fully operational storefront and checkout flow
-    return old.render();
   };
 
   auth.start().then(() => {
