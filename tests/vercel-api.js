@@ -72,26 +72,24 @@ async function main() {
     let res = response();
     aiStatus({ method:'GET' }, res);
     assert.equal(res.statusCode, 200);
-    assert.equal(payload(res).configured, false);
-    assert.equal(payload(res).provider, 'Cloudflare Workers AI');
-    assert.equal(payload(res).model, '@cf/black-forest-labs/flux-2-klein-9b');
+    assert.equal(payload(res).configured, true);
+    assert.equal(payload(res).keyless, true);
+    assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
+    assert.equal(payload(res).model, 'gpt-image-2.5-flare');
     assert.equal(payload(res).localDailyLimit, 50);
-    assert.equal(payload(res).quotaMode, 'process-memory');
+    assert(Array.isArray(payload(res).supportedModels));
+    assert(payload(res).supportedModels.includes('gpt-image-2.5-flare'));
 
-    process.env.CLOUDFLARE_ACCOUNT_ID='0123456789abcdef0123456789abcdef';
-    process.env.CLOUDFLARE_API_TOKEN='test-only-token';
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
     process.env.VERCEL='1';
     res = response();
-    await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{ images:[referenceDataUrl,referenceDataUrl,referenceDataUrl] } }, res);
+    await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{ images:[referenceDataUrl] } }, res);
     assert.equal(res.statusCode, 401);
     assert.match(payload(res).error, /وارد شوید/);
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_PUBLISHABLE_KEY;
     delete process.env.VERCEL;
-    delete process.env.CLOUDFLARE_ACCOUNT_ID;
-    delete process.env.CLOUDFLARE_API_TOKEN;
 
     res = response();
     await productPhoto({ method:'GET', headers:{} }, res);
@@ -101,21 +99,23 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    res = response();
-    await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{} }, res);
-    assert.equal(res.statusCode, 503);
-
-    // Verify productPhoto handles Cloudflare safety filter rejection, reports Persian message and ID, and preserves quota
-    process.env.CLOUDFLARE_ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
-    process.env.CLOUDFLARE_API_TOKEN = 'test-only-token';
+    // Verify productPhoto generates photo using Puter GPT Image
     const oldFetchApi = global.fetch;
-    global.fetch = async (url) => {
+    let puterDriverCalled = false;
+    global.fetch = async (url, options) => {
       const urlStr = String(url);
-      if (urlStr.includes('/ai/run/')) {
+      if (urlStr.includes('/drivers/call')) {
+        puterDriverCalled = true;
+        const body = JSON.parse(options?.body || '{}');
+        assert.equal(body.interface, 'puter-image-generation');
+        assert.equal(body.driver, 'ai-image');
+        assert.equal(body.method, 'generate');
+        assert.equal(body.args.model, 'gpt-image-2.5-flare');
+        assert.equal(body.args.input_image, referenceDataUrl);
         return new Response(JSON.stringify({
-          success: false,
-          errors: [{ code: 3030, message: 'Your output has been flagged (52766dd9-b65a-4b5f-a9f9-a24871006a01)' }]
-        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+          success: true,
+          result: `data:image/jpeg;base64,${Buffer.from('puter-output').toString('base64')}`
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -124,21 +124,42 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, productHint: 'ignored freeform text' }
+        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare' }
       }, res);
-      assert.equal(res.statusCode, 400);
-      assert.equal(payload(res).flagged, true);
-      assert.equal(payload(res).quotaConsumed, false);
-      assert.equal(payload(res).cloudflareId, '52766dd9-b65a-4b5f-a9f9-a24871006a01');
-      assert.match(payload(res).error, /فیلتر ایمنی Cloudflare/);
-      assert.match(payload(res).error, /52766dd9-b65a-4b5f-a9f9-a24871006a01/);
-      assert.match(payload(res).error, /ردشدن فیلتر ایمنی است، نه خطای Supabase/);
-      assert.match(payload(res).error, /نباید راهی برای دورزدن فیلتر اضافه شود/);
-      assert.match(payload(res).error, /سهمیهٔ روزانه محفوظ ماند/);
+      assert.equal(res.statusCode, 200);
+      assert.equal(puterDriverCalled, true);
+      assert.equal(payload(res).success, true);
+      assert.equal(payload(res).model, 'gpt-image-2.5-flare');
+      assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
+      assert.equal(payload(res).keyless, true);
     } finally {
       global.fetch = oldFetchApi;
-      delete process.env.CLOUDFLARE_ACCOUNT_ID;
-      delete process.env.CLOUDFLARE_API_TOKEN;
+    }
+
+    // Verify productPhoto handles Puter errors, reports Persian message, and releases quota
+    const failingFetchApi = global.fetch;
+    global.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/drivers/call')) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: { message: 'Puter driver temporary error', code: 'driver_failed' }
+        }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+      res = response();
+      await productPhoto({
+        method: 'POST',
+        headers: { origin: 'https://touba.test', host: 'touba.test' },
+        body: { image: referenceDataUrl }
+      }, res);
+      assert.equal(res.statusCode, 502);
+      assert.equal(payload(res).quotaConsumed, false);
+      assert.match(payload(res).error, /Puter/);
+    } finally {
+      global.fetch = failingFetchApi;
     }
 
     const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
@@ -170,5 +191,6 @@ async function main() {
     if (oldPublicKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = oldPublicKey;
   }
   console.log('PASS: Vercel function endpoints, same-origin checks and ephemeral upload behavior');
+  process.exit(0);
 }
 main().catch(error => { console.error(error); process.exit(1); });

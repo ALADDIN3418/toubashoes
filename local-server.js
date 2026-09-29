@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { generateProductPhoto, MODEL } = require('./services/cloudflare-image.js');
+const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS } = require('./services/puter-image.js');
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
@@ -185,9 +185,20 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === '/api/ai/status' && req.method === 'GET') {
-    const cloudflareConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
     const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
-    return json(res, 200, { configured:cloudflareConfigured, cloudflareConfigured, persistentQuotaConfigured, quotaMode:persistentQuotaConfigured ? 'persistent-utc' : 'process-memory', provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:50, referenceMaxSide:511, note:persistentQuotaConfigured ? 'Supabase public configuration is present; RPC migration readiness is checked during the reservation request.' : 'Local development uses process-memory quota; production requires the durable Supabase migration.' });
+    return json(res, 200, {
+      configured: true,
+      puterConfigured: true,
+      keyless: true,
+      persistentQuotaConfigured,
+      quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
+      provider: 'Puter.js (OpenAI GPT Image)',
+      model: process.env.PUTER_IMAGE_MODEL || DEFAULT_MODEL || MODEL,
+      supportedModels: SUPPORTED_MODELS,
+      localDailyLimit: 50,
+      referenceMaxSide: 1024,
+      note: 'Puter.js keyless GPT Image integration enabled.'
+    });
   }
   if (pathname === '/api/ai/describe') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -210,9 +221,6 @@ const server = http.createServer(async (req, res) => {
     if (!requireSameOrigin(req, res)) return;
     let authContext;
     try { authContext = await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
-    if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) {
-      return json(res, 503, { error:'سرویس هنوز تنظیم نشده است. Account ID و API Token را فقط در فایل محلی .env وارد کنید؛ این اطلاعات را در گفتگو نفرستید.' });
-    }
     let body, sourceBytes, imageRoles;
     try {
       body = await readBody(req, 4 * 1024 * 1024);
@@ -228,10 +236,16 @@ const server = http.createServer(async (req, res) => {
     try {
       if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = true; }
       else reservationId = reserveWindowQuota('local-ai', 50, 24 * 60 * 60 * 1000);
-      if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است؛ سهمیه و هزینهٔ Cloudflare نیز جداگانه اعمال می‌شود.' });
+      if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
     } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
     try {
-      const result = await generateProductPhoto({ imageBytes:sourceBytes, imageRoles, style:body.style });
+      const result = await generateProductPhoto({
+        imageBytes: sourceBytes,
+        dataUrl: body.image,
+        style: body.style,
+        model: body.model,
+        quality: body.quality
+      });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
       return json(res, 200, result);
@@ -241,9 +255,8 @@ const server = http.createServer(async (req, res) => {
       }
       const status = Number(error.status) || 502;
       return json(res, status, {
-        error: error.message || 'ساخت تصویر با Cloudflare انجام نشد.',
-        cloudflareId: error.cloudflareId || undefined,
-        flagged: Boolean(error.safetyFlagged),
+        error: error.message || 'ساخت تصویر با Puter GPT Image انجام نشد.',
+        code: error.code || undefined,
         quotaConsumed: false
       });
     }

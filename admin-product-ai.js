@@ -120,6 +120,16 @@
     });
   }
 
+  function buildShoePhotoPrompt(style) {
+    const styles = {
+      'warm-studio': 'in an elegant warm neutral ecommerce studio setting, soft cream and beige background, gentle diffused studio lighting, centered clean pedestal, sharp focus on shoe materials, textures, and craftsmanship',
+      'dark-luxury': 'in a luxury dark ecommerce studio setting, moody deep charcoal background, subtle edge reflections and rim lighting accentuating footwear contours, premium catalog presentation, sharp focus',
+      'natural-stone': 'on a smooth natural limestone pedestal, crisp architectural daylight, minimalist organic textures, clean commercial shoe photography, sharp focus'
+    };
+    const desc = styles[style] || styles['warm-studio'];
+    return `Professional ecommerce product photograph of the exact footwear shown in the reference image, ${desc}. Single shoe in full clear view, centered composition, commercial advertising catalog standard, sharp details, photorealistic, 8k resolution.`;
+  }
+
   function insertStudio() {
     const form = document.querySelector('#product-edit-form');
     const images = form?.elements?.images;
@@ -136,12 +146,25 @@
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی</h3>
-        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. هوش مصنوعی یک تصویر نهاییِ باکیفیت برای کاتالوگ تولید می‌کند.</p>
+        <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی (Puter GPT Image)</h3>
+        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. هوش مصنوعی با استفاده از مدل‌های پیشرفتهٔ GPT Image و کتابخانهٔ Puter.js بدون نیاز به کلید خصوصی OpenAI، یک تصویر نهاییِ باکیفیت و اختصاصی برای کاتالوگ تولید می‌کند.</p>
       </div>
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
+        <label for="ai-product-model">مدل هوش مصنوعی (Puter GPT Image)</label>
+        <select id="ai-product-model" class="ai-studio-select">
+          <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare (پیش‌فرض / سریع و دقیق)</option>
+          <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst (کنتراست و روشنایی پویا)</option>
+          <option value="gpt-image-2">GPT Image 2 (کلاسیک)</option>
+        </select>
+        <label for="ai-product-quality">کیفیت خروجی تصویر</label>
+        <select id="ai-product-quality" class="ai-studio-select">
+          <option value="high">کیفیت بالا (High - پیش‌فرض)</option>
+          <option value="medium">کیفیت متوسط (Medium - سریع‌تر)</option>
+          <option value="xhigh">کیفیت فوق‌العاده (X-High)</option>
+          <option value="low">کیفیت پایه (Low)</option>
+        </select>
         <label for="ai-product-style">سبک پس‌زمینهٔ خروجی</label>
         <select id="ai-product-style" class="ai-studio-select">
           <option value="warm-studio">استودیوی کرم و ملایم</option>
@@ -159,7 +182,7 @@
         <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin: 0; width: 100%;">
           <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی تولیدشده</label>
           <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از عکس مرجع">
-          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">یک خروجی نهایی از تصویر مرجع</figcaption>
+          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">یک خروجی نهایی از تصویر مرجع با Puter GPT Image</figcaption>
         </figure>
       </div>
       <div class="ai-studio-actions">
@@ -172,6 +195,8 @@
     const generateButton = studio.querySelector('#ai-product-generate');
     const applyButton = studio.querySelector('#ai-product-apply');
     const fileInput = studio.querySelector('#ai-product-file');
+    const modelSelect = studio.querySelector('#ai-product-model');
+    const qualitySelect = studio.querySelector('#ai-product-quality');
     const styleSelect = studio.querySelector('#ai-product-style');
     const sourceWrap = studio.querySelector('#ai-product-source-wrap');
     const sourcePreview = studio.querySelector('#ai-product-source-preview');
@@ -190,14 +215,19 @@
 
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
-      status.textContent = providerReady
-        ? `سرویس آماده است؛ از یک تصویر واضح یک خروجی می‌سازد. سقف ۵۰ خروجی موفق در هر روز UTC، ${data.quotaMode === 'persistent-utc' ? 'با پیکربندی Supabase برای شمارندهٔ پایدار' : 'در حافظهٔ همین فرایند'} اعمال می‌شود؛ سهمیهٔ Cloudflare جداست.`
-        : data.cloudflareConfigured && data.quotaMode === 'unavailable'
-          ? 'کلیدهای Cloudflare تنظیم شده‌اند؛ برای آماده‌شدن، migration سهمیهٔ پایدار را در Supabase اجرا و SUPABASE_URL همراه SUPABASE_PUBLISHABLE_KEY یا SUPABASE_ANON_KEY را در Environment Variables وریسل تنظیم کنید؛ سپس deploy را بازسازی کنید. Service-role key لازم نیست.'
-          : 'برای ساخت تصویر، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در Environment Variables وریسل تنظیم کنید؛ کلیدها را در مرورگر یا کد قرار ندهید.';
+      status.textContent = 'سرویس Puter.js (GPT Image) آماده است؛ دسترسی عمومی و بدون نیاز به کلید OpenAI. یک تصویر واضح از محصول انتخاب کنید.';
       status.classList.toggle('is-ready', providerReady);
       updateGenerateButton();
-    }).catch(() => { status.textContent = 'سرویس تصویر در دسترس نیست.'; });
+    }).catch(() => {
+      if (typeof window !== 'undefined' && window.puter?.ai?.txt2img) {
+        providerReady = true;
+        status.textContent = 'کتابخانهٔ Puter.js در مرورگر آماده است. یک تصویر واضح از محصول انتخاب کنید.';
+        status.classList.add('is-ready');
+        updateGenerateButton();
+      } else {
+        status.textContent = 'سرویس تصویر در دسترس نیست.';
+      }
+    });
 
     fileInput.addEventListener('change', async () => {
       sourceDataUrl = '';
@@ -217,12 +247,12 @@
       }
       status.textContent = 'در حال آماده‌سازی عکس…';
       try {
-        sourceDataUrl = await resizeImage(file, 511, .84);
+        sourceDataUrl = await resizeImage(file, 1024, .88);
         sourcePreview.src = sourceDataUrl;
         sourceWrap.hidden = false;
         updateGenerateButton();
         status.textContent = providerReady
-          ? 'عکس واضح محصول آماده است؛ دکمهٔ «تولید یک تصویر نهایی» را بزنید.'
+          ? 'عکس واضح محصول آماده است؛ مدل، کیفیت و سبک را انتخاب کرده و دکمهٔ «تولید یک تصویر نهایی» را بزنید.'
           : 'عکس آماده است؛ سرویس تصویر هنوز تنظیم نشده است.';
       } catch (error) {
         status.textContent = error.message || 'خواندن عکس انجام نشد.';
@@ -230,7 +260,10 @@
       }
     });
 
-    styleSelect.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
+    styleSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
+    modelSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
+    qualitySelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
+
     generateButton.addEventListener('click', async () => {
       if (!sourceDataUrl) {
         status.textContent = 'برای ساخت تصویر، یک تصویر واضح از همان کفش انتخاب کنید.';
@@ -241,26 +274,49 @@
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      status.textContent = 'تصویر مرجع در حال ارسال و تحلیل است؛ یک تصویر نهایی ساخته می‌شود…';
+      const model = modelSelect?.value || 'gpt-image-2.5-flare';
+      const quality = qualitySelect?.value || 'high';
+      const style = styleSelect?.value || 'warm-studio';
+      status.textContent = `تصویر مرجع با مدل ${model} از طریق Puter.js در حال پردازش است؛ در حال ساخت تصویر نهایی محصول…`;
+
       try {
-        const response = await fetch('/api/ai/product-photo', {
-          method:'POST', headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
-          body:JSON.stringify({ image:sourceDataUrl, images:[sourceDataUrl], style:styleSelect.value })
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const err = new Error(payload.error || `خطای سرویس (${response.status})`);
-          err.cloudflareId = payload.cloudflareId;
-          err.flagged = payload.flagged;
-          throw err;
+        let outputUrl = '';
+        if (typeof window !== 'undefined' && window.puter?.ai?.txt2img) {
+          try {
+            const prompt = buildShoePhotoPrompt(style);
+            const imageElement = await window.puter.ai.txt2img(prompt, {
+              model,
+              quality,
+              input_image: sourceDataUrl
+            });
+            outputUrl = imageElement?.src || (typeof imageElement === 'string' ? imageElement : '');
+          } catch {
+            outputUrl = '';
+          }
         }
-        const output = await resizeImage(payload.dataUrl, 1280, .84);
+
+        if (!outputUrl) {
+          const response = await fetch('/api/ai/product-photo', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
+            body:JSON.stringify({ image:sourceDataUrl, images:[sourceDataUrl], style, model, quality })
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || `خطای سرویس (${response.status})`);
+          }
+          outputUrl = payload.dataUrl;
+        }
+
+        if (!outputUrl) throw new Error('تصویر نهایی از هوش مصنوعی دریافت نشد.');
+
+        const output = await resizeImage(outputUrl, 1280, .88);
         if (currentGenerationId !== generationId) return;
         generatedDataUrl = output;
         studio.querySelector('#ai-product-output-preview').src = output;
         studio.querySelector('#ai-product-output-wrap').hidden = false;
         applyButton.disabled = false;
-        status.textContent = 'یک تصویر نهایی با موفقیت آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.';
+        status.textContent = `یک تصویر نهایی با مدل ${model} با موفقیت آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.`;
       } catch (error) {
         if (currentGenerationId !== generationId) return;
         status.textContent = error.message || 'ساخت تصویر انجام نشد.';
