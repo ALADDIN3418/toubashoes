@@ -11,7 +11,7 @@
     "start": "node local-server.js",
     "build": "node scripts/check.js && node scripts/build-vercel.js",
     "lint": "node scripts/check.js",
-    "test": "node tests/repository-crud.js && node tests/gpt-image.js && node tests/cloudflare-image.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/runtime-smoke.js && node tests/demo-e2e.js"
+    "test": "node tests/repository-crud.js && node tests/studio-image.js && node tests/cloudflare-image.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/runtime-smoke.js && node tests/demo-e2e.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS, defaultKeyManager } = require('./services/gpt-image.js');
+const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS, SUPPORTED_STYLES } = require('./services/studio-image.js');
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
@@ -188,32 +188,19 @@ const server = http.createServer(async (req, res) => {
     const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
     return json(res, 200, {
       configured: true,
-      keyless: false,
+      keyless: true,
       unlimited: true,
-      autoRotating: true,
+      free: true,
       persistentQuotaConfigured,
       quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-      provider: 'GPT Image (OpenAI / Rotating Pool)',
-      model: process.env.IMAGE_MODEL || DEFAULT_MODEL || MODEL,
+      provider: 'Touba AI Commercial Studio (100% Free & Unlimited)',
+      model: DEFAULT_MODEL || MODEL,
       supportedModels: SUPPORTED_MODELS,
-      localDailyLimit: 50,
-      referenceMaxSide: 1024,
-      note: 'GPT Image with automatic key rotation enabled.'
+      supportedStyles: SUPPORTED_STYLES,
+      localDailyLimit: 'unlimited',
+      referenceMaxSide: 1280,
+      note: 'استودیوی هوشمند عکس محصول طوبی: کاملاً رایگان، نامحدود، بدون نیاز به کلید API و با حفظ ۱۰۰٪ هویت کفش مرجع.'
     });
-  }
-  if (pathname === '/api/ai/rotate-token') {
-    if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
-    if (!requireSameOrigin(req, res)) return;
-    try { await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
-    try {
-      if (defaultKeyManager.configuredKeys.length > 0) {
-        const nextKey = await defaultKeyManager.getValidKey(true, 'local-rotate');
-        return json(res, 200, { success: true, rotated: true, key: nextKey ? `${nextKey.slice(0, 7)}...` : null });
-      }
-      return json(res, 200, { success: false, rotated: false, message: 'هیچ کلیدی در استخر سرور تنظیم نشده است.' });
-    } catch (error) {
-      return json(res, 500, { error: error.message || 'خطا در چرخش کلید' });
-    }
   }
   if (pathname === '/api/ai/describe') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -259,11 +246,9 @@ const server = http.createServer(async (req, res) => {
         dataUrl: body.image,
         style: body.style,
         model: body.model,
-        quality: body.quality,
-        apiKey: body.apiKey || body.authToken,
-        geminiApiKey: body.geminiApiKey,
-        apiBase: body.apiBase,
-        autoFallback: body.autoFallback !== false
+        lighting: body.lighting,
+        pedestal: body.pedestal !== false,
+        contrast: body.contrast !== false
       });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });

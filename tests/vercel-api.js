@@ -73,15 +73,13 @@ async function main() {
     aiStatus({ method:'GET' }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).configured, true);
-    assert.equal(payload(res).keyless, false);
+    assert.equal(payload(res).keyless, true);
     assert.equal(payload(res).unlimited, true);
-    assert.equal(payload(res).autoRotating, true);
-    assert.equal(payload(res).provider, 'GPT Image (OpenAI / Rotating Pool)');
-    assert.equal(payload(res).model, 'gpt-image-2.5-flare');
-    assert.equal(payload(res).localDailyLimit, 50);
+    assert.equal(payload(res).free, true);
+    assert.equal(payload(res).provider, 'Touba AI Commercial Studio (100% Free & Unlimited)');
+    assert.equal(payload(res).model, 'touba-studio-v1');
     assert(Array.isArray(payload(res).supportedModels));
-    assert(payload(res).supportedModels.includes('gpt-image-2.5-flare'));
-    assert(payload(res).supportedModels.includes('gpt-image-2'));
+    assert(payload(res).supportedModels.includes('touba-studio-v1'));
 
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
@@ -102,61 +100,31 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates photo using GPT Image with auto-rotation
-    const oldFetchApi = global.fetch;
-    let gptImageCalled = false;
-    global.fetch = async (url, options = {}) => {
-      const urlStr = String(url);
-      if (urlStr.includes('/images/edits')) {
-        gptImageCalled = true;
-        return new Response(JSON.stringify({
-          data: [{ b64_json: 'mockGptImageOutputBase64' }]
-        }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    };
-    try {
-      res = response();
-      await productPhoto({
-        method: 'POST',
-        headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare', apiKey: 'mock_test_key' }
-      }, res);
-      assert.equal(res.statusCode, 200);
-      assert.equal(gptImageCalled, true);
-      assert.equal(payload(res).success, true);
-      assert.equal(payload(res).model, 'gpt-image-2.5-flare');
-      assert.equal(payload(res).provider, 'GPT Image (OpenAI / Rotating Pool)');
-      assert.equal(payload(res).keyless, false);
-    } finally {
-      global.fetch = oldFetchApi;
-    }
+    // Verify productPhoto generates studio photo keyless and unlimited
+    res = response();
+    await productPhoto({
+      method: 'POST',
+      headers: { origin: 'https://touba.test', host: 'touba.test' },
+      body: { image: referenceDataUrl, style: 'warm-studio', lighting: 'front-diffused', pedestal: true }
+    }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(payload(res).success, true);
+    assert.equal(payload(res).model, 'touba-studio-v1');
+    assert.equal(payload(res).style, 'warm-studio');
+    assert.equal(payload(res).provider, 'Touba AI Commercial Studio (100% Free & Unlimited)');
+    assert.equal(payload(res).keyless, true);
+    assert.equal(payload(res).unlimited, true);
+    assert.equal(payload(res).free, true);
 
-    // Verify productPhoto handles upstream errors and releases quota
-    const failingFetchApi = global.fetch;
-    global.fetch = async (url) => {
-      const urlStr = String(url);
-      if (urlStr.includes('/images/edits')) {
-        return new Response(JSON.stringify({ error: { message: 'Upstream GPT Image failure' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    };
-    try {
-      res = response();
-      await productPhoto({
-        method: 'POST',
-        headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, apiKey: 'mock_test_key' }
-      }, res);
-      assert.equal(res.statusCode, 502);
-      assert.equal(payload(res).quotaConsumed, false);
-      assert.match(payload(res).error, /Upstream GPT Image failure/);
-    } finally {
-      global.fetch = failingFetchApi;
-    }
+    // Verify productPhoto handles invalid input gracefully
+    res = response();
+    await productPhoto({
+      method: 'POST',
+      headers: { origin: 'https://touba.test', host: 'touba.test' },
+      body: { image: '' }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert(payload(res).error);
 
     const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
     const dataUrl = `data:image/jpeg;base64,${tinyJpeg}`;
