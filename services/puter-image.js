@@ -3,11 +3,21 @@
 let puterClient = null;
 function getPuterClient() {
   if (!puterClient) {
-    try {
-      const { puter } = require('@heyputer/puter.js');
-      puterClient = puter;
-    } catch {
-      puterClient = globalThis.puter || null;
+    if (globalThis.puter && globalThis.puter.ai) {
+      puterClient = globalThis.puter;
+    } else {
+      try {
+        // CommonJS bundle works across all Node versions without ERR_REQUIRE_ESM
+        const cjs = require('@heyputer/puter.js/dist/puter.cjs');
+        puterClient = globalThis.puter || cjs?.puter || cjs?.default || cjs;
+      } catch {
+        try {
+          const m = require('@heyputer/puter.js');
+          puterClient = m?.puter || m?.default || m;
+        } catch {
+          puterClient = null;
+        }
+      }
     }
   }
   return puterClient;
@@ -68,6 +78,52 @@ function parseStyle(style) {
   return SUPPORTED_STYLES.includes(s) ? s : DEFAULT_STYLE;
 }
 
+async function callPuterDriverDirect({ prompt, model, quality, inputImage, testMode = false }) {
+  const origin = process.env.PUTER_API_ORIGIN || 'https://api.puter.com';
+  const response = await fetch(`${origin}/drivers/call`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'puter-js/1.0'
+    },
+    body: JSON.stringify({
+      interface: 'puter-image-generation',
+      driver: 'ai-image',
+      test_mode: Boolean(testMode),
+      method: 'generate',
+      args: {
+        model,
+        quality,
+        input_image: inputImage,
+        prompt
+      },
+      auth_token: null
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.success === false) {
+    const errorMsg = data?.error?.message || data?.message || `خطای سرویس Puter (${response.status})`;
+    const err = new Error(errorMsg);
+    err.status = response.status >= 400 ? response.status : 502;
+    err.code = data?.error?.code || data?.code || 'PUTER_DRIVER_ERROR';
+    throw err;
+  }
+
+  const result = data.result;
+  let outputUrl = '';
+  if (typeof result === 'string') {
+    outputUrl = result;
+  } else if (result && typeof result === 'object') {
+    outputUrl = result.url || result.src || result.asset_url || result.href || '';
+  }
+
+  if (!outputUrl) {
+    throw new Error('پاسخ دریافت شده از Puter شامل تصویر معتبر نبود.');
+  }
+  return outputUrl;
+}
+
 async function generateProductPhoto({
   imageBytes,
   dataUrl,
@@ -94,12 +150,6 @@ async function generateProductPhoto({
   }
 
   const prompt = promptFor(selectedStyle);
-  const puter = client || getPuterClient();
-
-  if (!puter || !puter.ai || typeof puter.ai.txt2img !== 'function') {
-    throw Object.assign(new Error('کتابخانهٔ Puter.js برای تولید تصویر در دسترس نیست.'), { status: 503 });
-  }
-
   const options = {
     model: selectedModel,
     quality: selectedQuality,
@@ -107,39 +157,59 @@ async function generateProductPhoto({
     test_mode: Boolean(testMode)
   };
 
-  try {
-    const result = await puter.ai.txt2img(prompt, options);
-    let outputSrc = '';
+  let outputSrc = '';
+  const puter = client || getPuterClient();
 
-    if (typeof result === 'string') {
-      outputSrc = result;
-    } else if (result && typeof result.src === 'string') {
-      outputSrc = result.src;
-    } else if (result && typeof result.toString === 'function') {
-      outputSrc = result.toString();
+  // 1. If an explicit client or puter SDK with txt2img is available, try it
+  if (puter && puter.ai && typeof puter.ai.txt2img === 'function') {
+    try {
+      const result = await puter.ai.txt2img(prompt, options);
+      if (typeof result === 'string') {
+        outputSrc = result;
+      } else if (result && typeof result.src === 'string') {
+        outputSrc = result.src;
+      } else if (result && typeof result.toString === 'function') {
+        outputSrc = result.toString();
+      }
+    } catch (sdkError) {
+      if (client) throw sdkError;
+      outputSrc = '';
     }
-
-    if (!outputSrc || typeof outputSrc !== 'string') {
-      throw new Error('خروجی معتبری از Puter GPT Image دریافت نشد.');
-    }
-
-    return {
-      success: true,
-      dataUrl: outputSrc,
-      model: selectedModel,
-      quality: selectedQuality,
-      style: selectedStyle,
-      provider: 'Puter.js (OpenAI GPT Image)',
-      keyless: true
-    };
-  } catch (error) {
-    const message = error?.message || error?.error?.message || 'خطا در ساخت تصویر با Puter GPT Image.';
-    const status = Number(error?.status || error?.error?.status) || 502;
-    const err = new Error(message);
-    err.status = status;
-    err.code = error?.code || error?.error?.code || 'PUTER_IMAGE_ERROR';
-    throw err;
   }
+
+  // 2. If SDK was not available or didn't produce output, use direct HTTP driver call
+  if (!outputSrc) {
+    try {
+      outputSrc = await callPuterDriverDirect({
+        prompt,
+        model: selectedModel,
+        quality: selectedQuality,
+        inputImage,
+        testMode
+      });
+    } catch (driverError) {
+      const message = driverError?.message || 'خطا در ارتباط با سرویس Puter GPT Image.';
+      const status = Number(driverError?.status) || 502;
+      const err = new Error(message);
+      err.status = status;
+      err.code = driverError?.code || 'PUTER_IMAGE_ERROR';
+      throw err;
+    }
+  }
+
+  if (!outputSrc || typeof outputSrc !== 'string') {
+    throw new Error('خروجی معتبری از Puter GPT Image دریافت نشد.');
+  }
+
+  return {
+    success: true,
+    dataUrl: outputSrc,
+    model: selectedModel,
+    quality: selectedQuality,
+    style: selectedStyle,
+    provider: 'Puter.js (OpenAI GPT Image)',
+    keyless: true
+  };
 }
 
 module.exports = {
@@ -155,6 +225,7 @@ module.exports = {
   parseModel,
   parseQuality,
   parseStyle,
+  callPuterDriverDirect,
   generateProductPhoto,
   getPuterClient
 };

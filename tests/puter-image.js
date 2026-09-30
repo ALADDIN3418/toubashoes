@@ -177,6 +177,31 @@ async function main() {
     global.fetch = oldFetch;
   }
 
+  // Direct driver fallback test
+  const directFetch = global.fetch;
+  let directCalled = false;
+  global.fetch = async (url, options) => {
+    directCalled = true;
+    assert.equal(url, 'https://api.puter.com/drivers/call');
+    return new Response(JSON.stringify({
+      success: true,
+      result: 'data:image/jpeg;base64,RElSRUNUX09VVFBVVA=='
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const { callPuterDriverDirect } = require('../services/puter-image.js');
+    const directResult = await callPuterDriverDirect({
+      prompt: 'a shoe',
+      model: 'gpt-image-2.5-flare',
+      quality: 'high',
+      inputImage: sampleDataUrl
+    });
+    assert.equal(directCalled, true);
+    assert.equal(directResult, 'data:image/jpeg;base64,RElSRUNUX09VVFBVVA==');
+  } finally {
+    global.fetch = directFetch;
+  }
+
   console.log('PASS: Puter.js GPT Image assistant, keyless model options, prompt sanitization, and driver integration');
   process.exit(0);
 }
