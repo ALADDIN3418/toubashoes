@@ -58,16 +58,14 @@ function parseStyle(style) {
  * Intelligent Puter Token & API Credential Rotation Manager
  * Supports:
  *  1. Preconfigured token pools via PUTER_AUTH_TOKENS (comma-separated) or PUTER_AUTH_TOKEN
- *  2. Dynamic anonymous temporary session creation via Puter signup API
- *  3. Automatic detection of rate limits (429), quota exhaustion (402/403/credits), and expired tokens (401)
- *  4. Seamless zero-touch replacement of limited credentials
+ *  2. Automatic detection of rate limits (429), quota exhaustion (402/403/credits), and expired tokens (401)
+ *  3. Seamless zero-touch replacement across unexhausted credentials in the pool
  */
 class PuterTokenManager {
   constructor(options = {}) {
     this.apiOrigin = options.apiOrigin || process.env.PUTER_API_ORIGIN || 'https://api.puter.com';
     this.configuredTokens = [];
     this.exhaustedTokens = new Set();
-    this.ephemeralTokens = [];
     this.activeToken = null;
     this.tokenIndex = 0;
     this.customFetch = options.fetchFn || null;
@@ -117,38 +115,6 @@ class PuterTokenManager {
     }
   }
 
-  async createEphemeralToken() {
-    try {
-      const signupUrl = `${this.apiOrigin}/signup`;
-      const response = await this.fetchFn(signupUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'ToubaShoes-AI/1.0'
-        },
-        body: JSON.stringify({ is_temp: true })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Puter temp signup failed with status ${response.status}`);
-      }
-
-      const data = await response.json().catch(() => ({}));
-      const newToken = data?.token || null;
-      if (newToken && typeof newToken === 'string') {
-        this.ephemeralTokens.push(newToken);
-        this.activeToken = newToken;
-        return newToken;
-      }
-      throw new Error('Puter signup response did not include a valid token.');
-    } catch (error) {
-      throw Object.assign(new Error(`دریافت خودکار توکن موقت Puter انجام نشد: ${error.message}`), {
-        status: 502,
-        code: 'PUTER_TEMP_TOKEN_FAILED'
-      });
-    }
-  }
-
   async getValidToken(forceRotate = false, reason = '') {
     if (forceRotate && this.activeToken) {
       this.markExhausted(this.activeToken, reason);
@@ -167,17 +133,7 @@ class PuterTokenManager {
       }
     }
 
-    // 2. Try unexhausted token from ephemeral list
-    for (const ep of this.ephemeralTokens) {
-      if (!this.exhaustedTokens.has(ep)) {
-        this.activeToken = ep;
-        return ep;
-      }
-    }
-
-    // 3. Dynamically spawn a new ephemeral token
-    const freshToken = await this.createEphemeralToken();
-    return freshToken;
+    return this.activeToken || null;
   }
 }
 
@@ -204,6 +160,13 @@ async function callPuterDriverWithRotation({
   while (attempts <= maxRetries) {
     if (!currentToken) {
       currentToken = await tokenManager.getValidToken(false);
+    }
+
+    if (!currentToken) {
+      const err = new Error('برای پردازش تصویر از سمت سرور، توکن Puter در متغیرهای سرور یافت نشد. لطفاً در پنل ادمین مستقیماً از قابلیت ساخت تصویر در مرورگر استفاده کنید یا متغیر PUTER_AUTH_TOKEN را در تنظیمات Vercel قرار دهید.');
+      err.status = 401;
+      err.code = 'PUTER_AUTH_REQUIRED';
+      throw err;
     }
 
     const headers = {
@@ -244,8 +207,11 @@ async function callPuterDriverWithRotation({
           tokenManager.markExhausted(currentToken, `Status ${response.status}: ${rawError}`);
           attempts++;
           if (attempts <= maxRetries) {
-            currentToken = await tokenManager.getValidToken(true, `Status ${response.status}: ${rawError}`);
-            continue; // retry loop with newly rotated token
+            const nextToken = await tokenManager.getValidToken(true, `Status ${response.status}: ${rawError}`);
+            if (nextToken && nextToken !== currentToken) {
+              currentToken = nextToken;
+              continue; // retry loop with newly rotated token
+            }
           }
         }
 
@@ -278,8 +244,11 @@ async function callPuterDriverWithRotation({
         tokenManager.markExhausted(currentToken, err.message);
         attempts++;
         if (attempts <= maxRetries) {
-          currentToken = await tokenManager.getValidToken(true, err.message);
-          continue;
+          const nextToken = await tokenManager.getValidToken(true, err.message);
+          if (nextToken && nextToken !== currentToken) {
+            currentToken = nextToken;
+            continue;
+          }
         }
       }
       throw err;

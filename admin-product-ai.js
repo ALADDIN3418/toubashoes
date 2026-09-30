@@ -131,23 +131,22 @@
   }
 
   async function getClientPuterToken(forceRefresh = false) {
-    let token = localStorage.getItem('touba_ai_puter_token');
+    if (forceRefresh) {
+      localStorage.removeItem('touba_ai_puter_token');
+    }
+    let token = localStorage.getItem('touba_ai_puter_token') || window.puter?.authToken || null;
     if (token && !forceRefresh) return token;
 
-    try {
-      const resp = await fetch('https://api.puter.com/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_temp: true })
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data?.token) {
-          localStorage.setItem('touba_ai_puter_token', data.token);
-          return data.token;
+    if (typeof window.puter !== 'undefined' && window.puter?.auth?.signIn) {
+      try {
+        await window.puter.auth.signIn({ attempt_temp_user_creation: true });
+        token = window.puter.authToken || localStorage.getItem('touba_ai_puter_token') || null;
+        if (token) {
+          localStorage.setItem('touba_ai_puter_token', token);
+          return token;
         }
-      }
-    } catch { /* proceed to backend fallback */ }
+      } catch { /* proceed to backend fallback */ }
+    }
 
     try {
       const resp = await fetch('/api/ai/rotate-token', {
@@ -329,55 +328,91 @@
         let outputUrl = '';
         const prompt = buildShoePhotoPrompt(style);
 
-        // 1. Direct browser fetch with automatic token rotation
-        let directAttempts = 0;
-        let forceRefresh = false;
-        while (directAttempts < 2 && !outputUrl) {
+        // 1. Direct browser execution with official Puter.js SDK
+        if (typeof window.puter !== 'undefined' && window.puter?.ai && typeof window.puter.ai.txt2img === 'function') {
           try {
-            const token = await getClientPuterToken(forceRefresh);
-            const headers = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-
-            const directResponse = await fetch('https://api.puter.com/drivers/call', {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                interface: 'puter-image-generation',
-                driver: 'ai-image',
-                method: 'generate',
-                args: {
-                  model,
-                  quality: 'high',
-                  input_image: sourceDataUrl,
-                  prompt
-                },
-                auth_token: token
-              })
+            status.textContent = `در حال پردازش تصویر با مدل ${modelLabel}؛ حفظ جزئیات دقیق محصول…`;
+            const puterImg = await window.puter.ai.txt2img(prompt, {
+              model: model,
+              quality: 'high',
+              input_image: sourceDataUrl
             });
-
-            const data = await directResponse.json().catch(() => ({}));
-            if (directResponse.ok && data.success !== false) {
-              const res = data.result;
-              if (typeof res === 'string') outputUrl = res;
-              else if (res && typeof res === 'object') outputUrl = res.url || res.src || res.asset_url || '';
-              break;
+            if (typeof puterImg === 'string') outputUrl = puterImg;
+            else if (puterImg && puterImg.src) outputUrl = puterImg.src;
+            else if (puterImg && typeof puterImg.toString === 'function') outputUrl = puterImg.toString();
+          } catch (sdkError) {
+            // If Puter SDK needs auth or hits limit, try signing in / rotating session
+            if (window.puter?.auth && typeof window.puter.auth.signIn === 'function') {
+              status.textContent = 'تنظیم سشن Puter GPT Image و چرخش خودکار…';
+              try {
+                if (window.puter.auth.signOut) await window.puter.auth.signOut().catch(() => {});
+                await window.puter.auth.signIn({ attempt_temp_user_creation: true });
+                const retryImg = await window.puter.ai.txt2img(prompt, {
+                  model: model,
+                  quality: 'high',
+                  input_image: sourceDataUrl
+                });
+                if (typeof retryImg === 'string') outputUrl = retryImg;
+                else if (retryImg && retryImg.src) outputUrl = retryImg.src;
+                else if (retryImg && typeof retryImg.toString === 'function') outputUrl = retryImg.toString();
+              } catch { /* proceed to backend fallback */ }
             }
-
-            const rawErr = data?.error?.message || data?.message || '';
-            if (isTokenLimitError(directResponse.status, rawErr)) {
-              status.textContent = 'سهمیه کلید قبلی تکمیل شد؛ جایگزینی خودکار کلید جدید و ادامه تولید تصویر بدون وقفه…';
-              forceRefresh = true;
-              directAttempts++;
-              continue;
-            }
-            break;
-          } catch {
-            break;
           }
         }
 
-        // 2. Serverless fallback with backend auto-rotation if direct browser call did not succeed
+        // 2. Direct browser driver call if token is available
         if (!outputUrl) {
+          let directAttempts = 0;
+          let forceRefresh = false;
+          while (directAttempts < 2 && !outputUrl) {
+            try {
+              const token = await getClientPuterToken(forceRefresh);
+              if (!token) break;
+              const headers = { 'Content-Type': 'application/json' };
+              headers['Authorization'] = `Bearer ${token}`;
+
+              const directResponse = await fetch('https://api.puter.com/drivers/call', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  interface: 'puter-image-generation',
+                  driver: 'ai-image',
+                  method: 'generate',
+                  args: {
+                    model,
+                    quality: 'high',
+                    input_image: sourceDataUrl,
+                    prompt
+                  },
+                  auth_token: token
+                })
+              });
+
+              const data = await directResponse.json().catch(() => ({}));
+              if (directResponse.ok && data.success !== false) {
+                const res = data.result;
+                if (typeof res === 'string') outputUrl = res;
+                else if (res && typeof res === 'object') outputUrl = res.url || res.src || res.asset_url || '';
+                break;
+              }
+
+              const rawErr = data?.error?.message || data?.message || '';
+              if (isTokenLimitError(directResponse.status, rawErr)) {
+                status.textContent = 'سهمیه کلید قبلی تکمیل شد؛ دریافت خودکار کلید جدید و ادامه تولید تصویر بدون وقفه…';
+                forceRefresh = true;
+                directAttempts++;
+                continue;
+              }
+              break;
+            } catch {
+              break;
+            }
+          }
+        }
+
+        // 3. Serverless fallback with backend auto-rotation
+        if (!outputUrl) {
+          const clientToken = window.puter?.authToken || localStorage.getItem('touba_ai_puter_token') || null;
           const response = await fetch('/api/ai/product-photo', {
             method: 'POST',
             headers: {
@@ -389,7 +424,8 @@
               images: [sourceDataUrl],
               style,
               model,
-              quality: 'high'
+              quality: 'high',
+              authToken: clientToken
             })
           });
           const payload = await response.json().catch(() => ({}));

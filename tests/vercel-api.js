@@ -133,7 +133,7 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare' }
+        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare', authToken: 'mock_test_token' }
       }, res);
       assert.equal(res.statusCode, 200);
       assert.equal(puterCalled, true);
@@ -166,7 +166,7 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl }
+        body: { image: referenceDataUrl, authToken: 'mock_test_token' }
       }, res);
       assert.equal(res.statusCode, 502);
       assert.equal(payload(res).quotaConsumed, false);

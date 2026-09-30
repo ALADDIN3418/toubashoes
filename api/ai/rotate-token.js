@@ -14,16 +14,24 @@ module.exports = async function rotateToken(req, res) {
   }
 
   try {
-    const newToken = await defaultTokenManager.getValidToken(true, 'client-requested-rotation');
+    if (defaultTokenManager.configuredTokens.length > 0) {
+      const newToken = await defaultTokenManager.getValidToken(true, 'client-requested-rotation');
+      return sendJson(res, 200, {
+        success: true,
+        token: newToken,
+        rotated: true,
+        message: 'توکن جدید با موفقیت جایگزین شد.'
+      });
+    }
     return sendJson(res, 200, {
-      success: true,
-      token: newToken,
-      rotated: true,
-      message: 'توکن جدید با موفقیت جایگزین شد.'
+      success: false,
+      token: null,
+      rotated: false,
+      message: 'استخر توکن سرور تعریف نشده است؛ لطفاً از نشست مستقیم مرورگر استفاده کنید.'
     });
   } catch (error) {
     return sendJson(res, 502, {
-      error: error.message || 'خطا در چرخش خودکار توکن Puter GPT Image'
+      error: error.message || 'خطا در چرخش توکن Puter'
     });
   }
 };

@@ -77,46 +77,16 @@ async function run() {
   assert.equal(thirdToken, 'token_gamma');
   assert.ok(tokenManager.exhaustedTokens.has('token_beta'));
 
-  // Ephemeral signup when pool is exhausted
-  let signupCalled = false;
-  const mockSignupFetch = async (url, options) => {
-    if (url.endsWith('/signup')) {
-      signupCalled = true;
-      assert.equal(options.method, 'POST');
-      const body = JSON.parse(options.body);
-      assert.equal(body.is_temp, true);
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          token: 'token_ephemeral_dynamic_123',
-          user: { username: 'temp_user_99', is_temp: true }
-        })
-      };
-    }
-    throw new Error(`Unexpected URL: ${url}`);
-  };
-
-  const dynamicTokenManager = new PuterTokenManager({
-    tokens: [],
-    fetchFn: mockSignupFetch
+  // Token exhaustion when pool has no more tokens
+  const emptyTokenManager = new PuterTokenManager({
+    tokens: []
   });
-
-  const freshEphemeral = await dynamicTokenManager.getValidToken(false);
-  assert.ok(signupCalled, 'Dynamic signup endpoint must be called when no tokens available');
-  assert.equal(freshEphemeral, 'token_ephemeral_dynamic_123');
+  assert.equal(await emptyTokenManager.getValidToken(false), null);
 
   // 4. Automatic rotation during callPuterDriverWithRotation
   let callCount = 0;
   const callTokens = [];
   const mockRotateFetch = async (url, options) => {
-    if (url.endsWith('/signup')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ token: 'token_spawned_after_exhaustion', user: { is_temp: true } })
-      };
-    }
     if (url.endsWith('/drivers/call')) {
       callCount++;
       const authHeader = options.headers['Authorization'] || '';
