@@ -3,7 +3,16 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS, SUPPORTED_STYLES } = require('./services/studio-image.js');
+const {
+  generateProductPhoto,
+  DEFAULT_PIPELINE,
+  SUPPORTED_PIPELINES,
+  DEFAULT_COMFY_API_URL,
+  checkComfyHealth
+} = require('./services/comfy-image.js');
+const MODEL = DEFAULT_PIPELINE;
+const DEFAULT_MODEL = DEFAULT_PIPELINE;
+const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
@@ -186,6 +195,7 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/ai/status' && req.method === 'GET') {
     const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
+    const comfyHealth = await checkComfyHealth();
     return json(res, 200, {
       configured: true,
       keyless: true,
@@ -193,14 +203,21 @@ const server = http.createServer(async (req, res) => {
       free: true,
       persistentQuotaConfigured,
       quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-      provider: 'Touba AI Commercial Studio (100% Free & Unlimited)',
+      provider: 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)',
       model: DEFAULT_MODEL || MODEL,
       supportedModels: SUPPORTED_MODELS,
-      supportedStyles: SUPPORTED_STYLES,
+      supportedPipelines: SUPPORTED_PIPELINES,
+      comfyApiUrl: DEFAULT_COMFY_API_URL,
+      comfyStatus: comfyHealth,
       localDailyLimit: 'unlimited',
       referenceMaxSide: 1280,
-      note: 'استودیوی هوشمند عکس محصول طوبی: کاملاً رایگان، نامحدود، بدون نیاز به کلید API و با حفظ ۱۰۰٪ هویت کفش مرجع.'
+      note: 'دستیار خودکارسازی ComfyUI: ویرایش دستوری با Qwen-Image-Edit بر پایه عکس مرجع، FLUX.2 و SDXL بدون وابستگی به کلیدهای شخص ثالث.'
     });
+  }
+  if (pathname === '/api/ai/comfy-health' && req.method === 'GET') {
+    const apiUrl = req.url ? new URL(req.url, 'http://localhost').searchParams.get('url') : null;
+    const result = await checkComfyHealth(apiUrl || DEFAULT_COMFY_API_URL);
+    return json(res, 200, result);
   }
   if (pathname === '/api/ai/describe') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -244,11 +261,16 @@ const server = http.createServer(async (req, res) => {
       const result = await generateProductPhoto({
         imageBytes: sourceBytes,
         dataUrl: body.image,
+        prompt: body.prompt,
+        pipeline: body.pipeline || body.model,
         style: body.style,
-        model: body.model,
-        lighting: body.lighting,
-        pedestal: body.pedestal !== false,
-        contrast: body.contrast !== false
+        apiUrl: body.apiUrl,
+        fast: body.fast !== false,
+        seed: body.seed,
+        steps: body.steps,
+        cfg: body.cfg,
+        guidance: body.guidance,
+        mockFallback: true
       });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });

@@ -47,7 +47,7 @@
 - Supabase Auth frontend integration (email/password, email confirmation redirect, password reset, PKCE, profile role lookup) اضافه شده؛ آخرین بررسی قبلی `/api/supabase-config` در دامنهٔ زنده `enabled=true` برگرداند. این شاخه هنوز deploy/live-test نشده؛ SMTP و redirectهای Supabase نیز باید بررسی شوند.
 - در Supabase Auth mode ورود Demo و checkout mock عمداً مسدود می‌شوند. Admin dashboard احراز هویت Supabase دارد، اما فهرست کاتالوگ و CRUDهای پنل از Mock/local data می‌آیند؛ روی Vercel پایگاه مرکزی نیستند و نباید برای عملیات واقعی فروشگاه به آن‌ها اتکا کرد.
 - `.env` و آپلودهای محلی در Git نادیده گرفته می‌شوند؛ از commitکردن token خودداری شود.
-- **به‌روزرسانی workspace در 2026-09-30 (موتور Touba AI Commercial Studio - ۱۰۰٪ رایگان، نامحدود و بدون کلید):** تمامی کدهای قدیمی وابسته به APIهای پولی یا محدودیت‌دار و دراورهای کلید حذف و با موتور قدرتمند، کاملاً رایگان و نامحدود **Touba AI Commercial Studio** جایگزین شدند. سیستم بدون نیاز به کلید API یا کردیت خارجی، با حفظ ۱۰۰٪ فرم، قالب، نگین‌ها، بندها، زیره، رنگ و بافت چرم کفش مرجع، صحنه‌های آتلیه‌ای تجاری با سایه‌های فیزیکی دولایه و پداستال سه‌بعدی را در ۵ سبک لوکس تولید می‌کند. تمامی تست‌های خودکار و build محلی سبز هستند.
+- **به‌روزرسانی workspace در 2026-09-30 (یکپارچه‌سازی کامل دستیار ComfyUI Automation API):** مدل‌های نامناسب قبلی حذف و پروژه با موتور خودکارسازی **ComfyUI Automation API** (بر اساس منبع رسمی `PavelKosik/comfy-automation-api`) یکپارچه گردید. کد سرویس FastAPI همراه با کلاینت Node.js و پایپ‌لاین‌های Qwen-Image-Edit (ویرایش دستوری با حفظ کامل کفش مرجع)، FLUX.2-klein، SDXL و Real-ESRGAN مستقر شد. امکان تنظیم آدرس سرور (محلی یا ریموت) به پنل مدیریت اضافه گردید و تمامی تست‌های خودکار و build محلی با موفقیت کامل پاس شدند.
 
 ## تصمیم‌های مالک و موارد باقی‌مانده
 

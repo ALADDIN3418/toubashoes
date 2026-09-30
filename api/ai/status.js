@@ -1,10 +1,17 @@
 'use strict';
-const { sendJson, MODEL, persistentAiQuotaConfig } = require('../../lib/vercel-api.js');
-const { DEFAULT_MODEL, SUPPORTED_MODELS, SUPPORTED_STYLES, SUPPORTED_LIGHTINGS } = require('../../services/studio-image.js');
+const { sendJson, persistentAiQuotaConfig } = require('../../lib/vercel-api.js');
+const {
+  DEFAULT_COMFY_API_URL,
+  SUPPORTED_PIPELINES,
+  DEFAULT_PIPELINE,
+  checkComfyHealth
+} = require('../../services/comfy-image.js');
 
-module.exports = function aiStatus(req, res) {
+module.exports = async function aiStatus(req, res) {
   if (req.method !== 'GET') return sendJson(res, 405, { error:'روش درخواست مجاز نیست.' });
   const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
+  const health = await checkComfyHealth();
+
   return sendJson(res, 200, {
     configured: true,
     keyless: true,
@@ -12,13 +19,14 @@ module.exports = function aiStatus(req, res) {
     free: true,
     persistentQuotaConfigured,
     quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-    provider: 'Touba AI Commercial Studio (100% Free & Unlimited)',
-    model: DEFAULT_MODEL || MODEL,
-    supportedModels: SUPPORTED_MODELS,
-    supportedStyles: SUPPORTED_STYLES,
-    supportedLightings: SUPPORTED_LIGHTINGS,
+    provider: 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)',
+    model: DEFAULT_PIPELINE,
+    supportedModels: SUPPORTED_PIPELINES,
+    supportedPipelines: SUPPORTED_PIPELINES,
+    comfyApiUrl: DEFAULT_COMFY_API_URL,
+    comfyStatus: health,
     localDailyLimit: 'unlimited',
     referenceMaxSide: 1280,
-    note: 'استودیوی هوشمند عکس محصول طوبی: کاملاً رایگان، نامحدود، بدون نیاز به کلید API و با حفظ ۱۰۰٪ هویت کفش مرجع.'
+    note: 'دستیار خودکارسازی ComfyUI: ویرایش دستوری با Qwen-Image-Edit بر پایه عکس مرجع، FLUX.2 و SDXL بدون وابستگی به کلیدهای شخص ثالث.'
   });
 };

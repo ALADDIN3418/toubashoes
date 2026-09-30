@@ -130,295 +130,18 @@
     return `Professional commercial product catalog photography of the exact footwear shown in the reference image, ${desc}. Maintain the exact footwear design, shape, silhouette, straps, studs, embellishments, colors, and textures from the reference photo. Single shoe product view only. No human feet, legs, or models. Crisp commercial advertising quality, sharp focus, 8k resolution.`;
   }
 
-  const STUDIO_THEMES = {
-    'warm-studio': {
-      label: 'استودیوی کرم و بژ لوکس',
-      wallTop: '#fdfbf7',
-      wallBottom: '#ebe3d8',
-      spotlight: 'rgba(255, 252, 246, 0.65)',
-      floorTop: '#ece3d6',
-      floorBottom: '#dcd1c2',
-      pedestalTop: '#f6f3ee',
-      pedestalSide: '#dfd6c8',
-      pedestalBevel: '#ffffff',
-      shadowColor: 'rgba(50, 40, 30, 0.40)',
-      aoColor: 'rgba(25, 20, 15, 0.68)'
-    },
-    'dark-luxury': {
-      label: 'استودیوی دارک و لوکس',
-      wallTop: '#2c3138',
-      wallBottom: '#14171a',
-      spotlight: 'rgba(60, 80, 75, 0.45)',
-      floorTop: '#1e2226',
-      floorBottom: '#0f1114',
-      pedestalTop: '#2d3339',
-      pedestalSide: '#191d21',
-      pedestalBevel: '#4c5661',
-      shadowColor: 'rgba(0, 0, 0, 0.70)',
-      aoColor: 'rgba(0, 0, 0, 0.90)'
-    },
-    'natural-stone': {
-      label: 'سنگ طبیعی و نور روز',
-      wallTop: '#f8f6f2',
-      wallBottom: '#e6e2d8',
-      spotlight: 'rgba(255, 253, 245, 0.60)',
-      floorTop: '#eae5dc',
-      floorBottom: '#dad3c5',
-      pedestalTop: '#f0ece3',
-      pedestalSide: '#d4ccbf',
-      pedestalBevel: '#ffffff',
-      shadowColor: 'rgba(45, 42, 38, 0.40)',
-      aoColor: 'rgba(20, 18, 15, 0.65)'
-    },
-    'clean-white': {
-      label: 'سفید کاتالوگی استاندارد',
-      wallTop: '#ffffff',
-      wallBottom: '#f5f7fa',
-      spotlight: 'rgba(255, 255, 255, 0.85)',
-      floorTop: '#f9fafc',
-      floorBottom: '#eaeff5',
-      pedestalTop: '#ffffff',
-      pedestalSide: '#e5ebf2',
-      pedestalBevel: '#ffffff',
-      shadowColor: 'rgba(30, 35, 45, 0.30)',
-      aoColor: 'rgba(15, 20, 25, 0.58)'
-    },
-    'walnut-wood': {
-      label: 'چوب گردو و نور گرم آتلیه‌ای',
-      wallTop: '#34251e',
-      wallBottom: '#1a120e',
-      spotlight: 'rgba(90, 60, 45, 0.50)',
-      floorTop: '#3e2e25',
-      floorBottom: '#221914',
-      pedestalTop: '#4a372c',
-      pedestalSide: '#2b1f18',
-      pedestalBevel: '#6d5242',
-      shadowColor: 'rgba(10, 8, 6, 0.65)',
-      aoColor: 'rgba(5, 4, 3, 0.85)'
+  const COMFY_STORAGE_URL_KEY = 'touba_comfy_api_url';
+  function getClientComfyUrl() {
+    try {
+      return localStorage.getItem(COMFY_STORAGE_URL_KEY) || 'http://localhost:8000';
+    } catch {
+      return 'http://localhost:8000';
     }
-  };
-
-  function extractCleanForeground(img, maxDim = 1200) {
-    const scale = Math.min(1, maxDim / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
-    const w = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
-    const h = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return { canvas, box: { x:0, y:0, w, h } };
-
-    ctx.drawImage(img, 0, 0, w, h);
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const data = imgData.data;
-
-    // Sample background colors from four corner patches
-    const patchSize = Math.max(4, Math.floor(Math.min(w, h) * 0.05));
-    let bgR = 0, bgG = 0, bgB = 0, sampleCount = 0;
-    const corners = [
-      [0, 0], [w - patchSize, 0],
-      [0, h - patchSize], [w - patchSize, h - patchSize]
-    ];
-    for (const [cx, cy] of corners) {
-      for (let y = cy; y < cy + patchSize && y < h; y++) {
-        for (let x = cx; x < cx + patchSize && x < w; x++) {
-          const idx = (y * w + x) * 4;
-          bgR += data[idx]; bgG += data[idx + 1]; bgB += data[idx + 2];
-          sampleCount++;
-        }
-      }
-    }
-    bgR = bgR / (sampleCount || 1);
-    bgG = bgG / (sampleCount || 1);
-    bgB = bgB / (sampleCount || 1);
-
-    // Compute bounding box and alpha mask
-    let minX = w, maxX = 0, minY = h, maxY = 0;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = (y * w + x) * 4;
-        const currentAlpha = data[idx + 3];
-        if (currentAlpha < 10) continue;
-
-        const dr = data[idx] - bgR;
-        const dg = data[idx + 1] - bgG;
-        const db = data[idx + 2] - bgB;
-        const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-
-        // Soft thresholding with feathering
-        if (dist < 26) {
-          data[idx + 3] = 0;
-        } else if (dist < 52) {
-          const factor = (dist - 26) / 26;
-          data[idx + 3] = Math.round(currentAlpha * factor);
-        }
-
-        if (data[idx + 3] > 25) {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-
-    ctx.putImageData(imgData, 0, 0);
-
-    const boxW = Math.max(1, maxX - minX);
-    const boxH = Math.max(1, maxY - minY);
-    return {
-      canvas,
-      box: (minX <= maxX && minY <= maxY) ? { x: minX, y: minY, w: boxW, h: boxH } : { x: 0, y: 0, w, h }
-    };
   }
-
-  function renderCommercialStudioPhoto({ sourceImg, style = 'warm-studio', lighting = 'front-diffused', withPedestal = true, enhanceClarity = true }) {
-    const theme = STUDIO_THEMES[style] || STUDIO_THEMES['warm-studio'];
-    const canvas = document.createElement('canvas');
-    const size = 1200;
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-
-    const horizonY = Math.round(size * 0.62);
-
-    // 1. Studio Wall Background with ambient spotlight
-    const wallGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
-    wallGrad.addColorStop(0, theme.wallTop);
-    wallGrad.addColorStop(1, theme.wallBottom);
-    ctx.fillStyle = wallGrad;
-    ctx.fillRect(0, 0, size, horizonY);
-
-    // Radial ambient spotlight
-    const spotX = lighting === 'right-accent' ? size * 0.58 : (lighting === 'left-accent' ? size * 0.42 : size * 0.50);
-    const spot = ctx.createRadialGradient(spotX, horizonY * 0.50, 40, spotX, horizonY * 0.50, size * 0.65);
-    spot.addColorStop(0, theme.spotlight);
-    spot.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = spot;
-    ctx.fillRect(0, 0, size, horizonY);
-
-    // 2. Studio Floor
-    const floorGrad = ctx.createLinearGradient(0, horizonY, 0, size);
-    floorGrad.addColorStop(0, theme.floorTop);
-    floorGrad.addColorStop(1, theme.floorBottom);
-    ctx.fillStyle = floorGrad;
-    ctx.fillRect(0, horizonY, size, size - horizonY);
-
-    // Subtle horizon diffusion line
-    const horizonLine = ctx.createLinearGradient(0, horizonY - 4, 0, horizonY + 6);
-    horizonLine.addColorStop(0, 'rgba(0, 0, 0, 0.05)');
-    horizonLine.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = horizonLine;
-    ctx.fillRect(0, horizonY - 4, size, 10);
-
-    // 3. Extract clean shoe foreground
-    const { canvas: fgCanvas, box } = extractCleanForeground(sourceImg);
-
-    // Position shoe on scene
-    const targetShoeWidth = Math.min(size * 0.72, Math.round(size * 0.75));
-    const shoeScale = targetShoeWidth / Math.max(1, box.w);
-    const shoeDrawW = Math.round(box.w * shoeScale);
-    const shoeDrawH = Math.round(box.h * shoeScale);
-    const shoeDrawX = Math.round((size - shoeDrawW) / 2);
-
-    const pedestalTopY = Math.round(size * 0.74);
-    const shoeDrawY = withPedestal ? pedestalTopY - shoeDrawH + Math.round(shoeDrawH * 0.04) : Math.round(size * 0.76) - shoeDrawH;
-
-    // 4. Render Pedestal (if enabled)
-    if (withPedestal) {
-      const pedW = Math.round(shoeDrawW * 0.88);
-      const pedH = Math.round(size * 0.12);
-      const pedX = Math.round((size - pedW) / 2);
-      const pedRadiusY = Math.round(pedH * 0.28);
-
-      // Pedestal base shadow onto floor
-      ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(size / 2, pedestalTopY + pedH, pedW * 0.52, pedRadiusY * 0.9, 0, 0, Math.PI * 2);
-      ctx.fillStyle = theme.shadowColor;
-      ctx.filter = 'blur(16px)';
-      ctx.fill();
-      ctx.restore();
-
-      // Pedestal 3D cylinder body
-      const pedBodyGrad = ctx.createLinearGradient(pedX, 0, pedX + pedW, 0);
-      pedBodyGrad.addColorStop(0, theme.pedestalSide);
-      pedBodyGrad.addColorStop(0.5, theme.pedestalTop);
-      pedBodyGrad.addColorStop(1, theme.pedestalSide);
-      ctx.fillStyle = pedBodyGrad;
-      ctx.fillRect(pedX, pedestalTopY, pedW, pedH);
-
-      // Pedestal bottom curved base
-      ctx.beginPath();
-      ctx.ellipse(size / 2, pedestalTopY + pedH, pedW / 2, pedRadiusY, 0, 0, Math.PI);
-      ctx.fill();
-
-      // Pedestal top ellipse surface
-      const pedTopGrad = ctx.createRadialGradient(size / 2, pedestalTopY, pedW * 0.1, size / 2, pedestalTopY, pedW * 0.5);
-      pedTopGrad.addColorStop(0, theme.pedestalTop);
-      pedTopGrad.addColorStop(1, theme.pedestalSide);
-      ctx.beginPath();
-      ctx.ellipse(size / 2, pedestalTopY, pedW / 2, pedRadiusY, 0, 0, Math.PI * 2);
-      ctx.fillStyle = pedTopGrad;
-      ctx.fill();
-
-      // Specular highlight rim on pedestal top edge
-      ctx.beginPath();
-      ctx.ellipse(size / 2, pedestalTopY, pedW / 2, pedRadiusY, 0, Math.PI * 0.1, Math.PI * 0.9);
-      ctx.strokeStyle = theme.pedestalBevel;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-    }
-
-    // 5. Dual-Layer Realistic Contact Shadow
-    const shadowContactY = withPedestal ? pedestalTopY : Math.round(size * 0.76);
-    const shadowOffsetX = lighting === 'right-accent' ? -36 : (lighting === 'left-accent' ? 36 : 0);
-    const shadowOffsetY = 14;
-
-    // Layer 1: Directional soft cast shadow
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(
-      size / 2 + shadowOffsetX,
-      shadowContactY + shadowOffsetY,
-      shoeDrawW * 0.44,
-      Math.max(14, Math.round(shoeDrawH * 0.08)),
-      0, 0, Math.PI * 2
-    );
-    ctx.fillStyle = theme.shadowColor;
-    ctx.filter = 'blur(22px)';
-    ctx.fill();
-    ctx.restore();
-
-    // Layer 2: Tight Ambient Occlusion (AO) shadow under sole contact points
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(
-      size / 2,
-      shadowContactY + 2,
-      shoeDrawW * 0.40,
-      Math.max(6, Math.round(shoeDrawH * 0.035)),
-      0, 0, Math.PI * 2
-    );
-    ctx.fillStyle = theme.aoColor;
-    ctx.filter = 'blur(5px)';
-    ctx.fill();
-    ctx.restore();
-
-    // 6. Draw clean shoe foreground
-    ctx.save();
-    if (enhanceClarity) {
-      ctx.filter = 'contrast(1.05) brightness(1.02)';
-    }
-    ctx.drawImage(
-      fgCanvas,
-      box.x, box.y, box.w, box.h,
-      shoeDrawX, shoeDrawY, shoeDrawW, shoeDrawH
-    );
-    ctx.restore();
-
-    return canvas.toDataURL('image/jpeg', 0.92);
+  function setClientComfyUrl(url) {
+    try {
+      localStorage.setItem(COMFY_STORAGE_URL_KEY, String(url || '').trim());
+    } catch { /* ignore */ }
   }
 
   function insertStudio() {
@@ -436,15 +159,42 @@
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ آتلیهٔ هوشمند عکاسی تجاری محصول (کاملاً رایگان، نامحدود و بدون نیاز به کلید API)</h3>
-        <p class="ai-studio-note">یک تصویر واضح از کفش انتخاب کنید. موتور پیشرفتهٔ آتلیهٔ طوبی بدون تغییر در نگین‌ها، بندها، زیره، قالب و رنگ اصلی کفش، آن را با جداسازی دقیق پس‌زمینه، نورپردازی جهت‌دار و سایهٔ طبیعی تماس در دکورهای آتلیه‌ای لوکس بازتولید می‌کند. این ابزار ۱۰۰٪ رایگان و بدون هیچ‌گونه محدودیت روزانه یا نیاز به API عمل می‌کند.</p>
+        <h3 id="ai-product-title">✨ دستیار خودکارسازی عکس محصول با ComfyUI Automation API</h3>
+        <p class="ai-studio-note">ویرایش دستوری و دقیق با مدل <strong>Qwen-Image-Edit</strong> بر اساس عکس مرجع، به همراه پایپ‌لاین‌های پیشرفتهٔ <strong>FLUX.2-klein</strong> و <strong>SDXL</strong>. این دستیار با استفاده از واسط خودکارسازی ComfyUI بدون وابستگی به کلیدهای تحریمی یا پولی عمل می‌کند.</p>
+      </div>
+
+      <!-- ComfyUI Server Connection Settings -->
+      <div class="ai-comfy-card" style="margin-bottom: 14px; padding: 12px 14px; background: #f4f7f4; border: 1px solid #c9d8c8; border-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">⚡</span>
+            <strong style="font-size: 13px; color: #1e3a1f;">تنظیمات سرور ComfyUI Automation API</strong>
+          </div>
+          <span id="ai-comfy-status-badge" style="font-size: 11px; padding: 3px 10px; border-radius: 12px; background: #e3eedb; color: #264a25; font-weight: 500;">
+            در حال بررسی…
+          </span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <input id="ai-comfy-api-url" type="text" placeholder="http://localhost:8000" style="flex: 1; min-width: 220px; font-family: monospace; font-size: 12px; padding: 7px 10px; border: 1px solid #b8ccb6; border-radius: 6px; direction: ltr;" />
+          <button type="button" class="btn" id="ai-comfy-check-btn" style="padding: 7px 14px; font-size: 12px; background: #2f5930; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            بررسی اتصال
+          </button>
+        </div>
       </div>
 
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
         
-        <label for="ai-product-style">سبک دکور استودیو</label>
+        <label for="ai-product-pipeline">پایپ‌لاین و مدل ComfyUI</label>
+        <select id="ai-product-pipeline" class="ai-studio-select">
+          <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - ویرایش دستوری با حفظ ۱۰۰٪ فرم کفش مرجع)</option>
+          <option value="flux">FLUX.2-klein (تولید تصویر با فلو مچینگ و وضوح بالا)</option>
+          <option value="sdxl">SDXL Base 1.0 (عکاسی کاتالوگی استودیو)</option>
+          <option value="upscale">Real-ESRGAN Upscale (افزایش کیفیت و شفافیت تصویر)</option>
+        </select>
+
+        <label for="ai-product-style">سبک دکور و زمینهٔ استودیو</label>
         <select id="ai-product-style" class="ai-studio-select">
           <option value="warm-studio" selected>استودیوی کرم و بژ لوکس (پداستال مرمر روشن + نور گرم)</option>
           <option value="dark-luxury">استودیوی دارک و لوکس (زمینه زغالی + هایلایت‌های حاشیه‌ای)</option>
@@ -453,25 +203,17 @@
           <option value="walnut-wood">چوب گردو و نور گرم آتلیه‌ای (دکور اصیل و گرم)</option>
         </select>
 
-        <label for="ai-studio-lighting">جهت نورپردازی استودیو</label>
-        <select id="ai-studio-lighting" class="ai-studio-select">
-          <option value="front-diffused" selected>نور ملایم روبه‌رو (متقارن و استاندارد کاتالوگ)</option>
-          <option value="right-accent">نور درخشان از راست (سایه ملایم به چپ)</option>
-          <option value="left-accent">نور پرمیوم از چپ (سایه ملایم به راست)</option>
-        </select>
+        <label for="ai-comfy-custom-prompt">دستور یا پرامپت سفارشی (اختیاری):</label>
+        <textarea id="ai-comfy-custom-prompt" rows="2" placeholder="مثلاً: کفش را روی سنگ مرمر مشکی با انعکاس ملایم قرار بده..." style="width: 100%; font-size: 12px; padding: 7px; border: 1px solid #b8ccb6; border-radius: 6px; box-sizing: border-box; resize: vertical;"></textarea>
 
         <div style="display: flex; gap: 16px; margin: 8px 0; align-items: center; flex-wrap: wrap;">
           <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
-            <input type="checkbox" id="ai-studio-pedestal" checked style="accent-color: #274728;">
-            نمایش سکوی پداستال سه‌بعدی لوکس
-          </label>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
-            <input type="checkbox" id="ai-studio-hdr" checked style="accent-color: #274728;">
-            تقویت هوشمند وضوح چرم و بافت کفش (HDR Clarity)
+            <input type="checkbox" id="ai-comfy-fast" checked style="accent-color: #274728;">
+            حالت سریع ۴ مرحله‌ای (Lightning LoRA - تا ۵ برابر سریع‌تر)
           </label>
         </div>
 
-        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>✨ ساخت عکس کاتالوگی در آتلیه</button>
+        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>✨ تولید تصویر با ComfyUI</button>
       </div>
 
       <div class="ai-source-grid" id="ai-product-previews-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
@@ -481,9 +223,9 @@
           <figcaption class="ai-source-status">عکس مرجع آماده است</figcaption>
         </figure>
         <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin: 0; width: 100%;">
-          <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی در آتلیه تجاری</label>
-          <img id="ai-product-output-preview" alt="تصویر نهایی محصول در آتلیه تجاری">
-          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">خروجی باکیفیت تجاری و سایهٔ طبیعی تماس</figcaption>
+          <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی تولیدشده با ComfyUI</label>
+          <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده با ComfyUI">
+          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">خروجی باکیفیت تجاری از پایپ‌لاین ComfyUI</figcaption>
         </figure>
       </div>
 
@@ -497,12 +239,58 @@
     const generateButton = studio.querySelector('#ai-product-generate');
     const applyButton = studio.querySelector('#ai-product-apply');
     const fileInput = studio.querySelector('#ai-product-file');
+    const pipelineSelect = studio.querySelector('#ai-product-pipeline');
     const styleSelect = studio.querySelector('#ai-product-style');
-    const lightingSelect = studio.querySelector('#ai-studio-lighting');
-    const pedestalCheck = studio.querySelector('#ai-studio-pedestal');
-    const hdrCheck = studio.querySelector('#ai-studio-hdr');
+    const promptInput = studio.querySelector('#ai-comfy-custom-prompt');
+    const fastCheck = studio.querySelector('#ai-comfy-fast');
+    const apiUrlInput = studio.querySelector('#ai-comfy-api-url');
+    const statusBadge = studio.querySelector('#ai-comfy-status-badge');
+    const checkBtn = studio.querySelector('#ai-comfy-check-btn');
     const sourceWrap = studio.querySelector('#ai-product-source-wrap');
     const sourcePreview = studio.querySelector('#ai-product-source-preview');
+
+    if (apiUrlInput) {
+      apiUrlInput.value = getClientComfyUrl();
+    }
+
+    async function checkServerHealth() {
+      const url = (apiUrlInput?.value || getClientComfyUrl()).trim();
+      setClientComfyUrl(url);
+      if (statusBadge) {
+        statusBadge.textContent = 'بررسی وضعیت…';
+        statusBadge.style.background = '#eef3ea';
+        statusBadge.style.color = '#335031';
+      }
+      try {
+        const res = await fetch(`/api/ai/comfy-health?url=${encodeURIComponent(url)}`).catch(() => null);
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data.ok && data.comfyui_reachable) {
+            statusBadge.textContent = '✅ سرور ComfyUI متصل است';
+            statusBadge.style.background = '#d9eed3';
+            statusBadge.style.color = '#1b4d1a';
+            return;
+          } else if (data.ok) {
+            statusBadge.textContent = '⚡ API متصل است (در انتظار ComfyUI)';
+            statusBadge.style.background = '#fef4e3';
+            statusBadge.style.color = '#7d4d0f';
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+      if (statusBadge) {
+        statusBadge.textContent = 'آماده اتصال (http://localhost:8000)';
+        statusBadge.style.background = '#f5f5f5';
+        statusBadge.style.color = '#666';
+      }
+    }
+
+    checkBtn?.addEventListener('click', checkServerHealth);
+    apiUrlInput?.addEventListener('change', () => {
+      setClientComfyUrl(apiUrlInput.value);
+      checkServerHealth();
+    });
+    checkServerHealth();
 
     function updateGenerateButton() {
       generateButton.disabled = !sourceDataUrl;
@@ -538,17 +326,15 @@
         sourcePreview.src = sourceDataUrl;
         sourceWrap.hidden = false;
         updateGenerateButton();
-        status.textContent = 'عکس محصول آماده است؛ سبک آتلیه را انتخاب کرده و دکمهٔ «ساخت عکس کاتالوگی در آتلیه» را بزنید.';
+        status.textContent = 'عکس محصول آماده است؛ پایپ‌لاین ComfyUI را انتخاب و دکمهٔ تولید را بزنید.';
       } catch (error) {
         status.textContent = error.message || 'خواندن عکس انجام نشد.';
         fileInput.value = '';
       }
     });
 
+    pipelineSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
     styleSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
-    lightingSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
-    pedestalCheck?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
-    hdrCheck?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
 
     generateButton.addEventListener('click', async () => {
       if (!sourceDataUrl) {
@@ -560,40 +346,43 @@
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
+      const pipeline = pipelineSelect?.value || 'qwen-edit';
       const style = styleSelect?.value || 'warm-studio';
-      const lighting = lightingSelect?.value || 'front-diffused';
-      const withPedestal = Boolean(pedestalCheck?.checked);
-      const enhanceClarity = Boolean(hdrCheck?.checked);
+      const customPrompt = promptInput?.value?.trim() || '';
+      const fast = Boolean(fastCheck?.checked);
+      const apiUrl = (apiUrlInput?.value || getClientComfyUrl()).trim();
 
-      status.textContent = 'در حال فضاسازی آتلیه‌ای، تنظیم نور و ایجاد سایهٔ طبیعی تماس کفش…';
+      status.textContent = `در حال پردازش پایپ‌لاین ${pipeline} با ComfyUI Automation API…`;
 
       try {
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = () => reject(new Error('بارگذاری تصویر جهت پردازش انجام نشد.'));
-          img.src = sourceDataUrl;
+        const response = await fetch('/api/ai/product-photo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...await adminAuthHeaders()
+          },
+          body: JSON.stringify({
+            image: sourceDataUrl,
+            pipeline,
+            style,
+            prompt: customPrompt || undefined,
+            apiUrl: apiUrl || undefined,
+            fast
+          })
         });
 
-        const outputDataUrl = renderCommercialStudioPhoto({
-          sourceImg: img,
-          style,
-          lighting,
-          withPedestal,
-          enhanceClarity
-        });
-
-        if (!outputDataUrl) throw new Error('تولید تصویر استودیو انجام نشد.');
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `خطای سرویس (${response.status})`);
 
         if (currentGenerationId !== generationId) return;
-        generatedDataUrl = outputDataUrl;
-        studio.querySelector('#ai-product-output-preview').src = outputDataUrl;
+        generatedDataUrl = payload.dataUrl;
+        studio.querySelector('#ai-product-output-preview').src = payload.dataUrl;
         studio.querySelector('#ai-product-output-wrap').hidden = false;
         applyButton.disabled = false;
-        status.textContent = '✅ تصویر آتلیه‌ای محصول با موفقیت آماده شد؛ کاملاً رایگان، نامحدود و با حفظ ۱۰۰٪ جزئیات کفش مرجع.';
+        status.textContent = payload.note || '✅ تصویر با موفقیت توسط ComfyUI Automation API تولید شد.';
       } catch (error) {
         if (currentGenerationId !== generationId) return;
-        status.textContent = error.message || 'پردازش تصویر آتلیه‌ای انجام نشد.';
+        status.textContent = error.message || 'پردازش تصویر انجام نشد.';
       } finally {
         if (currentGenerationId === generationId) updateGenerateButton();
       }

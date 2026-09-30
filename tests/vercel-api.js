@@ -70,16 +70,16 @@ async function main() {
   delete process.env.VERCEL;
   try {
     let res = response();
-    aiStatus({ method:'GET' }, res);
+    await aiStatus({ method:'GET' }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).configured, true);
     assert.equal(payload(res).keyless, true);
     assert.equal(payload(res).unlimited, true);
     assert.equal(payload(res).free, true);
-    assert.equal(payload(res).provider, 'Touba AI Commercial Studio (100% Free & Unlimited)');
-    assert.equal(payload(res).model, 'touba-studio-v1');
+    assert.equal(payload(res).provider, 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)');
+    assert.equal(payload(res).model, 'qwen-edit');
     assert(Array.isArray(payload(res).supportedModels));
-    assert(payload(res).supportedModels.includes('touba-studio-v1'));
+    assert(payload(res).supportedModels.includes('qwen-edit'));
 
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
@@ -100,21 +100,18 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates studio photo keyless and unlimited
+    // Verify productPhoto generates photo using ComfyUI Automation API
     res = response();
     await productPhoto({
       method: 'POST',
       headers: { origin: 'https://touba.test', host: 'touba.test' },
-      body: { image: referenceDataUrl, style: 'warm-studio', lighting: 'front-diffused', pedestal: true }
+      body: { image: referenceDataUrl, style: 'warm-studio', pipeline: 'qwen-edit' }
     }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).success, true);
-    assert.equal(payload(res).model, 'touba-studio-v1');
+    assert.equal(payload(res).pipeline, 'qwen-edit');
     assert.equal(payload(res).style, 'warm-studio');
-    assert.equal(payload(res).provider, 'Touba AI Commercial Studio (100% Free & Unlimited)');
-    assert.equal(payload(res).keyless, true);
-    assert.equal(payload(res).unlimited, true);
-    assert.equal(payload(res).free, true);
+    assert.equal(payload(res).provider, 'ComfyUI Automation API (Qwen / FLUX / SDXL)');
 
     // Verify productPhoto handles invalid input gracefully
     res = response();
