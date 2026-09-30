@@ -180,9 +180,14 @@ async function main() {
   // Direct driver fallback test
   const directFetch = global.fetch;
   let directCalled = false;
+  let sentAuthToken = null;
+  let sentAuthHeader = null;
   global.fetch = async (url, options) => {
     directCalled = true;
     assert.equal(url, 'https://api.puter.com/drivers/call');
+    const parsed = JSON.parse(options.body);
+    sentAuthToken = parsed.auth_token;
+    sentAuthHeader = options.headers?.Authorization;
     return new Response(JSON.stringify({
       success: true,
       result: 'data:image/jpeg;base64,RElSRUNUX09VVFBVVA=='
@@ -194,12 +199,42 @@ async function main() {
       prompt: 'a shoe',
       model: 'gpt-image-2.5-flare',
       quality: 'high',
-      inputImage: sampleDataUrl
+      inputImage: sampleDataUrl,
+      authToken: 'ptk_test_auth_token_xyz'
     });
     assert.equal(directCalled, true);
+    assert.equal(sentAuthToken, 'ptk_test_auth_token_xyz');
+    assert.equal(sentAuthHeader, 'Bearer ptk_test_auth_token_xyz');
     assert.equal(directResult, 'data:image/jpeg;base64,RElSRUNUX09VVFBVVA==');
   } finally {
     global.fetch = directFetch;
+  }
+
+  // Puter authentication error handling (401 Missing authentication token)
+  const authErrFetch = global.fetch;
+  global.fetch = async () => {
+    return new Response(JSON.stringify({
+      error: { message: 'Missing authentication token' }
+    }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const { callPuterDriverDirect } = require('../services/puter-image.js');
+    await assert.rejects(
+      () => callPuterDriverDirect({
+        prompt: 'a shoe',
+        model: 'gpt-image-2.5-flare',
+        quality: 'high',
+        inputImage: sampleDataUrl
+      }),
+      (err) => {
+        assert.equal(err.status, 401);
+        assert.equal(err.code, 'PUTER_AUTH_REQUIRED');
+        assert.match(err.message, /توکن احراز هویت Puter یافت نشد/);
+        return true;
+      }
+    );
+  } finally {
+    global.fetch = authErrFetch;
   }
 
   console.log('PASS: Puter.js GPT Image assistant, keyless model options, prompt sanitization, and driver integration');

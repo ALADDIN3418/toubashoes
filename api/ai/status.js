@@ -9,6 +9,8 @@ module.exports = function aiStatus(req, res) {
     configured: true,
     puterConfigured: true,
     keyless: true,
+    serverTokenConfigured: Boolean(process.env.PUTER_AUTH_TOKEN),
+    authMode: process.env.PUTER_AUTH_TOKEN ? 'server_token' : 'client_user_pays',
     persistentQuotaConfigured,
     quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
     provider: 'Puter.js (OpenAI GPT Image)',

@@ -162,6 +162,38 @@ async function main() {
       global.fetch = failingFetchApi;
     }
 
+    // Verify productPhoto forwards puterAuthToken and handles 401 missing authentication token
+    let passedToken = null;
+    let authHeaderValue = null;
+    const authFetchApi = global.fetch;
+    global.fetch = async (url, options) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/drivers/call')) {
+        const body = JSON.parse(options?.body || '{}');
+        passedToken = body.auth_token;
+        authHeaderValue = options?.headers?.Authorization;
+        return new Response(JSON.stringify({
+          error: { message: 'Missing authentication token' }
+        }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+      res = response();
+      await productPhoto({
+        method: 'POST',
+        headers: { origin: 'https://touba.test', host: 'touba.test' },
+        body: { image: referenceDataUrl, puterAuthToken: 'ptk_custom_token_456' }
+      }, res);
+      assert.equal(res.statusCode, 401);
+      assert.equal(passedToken, 'ptk_custom_token_456');
+      assert.equal(authHeaderValue, 'Bearer ptk_custom_token_456');
+      assert.equal(payload(res).quotaConsumed, false);
+      assert.match(payload(res).error, /توکن احراز هویت Puter/);
+    } finally {
+      global.fetch = authFetchApi;
+    }
+
     const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
     const dataUrl = `data:image/jpeg;base64,${tinyJpeg}`;
     res = response();

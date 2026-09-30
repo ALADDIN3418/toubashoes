@@ -238,13 +238,15 @@ const server = http.createServer(async (req, res) => {
       else reservationId = reserveWindowQuota('local-ai', 50, 24 * 60 * 60 * 1000);
       if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
     } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
+    const puterAuthToken = body?.puterAuthToken || body?.authToken || req.headers?.['x-puter-auth-token'] || process.env.PUTER_AUTH_TOKEN || null;
     try {
       const result = await generateProductPhoto({
         imageBytes: sourceBytes,
         dataUrl: body.image,
         style: body.style,
         model: body.model,
-        quality: body.quality
+        quality: body.quality,
+        authToken: puterAuthToken
       });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });

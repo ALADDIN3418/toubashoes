@@ -149,6 +149,13 @@
         <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی (Puter GPT Image)</h3>
         <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. هوش مصنوعی با استفاده از مدل‌های پیشرفتهٔ GPT Image و کتابخانهٔ Puter.js بدون نیاز به کلید خصوصی OpenAI، یک تصویر نهاییِ باکیفیت و اختصاصی برای کاتالوگ تولید می‌کند.</p>
       </div>
+      <div class="ai-puter-auth-box" id="ai-puter-auth-box">
+        <div class="ai-puter-auth-info">
+          <span class="ai-puter-auth-icon">🔑</span>
+          <span id="ai-puter-auth-status-text">وضعیت حساب Puter: در حال بررسی…</span>
+        </div>
+        <button type="button" class="btn btn-sm" id="ai-puter-auth-btn">ورود / اتصال به Puter (رایگان)</button>
+      </div>
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
@@ -200,6 +207,72 @@
     const styleSelect = studio.querySelector('#ai-product-style');
     const sourceWrap = studio.querySelector('#ai-product-source-wrap');
     const sourcePreview = studio.querySelector('#ai-product-source-preview');
+    const authBtn = studio.querySelector('#ai-puter-auth-btn');
+    const authStatusText = studio.querySelector('#ai-puter-auth-status-text');
+
+    async function syncPuterAuth() {
+      if (typeof window === 'undefined' || !window.puter?.auth) {
+        if (authStatusText) authStatusText.textContent = 'سرویس Puter.js در مرورگر آمادهٔ اتصال است.';
+        return false;
+      }
+      try {
+        const signedIn = window.puter.auth.isSignedIn();
+        if (signedIn) {
+          let username = '';
+          try {
+            const u = await window.puter.auth.getUser();
+            username = u?.username || '';
+          } catch { /* ignore */ }
+          if (authStatusText) {
+            authStatusText.textContent = username
+              ? `✅ حساب Puter فعال است (${username}) — دسترسی رایگان نامحدود آماده است.`
+              : '✅ حساب Puter متصل است — دسترسی رایگان نامحدود آماده است.';
+          }
+          if (authBtn) {
+            authBtn.textContent = 'خروج از Puter';
+            authBtn.classList.add('is-signed-in');
+          }
+          return true;
+        } else {
+          if (authStatusText) {
+            authStatusText.textContent = 'برای ساخت تصویر، با یک کلیک به Puter متصل شوید (رایگان و بدون نیاز به کلید):';
+          }
+          if (authBtn) {
+            authBtn.textContent = '🔑 ورود / ثبت‌نام در Puter (رایگان)';
+            authBtn.classList.remove('is-signed-in');
+          }
+          return false;
+        }
+      } catch {
+        if (authStatusText) authStatusText.textContent = 'وضعیت حساب Puter مشخص نیست.';
+        return false;
+      }
+    }
+
+    authBtn?.addEventListener('click', async () => {
+      if (typeof window === 'undefined' || !window.puter?.auth) return;
+      if (window.puter.auth.isSignedIn()) {
+        try {
+          window.puter.auth.signOut();
+          await syncPuterAuth();
+          status.textContent = 'از حساب Puter خارج شدید.';
+        } catch {
+          status.textContent = 'خطا در خروج از حساب Puter.';
+        }
+      } else {
+        try {
+          status.textContent = 'در حال باز کردن پنجرهٔ ورود به Puter… لطفاً اجازهٔ اتصال را تأیید کنید.';
+          authBtn.disabled = true;
+          await window.puter.auth.signIn({ attempt_temp_user_creation: true });
+          await syncPuterAuth();
+          status.textContent = 'اتصال به حساب Puter با موفقیت برقرار شد. اکنون می‌توانید تصویر را تولید کنید.';
+        } catch {
+          status.textContent = 'اتصال به حساب Puter تکمیل نشد یا پنجره بسته شد.';
+        } finally {
+          authBtn.disabled = false;
+        }
+      }
+    });
 
     function updateGenerateButton() {
       generateButton.disabled = !providerReady || !sourceDataUrl;
@@ -217,12 +290,14 @@
       providerReady = !!data.configured;
       status.textContent = 'سرویس Puter.js (GPT Image) آماده است؛ دسترسی عمومی و بدون نیاز به کلید OpenAI. یک تصویر واضح از محصول انتخاب کنید.';
       status.classList.toggle('is-ready', providerReady);
+      syncPuterAuth();
       updateGenerateButton();
     }).catch(() => {
       if (typeof window !== 'undefined' && window.puter?.ai?.txt2img) {
         providerReady = true;
         status.textContent = 'کتابخانهٔ Puter.js در مرورگر آماده است. یک تصویر واضح از محصول انتخاب کنید.';
         status.classList.add('is-ready');
+        syncPuterAuth();
         updateGenerateButton();
       } else {
         status.textContent = 'سرویس تصویر در دسترس نیست.';
@@ -271,6 +346,19 @@
         return;
       }
       if (!providerReady) { status.textContent = 'سرویس تصویر فعال نیست.'; return; }
+
+      if (typeof window !== 'undefined' && window.puter?.auth && !window.puter.auth.isSignedIn()) {
+        status.textContent = 'در حال باز کردن پنجرهٔ ورود به Puter… لطفاً اجازهٔ اتصال را تأیید کنید.';
+        try {
+          await window.puter.auth.signIn({ attempt_temp_user_creation: true });
+          await syncPuterAuth();
+        } catch {
+          status.textContent = 'برای ساخت تصویر با Puter، لطفاً ابتدا روی دکمهٔ «ورود / ثبت‌نام در Puter» در بالای فرم کلیک کنید.';
+          updateGenerateButton();
+          return;
+        }
+      }
+
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
@@ -296,14 +384,30 @@
         }
 
         if (!outputUrl) {
+          const puterToken = (typeof window !== 'undefined' && (window.puter?.authToken || localStorage.getItem('puter.auth.token') || localStorage.getItem('puter.token'))) || '';
           const response = await fetch('/api/ai/product-photo', {
             method:'POST',
-            headers:{ 'Content-Type':'application/json', ...await adminAuthHeaders() },
-            body:JSON.stringify({ image:sourceDataUrl, images:[sourceDataUrl], style, model, quality })
+            headers:{
+              'Content-Type':'application/json',
+              ...(puterToken ? { 'x-puter-auth-token': puterToken } : {}),
+              ...await adminAuthHeaders()
+            },
+            body:JSON.stringify({
+              image:sourceDataUrl,
+              images:[sourceDataUrl],
+              style,
+              model,
+              quality,
+              puterAuthToken: puterToken
+            })
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
-            throw new Error(payload.error || `خطای سرویس (${response.status})`);
+            let msg = payload.error || `خطای سرویس (${response.status})`;
+            if (/missing authentication token/i.test(msg) || /unauthorized/i.test(msg)) {
+              msg = 'توکن احراز هویت Puter یافت نشد. لطفاً روی دکمهٔ «ورود / ثبت‌نام در Puter» در بالای فرم کلیک کنید یا PUTER_AUTH_TOKEN را در تنظیمات Vercel اضافه کنید.';
+            }
+            throw new Error(msg);
           }
           outputUrl = payload.dataUrl;
         }

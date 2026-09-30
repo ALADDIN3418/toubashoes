@@ -78,14 +78,20 @@ function parseStyle(style) {
   return SUPPORTED_STYLES.includes(s) ? s : DEFAULT_STYLE;
 }
 
-async function callPuterDriverDirect({ prompt, model, quality, inputImage, testMode = false }) {
+async function callPuterDriverDirect({ prompt, model, quality, inputImage, testMode = false, authToken = null }) {
+  const token = authToken || process.env.PUTER_AUTH_TOKEN || null;
   const origin = process.env.PUTER_API_ORIGIN || 'https://api.puter.com';
+  const headers = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'puter-js/1.0'
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${origin}/drivers/call`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'puter-js/1.0'
-    },
+    headers,
     body: JSON.stringify({
       interface: 'puter-image-generation',
       driver: 'ai-image',
@@ -97,16 +103,20 @@ async function callPuterDriverDirect({ prompt, model, quality, inputImage, testM
         input_image: inputImage,
         prompt
       },
-      auth_token: null
+      auth_token: token
     })
   });
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.success === false) {
-    const errorMsg = data?.error?.message || data?.message || `خطای سرویس Puter (${response.status})`;
+    const rawError = data?.error?.message || data?.message || '';
+    let errorMsg = rawError || `خطای سرویس Puter (${response.status})`;
+    if (response.status === 401 || /missing authentication token/i.test(rawError) || /unauthorized/i.test(rawError)) {
+      errorMsg = 'توکن احراز هویت Puter یافت نشد یا منقضی شده است. لطفاً در پنل ادمین روی دکمهٔ «ورود / ثبت‌نام در Puter» کلیک فرمایید یا متغیر PUTER_AUTH_TOKEN را در تنظیمات Vercel قرار دهید.';
+    }
     const err = new Error(errorMsg);
     err.status = response.status >= 400 ? response.status : 502;
-    err.code = data?.error?.code || data?.code || 'PUTER_DRIVER_ERROR';
+    err.code = data?.error?.code || data?.code || (response.status === 401 ? 'PUTER_AUTH_REQUIRED' : 'PUTER_DRIVER_ERROR');
     throw err;
   }
 
@@ -131,11 +141,13 @@ async function generateProductPhoto({
   model = DEFAULT_MODEL,
   quality = DEFAULT_QUALITY,
   testMode = false,
-  client = null
+  client = null,
+  authToken = null
 } = {}) {
   const selectedModel = parseModel(model);
   const selectedQuality = parseQuality(quality);
   const selectedStyle = parseStyle(style);
+  const token = authToken || process.env.PUTER_AUTH_TOKEN || null;
 
   let inputImage = dataUrl;
   if (!inputImage && imageBytes) {
@@ -159,6 +171,12 @@ async function generateProductPhoto({
 
   let outputSrc = '';
   const puter = client || getPuterClient();
+
+  if (token && puter && typeof puter.setAuthToken === 'function') {
+    try {
+      puter.setAuthToken(token);
+    } catch { /* ignore */ }
+  }
 
   // 1. If an explicit client or puter SDK with txt2img is available, try it
   if (puter && puter.ai && typeof puter.ai.txt2img === 'function') {
@@ -185,7 +203,8 @@ async function generateProductPhoto({
         model: selectedModel,
         quality: selectedQuality,
         inputImage,
-        testMode
+        testMode,
+        authToken: token
       });
     } catch (driverError) {
       const message = driverError?.message || 'خطا در ارتباط با سرویس Puter GPT Image.';
