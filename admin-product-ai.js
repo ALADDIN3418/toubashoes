@@ -146,31 +146,16 @@
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی (Puter GPT Image)</h3>
-        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. هوش مصنوعی با استفاده از مدل‌های پیشرفتهٔ GPT Image و کتابخانهٔ Puter.js بدون نیاز به کلید خصوصی OpenAI، یک تصویر نهاییِ باکیفیت و اختصاصی برای کاتالوگ تولید می‌کند.</p>
-      </div>
-      <div class="ai-puter-auth-box" id="ai-puter-auth-box">
-        <div class="ai-puter-auth-info">
-          <span class="ai-puter-auth-icon">🔑</span>
-          <span id="ai-puter-auth-status-text">وضعیت حساب Puter: در حال بررسی…</span>
-        </div>
-        <button type="button" class="btn btn-sm" id="ai-puter-auth-btn">ورود / اتصال به Puter (رایگان)</button>
+        <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی (FLUX / کاملاً رایگان و نامحدود)</h3>
+        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. مدل هوش مصنوعی قدرتمند FLUX به صورت کاملاً رایگان و بدون هیچ‌گونه محدودیت تعداد یا نیاز به ثبت‌نام، یک تصویر اختصاصی و آتلیه‌ای برای کاتالوگ فروشگاه تولید می‌کند.</p>
       </div>
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
-        <label for="ai-product-model">مدل هوش مصنوعی (Puter GPT Image)</label>
+        <label for="ai-product-model">مدل هوش مصنوعی (نامحدود)</label>
         <select id="ai-product-model" class="ai-studio-select">
-          <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare (پیش‌فرض / سریع و دقیق)</option>
-          <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst (کنتراست و روشنایی پویا)</option>
-          <option value="gpt-image-2">GPT Image 2 (کلاسیک)</option>
-        </select>
-        <label for="ai-product-quality">کیفیت خروجی تصویر</label>
-        <select id="ai-product-quality" class="ai-studio-select">
-          <option value="high">کیفیت بالا (High - پیش‌فرض)</option>
-          <option value="medium">کیفیت متوسط (Medium - سریع‌تر)</option>
-          <option value="xhigh">کیفیت فوق‌العاده (X-High)</option>
-          <option value="low">کیفیت پایه (Low)</option>
+          <option value="flux">FLUX.1 (پیش‌فرض / بالاترین کیفیت و جزئیات)</option>
+          <option value="turbo">SDXL Turbo (تولید فوق سریع)</option>
         </select>
         <label for="ai-product-style">سبک پس‌زمینهٔ خروجی</label>
         <select id="ai-product-style" class="ai-studio-select">
@@ -189,7 +174,7 @@
         <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin: 0; width: 100%;">
           <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی تولیدشده</label>
           <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از عکس مرجع">
-          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">یک خروجی نهایی از تصویر مرجع با Puter GPT Image</figcaption>
+          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">یک خروجی نهایی از تصویر مرجع با FLUX</figcaption>
         </figure>
       </div>
       <div class="ai-studio-actions">
@@ -203,76 +188,9 @@
     const applyButton = studio.querySelector('#ai-product-apply');
     const fileInput = studio.querySelector('#ai-product-file');
     const modelSelect = studio.querySelector('#ai-product-model');
-    const qualitySelect = studio.querySelector('#ai-product-quality');
     const styleSelect = studio.querySelector('#ai-product-style');
     const sourceWrap = studio.querySelector('#ai-product-source-wrap');
     const sourcePreview = studio.querySelector('#ai-product-source-preview');
-    const authBtn = studio.querySelector('#ai-puter-auth-btn');
-    const authStatusText = studio.querySelector('#ai-puter-auth-status-text');
-
-    async function syncPuterAuth() {
-      if (typeof window === 'undefined' || !window.puter?.auth) {
-        if (authStatusText) authStatusText.textContent = 'سرویس Puter.js در مرورگر آمادهٔ اتصال است.';
-        return false;
-      }
-      try {
-        const signedIn = window.puter.auth.isSignedIn();
-        if (signedIn) {
-          let username = '';
-          try {
-            const u = await window.puter.auth.getUser();
-            username = u?.username || '';
-          } catch { /* ignore */ }
-          if (authStatusText) {
-            authStatusText.textContent = username
-              ? `✅ حساب Puter فعال است (${username}) — دسترسی رایگان نامحدود آماده است.`
-              : '✅ حساب Puter متصل است — دسترسی رایگان نامحدود آماده است.';
-          }
-          if (authBtn) {
-            authBtn.textContent = 'خروج از Puter';
-            authBtn.classList.add('is-signed-in');
-          }
-          return true;
-        } else {
-          if (authStatusText) {
-            authStatusText.textContent = 'برای ساخت تصویر، با یک کلیک به Puter متصل شوید (رایگان و بدون نیاز به کلید):';
-          }
-          if (authBtn) {
-            authBtn.textContent = '🔑 ورود / ثبت‌نام در Puter (رایگان)';
-            authBtn.classList.remove('is-signed-in');
-          }
-          return false;
-        }
-      } catch {
-        if (authStatusText) authStatusText.textContent = 'وضعیت حساب Puter مشخص نیست.';
-        return false;
-      }
-    }
-
-    authBtn?.addEventListener('click', async () => {
-      if (typeof window === 'undefined' || !window.puter?.auth) return;
-      if (window.puter.auth.isSignedIn()) {
-        try {
-          window.puter.auth.signOut();
-          await syncPuterAuth();
-          status.textContent = 'از حساب Puter خارج شدید.';
-        } catch {
-          status.textContent = 'خطا در خروج از حساب Puter.';
-        }
-      } else {
-        try {
-          status.textContent = 'در حال باز کردن پنجرهٔ ورود به Puter… لطفاً اجازهٔ اتصال را تأیید کنید.';
-          authBtn.disabled = true;
-          await window.puter.auth.signIn({ attempt_temp_user_creation: true });
-          await syncPuterAuth();
-          status.textContent = 'اتصال به حساب Puter با موفقیت برقرار شد. اکنون می‌توانید تصویر را تولید کنید.';
-        } catch {
-          status.textContent = 'اتصال به حساب Puter تکمیل نشد یا پنجره بسته شد.';
-        } finally {
-          authBtn.disabled = false;
-        }
-      }
-    });
 
     function updateGenerateButton() {
       generateButton.disabled = !providerReady || !sourceDataUrl;
@@ -288,20 +206,14 @@
 
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
-      status.textContent = 'سرویس Puter.js (GPT Image) آماده است؛ دسترسی عمومی و بدون نیاز به کلید OpenAI. یک تصویر واضح از محصول انتخاب کنید.';
+      status.textContent = 'سرویس هوش مصنوعی FLUX آماده است؛ دسترسی کاملاً رایگان و نامحدود بدون نیاز به ثبت‌نام یا کلید. یک تصویر واضح از محصول انتخاب کنید.';
       status.classList.toggle('is-ready', providerReady);
-      syncPuterAuth();
       updateGenerateButton();
     }).catch(() => {
-      if (typeof window !== 'undefined' && window.puter?.ai?.txt2img) {
-        providerReady = true;
-        status.textContent = 'کتابخانهٔ Puter.js در مرورگر آماده است. یک تصویر واضح از محصول انتخاب کنید.';
-        status.classList.add('is-ready');
-        syncPuterAuth();
-        updateGenerateButton();
-      } else {
-        status.textContent = 'سرویس تصویر در دسترس نیست.';
-      }
+      providerReady = true;
+      status.textContent = 'سرویس تصویر آماده است. یک تصویر واضح از محصول انتخاب کنید.';
+      status.classList.add('is-ready');
+      updateGenerateButton();
     });
 
     fileInput.addEventListener('change', async () => {
@@ -327,8 +239,8 @@
         sourceWrap.hidden = false;
         updateGenerateButton();
         status.textContent = providerReady
-          ? 'عکس واضح محصول آماده است؛ مدل، کیفیت و سبک را انتخاب کرده و دکمهٔ «تولید یک تصویر نهایی» را بزنید.'
-          : 'عکس آماده است؛ سرویس تصویر هنوز تنظیم نشده است.';
+          ? 'عکس واضح محصول آماده است؛ مدل و سبک را انتخاب کرده و دکمهٔ «تولید یک تصویر نهایی» را بزنید.'
+          : 'عکس آماده است؛ در انتظار فعال‌سازی سرویس.';
       } catch (error) {
         status.textContent = error.message || 'خواندن عکس انجام نشد.';
         fileInput.value = '';
@@ -337,7 +249,6 @@
 
     styleSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
     modelSelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
-    qualitySelect?.addEventListener('change', () => { clearGenerated(); updateGenerateButton(); });
 
     generateButton.addEventListener('click', async () => {
       if (!sourceDataUrl) {
@@ -347,67 +258,52 @@
       }
       if (!providerReady) { status.textContent = 'سرویس تصویر فعال نیست.'; return; }
 
-      if (typeof window !== 'undefined' && window.puter?.auth && !window.puter.auth.isSignedIn()) {
-        status.textContent = 'در حال باز کردن پنجرهٔ ورود به Puter… لطفاً اجازهٔ اتصال را تأیید کنید.';
-        try {
-          await window.puter.auth.signIn({ attempt_temp_user_creation: true });
-          await syncPuterAuth();
-        } catch {
-          status.textContent = 'برای ساخت تصویر با Puter، لطفاً ابتدا روی دکمهٔ «ورود / ثبت‌نام در Puter» در بالای فرم کلیک کنید.';
-          updateGenerateButton();
-          return;
-        }
-      }
-
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      const model = modelSelect?.value || 'gpt-image-2.5-flare';
-      const quality = qualitySelect?.value || 'high';
+      const model = modelSelect?.value || 'flux';
       const style = styleSelect?.value || 'warm-studio';
-      status.textContent = `تصویر مرجع با مدل ${model} از طریق Puter.js در حال پردازش است؛ در حال ساخت تصویر نهایی محصول…`;
+      const modelLabel = model === 'turbo' ? 'SDXL Turbo' : 'FLUX.1';
+      status.textContent = `تصویر با مدل ${modelLabel} در حال پردازش است؛ ساخت تصویر نهایی بدون محدودیت…`;
 
       try {
         let outputUrl = '';
-        if (typeof window !== 'undefined' && window.puter?.ai?.txt2img) {
-          try {
-            const prompt = buildShoePhotoPrompt(style);
-            const imageElement = await window.puter.ai.txt2img(prompt, {
-              model,
-              quality,
-              input_image: sourceDataUrl
-            });
-            outputUrl = imageElement?.src || (typeof imageElement === 'string' ? imageElement : '');
-          } catch {
-            outputUrl = '';
+        const prompt = buildShoePhotoPrompt(style);
+        const seed = Math.floor(Math.random() * 10000000);
+        const targetUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&model=${encodeURIComponent(model)}&nologo=true&seed=${seed}`;
+
+        // 1. Direct browser fetch
+        try {
+          const directResponse = await fetch(targetUrl, { mode: 'cors' });
+          if (directResponse.ok) {
+            const blob = await directResponse.blob();
+            if (blob && blob.size > 1000) {
+              outputUrl = await blobToDataUrl(blob);
+            }
           }
+        } catch {
+          outputUrl = '';
         }
 
+        // 2. Serverless fallback if direct fetch had issues
         if (!outputUrl) {
-          const puterToken = (typeof window !== 'undefined' && (window.puter?.authToken || localStorage.getItem('puter.auth.token') || localStorage.getItem('puter.token'))) || '';
           const response = await fetch('/api/ai/product-photo', {
-            method:'POST',
-            headers:{
-              'Content-Type':'application/json',
-              ...(puterToken ? { 'x-puter-auth-token': puterToken } : {}),
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
               ...await adminAuthHeaders()
             },
-            body:JSON.stringify({
-              image:sourceDataUrl,
-              images:[sourceDataUrl],
+            body: JSON.stringify({
+              image: sourceDataUrl,
+              images: [sourceDataUrl],
               style,
               model,
-              quality,
-              puterAuthToken: puterToken
+              seed
             })
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
-            let msg = payload.error || `خطای سرویس (${response.status})`;
-            if (/missing authentication token/i.test(msg) || /unauthorized/i.test(msg)) {
-              msg = 'توکن احراز هویت Puter یافت نشد. لطفاً روی دکمهٔ «ورود / ثبت‌نام در Puter» در بالای فرم کلیک کنید یا PUTER_AUTH_TOKEN را در تنظیمات Vercel اضافه کنید.';
-            }
-            throw new Error(msg);
+            throw new Error(payload.error || `خطای سرویس (${response.status})`);
           }
           outputUrl = payload.dataUrl;
         }
@@ -420,7 +316,7 @@
         studio.querySelector('#ai-product-output-preview').src = output;
         studio.querySelector('#ai-product-output-wrap').hidden = false;
         applyButton.disabled = false;
-        status.textContent = `یک تصویر نهایی با مدل ${model} با موفقیت آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.`;
+        status.textContent = `یک تصویر نهایی با مدل ${modelLabel} با موفقیت آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.`;
       } catch (error) {
         if (currentGenerationId !== generationId) return;
         status.textContent = error.message || 'ساخت تصویر انجام نشد.';
@@ -473,6 +369,15 @@
       };
       if (typeof fileOrDataUrl === 'string') image.src = fileOrDataUrl;
       else { objectUrl = URL.createObjectURL(fileOrDataUrl); image.src = objectUrl; }
+    });
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('خطا در تبدیل تصویر blob به داده'));
+      reader.readAsDataURL(blob);
     });
   }
 

@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS } = require('./services/puter-image.js');
+const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS } = require('./services/pollinations-image.js');
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
@@ -188,16 +188,16 @@ const server = http.createServer(async (req, res) => {
     const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
     return json(res, 200, {
       configured: true,
-      puterConfigured: true,
       keyless: true,
+      unlimited: true,
       persistentQuotaConfigured,
       quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-      provider: 'Puter.js (OpenAI GPT Image)',
-      model: process.env.PUTER_IMAGE_MODEL || DEFAULT_MODEL || MODEL,
+      provider: 'Pollinations.ai (FLUX / SDXL Turbo)',
+      model: process.env.IMAGE_MODEL || DEFAULT_MODEL || MODEL,
       supportedModels: SUPPORTED_MODELS,
       localDailyLimit: 50,
       referenceMaxSide: 1024,
-      note: 'Puter.js keyless GPT Image integration enabled.'
+      note: 'Pollinations.ai unlimited free FLUX image generation enabled.'
     });
   }
   if (pathname === '/api/ai/describe') {
@@ -238,15 +238,12 @@ const server = http.createServer(async (req, res) => {
       else reservationId = reserveWindowQuota('local-ai', 50, 24 * 60 * 60 * 1000);
       if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
     } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
-    const puterAuthToken = body?.puterAuthToken || body?.authToken || req.headers?.['x-puter-auth-token'] || process.env.PUTER_AUTH_TOKEN || null;
     try {
       const result = await generateProductPhoto({
         imageBytes: sourceBytes,
         dataUrl: body.image,
         style: body.style,
-        model: body.model,
-        quality: body.quality,
-        authToken: puterAuthToken
+        model: body.model
       });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
@@ -257,7 +254,7 @@ const server = http.createServer(async (req, res) => {
       }
       const status = Number(error.status) || 502;
       return json(res, status, {
-        error: error.message || 'ساخت تصویر با Puter GPT Image انجام نشد.',
+        error: error.message || 'ساخت تصویر با مدل هوش مصنوعی انجام نشد.',
         code: error.code || undefined,
         quotaConsumed: false
       });

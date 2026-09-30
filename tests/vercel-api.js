@@ -74,11 +74,13 @@ async function main() {
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).configured, true);
     assert.equal(payload(res).keyless, true);
-    assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
-    assert.equal(payload(res).model, 'gpt-image-2.5-flare');
+    assert.equal(payload(res).unlimited, true);
+    assert.equal(payload(res).provider, 'Pollinations.ai (FLUX / SDXL Turbo)');
+    assert.equal(payload(res).model, 'flux');
     assert.equal(payload(res).localDailyLimit, 50);
     assert(Array.isArray(payload(res).supportedModels));
-    assert(payload(res).supportedModels.includes('gpt-image-2.5-flare'));
+    assert(payload(res).supportedModels.includes('flux'));
+    assert(payload(res).supportedModels.includes('turbo'));
 
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
@@ -99,23 +101,17 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates photo using Puter GPT Image
+    // Verify productPhoto generates photo using Pollinations FLUX
     const oldFetchApi = global.fetch;
-    let puterDriverCalled = false;
-    global.fetch = async (url, options) => {
+    let pollinationsCalled = false;
+    let calledUrl = '';
+    global.fetch = async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('/drivers/call')) {
-        puterDriverCalled = true;
-        const body = JSON.parse(options?.body || '{}');
-        assert.equal(body.interface, 'puter-image-generation');
-        assert.equal(body.driver, 'ai-image');
-        assert.equal(body.method, 'generate');
-        assert.equal(body.args.model, 'gpt-image-2.5-flare');
-        assert.equal(body.args.input_image, referenceDataUrl);
-        return new Response(JSON.stringify({
-          success: true,
-          result: `data:image/jpeg;base64,${Buffer.from('puter-output').toString('base64')}`
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (urlStr.includes('pollinations.ai/prompt')) {
+        pollinationsCalled = true;
+        calledUrl = urlStr;
+        const mockBytes = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
+        return new Response(mockBytes, { status: 200, headers: { 'Content-Type': 'image/jpeg' } });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -124,27 +120,26 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare' }
+        body: { image: referenceDataUrl, style: 'warm-studio', model: 'flux' }
       }, res);
       assert.equal(res.statusCode, 200);
-      assert.equal(puterDriverCalled, true);
+      assert.equal(pollinationsCalled, true);
+      assert.match(calledUrl, /model=flux/);
       assert.equal(payload(res).success, true);
-      assert.equal(payload(res).model, 'gpt-image-2.5-flare');
-      assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
+      assert.equal(payload(res).model, 'flux');
+      assert.equal(payload(res).provider, 'Pollinations.ai (FLUX / SDXL Turbo)');
+      assert.equal(payload(res).unlimited, true);
       assert.equal(payload(res).keyless, true);
     } finally {
       global.fetch = oldFetchApi;
     }
 
-    // Verify productPhoto handles Puter errors, reports Persian message, and releases quota
+    // Verify productPhoto handles upstream errors and releases quota
     const failingFetchApi = global.fetch;
     global.fetch = async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('/drivers/call')) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: { message: 'Puter driver temporary error', code: 'driver_failed' }
-        }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      if (urlStr.includes('pollinations.ai/prompt')) {
+        return new Response('Upstream error', { status: 502 });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -157,41 +152,9 @@ async function main() {
       }, res);
       assert.equal(res.statusCode, 502);
       assert.equal(payload(res).quotaConsumed, false);
-      assert.match(payload(res).error, /Puter/);
+      assert.match(payload(res).error, /خطای سرویس تصویر/);
     } finally {
       global.fetch = failingFetchApi;
-    }
-
-    // Verify productPhoto forwards puterAuthToken and handles 401 missing authentication token
-    let passedToken = null;
-    let authHeaderValue = null;
-    const authFetchApi = global.fetch;
-    global.fetch = async (url, options) => {
-      const urlStr = String(url);
-      if (urlStr.includes('/drivers/call')) {
-        const body = JSON.parse(options?.body || '{}');
-        passedToken = body.auth_token;
-        authHeaderValue = options?.headers?.Authorization;
-        return new Response(JSON.stringify({
-          error: { message: 'Missing authentication token' }
-        }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    };
-    try {
-      res = response();
-      await productPhoto({
-        method: 'POST',
-        headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, puterAuthToken: 'ptk_custom_token_456' }
-      }, res);
-      assert.equal(res.statusCode, 401);
-      assert.equal(passedToken, 'ptk_custom_token_456');
-      assert.equal(authHeaderValue, 'Bearer ptk_custom_token_456');
-      assert.equal(payload(res).quotaConsumed, false);
-      assert.match(payload(res).error, /توکن احراز هویت Puter/);
-    } finally {
-      global.fetch = authFetchApi;
     }
 
     const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
