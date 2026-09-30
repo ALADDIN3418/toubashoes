@@ -75,12 +75,13 @@ async function main() {
     assert.equal(payload(res).configured, true);
     assert.equal(payload(res).keyless, true);
     assert.equal(payload(res).unlimited, true);
-    assert.equal(payload(res).provider, 'Pollinations.ai (FLUX / SDXL Turbo)');
-    assert.equal(payload(res).model, 'flux');
+    assert.equal(payload(res).autoRotating, true);
+    assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
+    assert.equal(payload(res).model, 'gpt-image-2.5-flare');
     assert.equal(payload(res).localDailyLimit, 50);
     assert(Array.isArray(payload(res).supportedModels));
-    assert(payload(res).supportedModels.includes('flux'));
-    assert(payload(res).supportedModels.includes('turbo'));
+    assert(payload(res).supportedModels.includes('gpt-image-2.5-flare'));
+    assert(payload(res).supportedModels.includes('gpt-image-2'));
 
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
@@ -101,17 +102,29 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates photo using Pollinations FLUX
+    // Verify productPhoto generates photo using Puter GPT Image with auto-rotation
     const oldFetchApi = global.fetch;
-    let pollinationsCalled = false;
-    let calledUrl = '';
-    global.fetch = async (url) => {
+    let puterCalled = false;
+    let calledModel = '';
+    global.fetch = async (url, options = {}) => {
       const urlStr = String(url);
-      if (urlStr.includes('pollinations.ai/prompt')) {
-        pollinationsCalled = true;
-        calledUrl = urlStr;
-        const mockBytes = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
-        return new Response(mockBytes, { status: 200, headers: { 'Content-Type': 'image/jpeg' } });
+      if (urlStr.includes('/signup')) {
+        return new Response(JSON.stringify({ token: 'temp_token_123', user: { is_temp: true } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (urlStr.includes('/drivers/call')) {
+        puterCalled = true;
+        const body = JSON.parse(options.body || '{}');
+        calledModel = body?.args?.model || '';
+        return new Response(JSON.stringify({
+          success: true,
+          result: { url: 'data:image/jpeg;base64,mockPuterOutputJpeg' }
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -120,15 +133,14 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, style: 'warm-studio', model: 'flux' }
+        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare' }
       }, res);
       assert.equal(res.statusCode, 200);
-      assert.equal(pollinationsCalled, true);
-      assert.match(calledUrl, /model=flux/);
+      assert.equal(puterCalled, true);
+      assert.equal(calledModel, 'gpt-image-2.5-flare');
       assert.equal(payload(res).success, true);
-      assert.equal(payload(res).model, 'flux');
-      assert.equal(payload(res).provider, 'Pollinations.ai (FLUX / SDXL Turbo)');
-      assert.equal(payload(res).unlimited, true);
+      assert.equal(payload(res).model, 'gpt-image-2.5-flare');
+      assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
       assert.equal(payload(res).keyless, true);
     } finally {
       global.fetch = oldFetchApi;
@@ -138,8 +150,14 @@ async function main() {
     const failingFetchApi = global.fetch;
     global.fetch = async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('pollinations.ai/prompt')) {
-        return new Response('Upstream error', { status: 502 });
+      if (urlStr.includes('/signup')) {
+        return new Response(JSON.stringify({ token: 'temp_token_fail', user: { is_temp: true } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (urlStr.includes('/drivers/call')) {
+        return new Response(JSON.stringify({ success: false, error: { message: 'Upstream driver failure' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -152,7 +170,7 @@ async function main() {
       }, res);
       assert.equal(res.statusCode, 502);
       assert.equal(payload(res).quotaConsumed, false);
-      assert.match(payload(res).error, /خطای سرویس تصویر/);
+      assert.match(payload(res).error, /Upstream driver failure/);
     } finally {
       global.fetch = failingFetchApi;
     }

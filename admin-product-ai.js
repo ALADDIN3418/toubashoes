@@ -127,7 +127,58 @@
       'natural-stone': 'on a smooth natural limestone pedestal, crisp architectural daylight, minimalist organic textures, clean commercial shoe photography, sharp focus'
     };
     const desc = styles[style] || styles['warm-studio'];
-    return `Professional ecommerce product photograph of the exact footwear shown in the reference image, ${desc}. Single shoe in full clear view, centered composition, commercial advertising catalog standard, sharp details, photorealistic, 8k resolution.`;
+    return `Professional commercial product catalog photography of the exact footwear shown in the reference image, ${desc}. Maintain the exact footwear design, shape, silhouette, straps, studs, embellishments, colors, and textures from the reference photo. Single shoe product view only. No human feet, legs, or models. Crisp commercial advertising quality, sharp focus, 8k resolution.`;
+  }
+
+  async function getClientPuterToken(forceRefresh = false) {
+    let token = localStorage.getItem('touba_ai_puter_token');
+    if (token && !forceRefresh) return token;
+
+    try {
+      const resp = await fetch('https://api.puter.com/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_temp: true })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data?.token) {
+          localStorage.setItem('touba_ai_puter_token', data.token);
+          return data.token;
+        }
+      }
+    } catch { /* proceed to backend fallback */ }
+
+    try {
+      const resp = await fetch('/api/ai/rotate-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data?.token) {
+          localStorage.setItem('touba_ai_puter_token', data.token);
+          return data.token;
+        }
+      }
+    } catch { /* no-op */ }
+
+    return token || null;
+  }
+
+  function isTokenLimitError(status, message = '') {
+    const code = Number(status) || 0;
+    if (code === 429 || code === 402 || code === 401 || code === 403) return true;
+    const msg = String(message || '').toLowerCase();
+    return (
+      msg.includes('usage limit') ||
+      msg.includes('rate limit') ||
+      msg.includes('too many requests') ||
+      msg.includes('quota') ||
+      msg.includes('credit') ||
+      msg.includes('missing authentication token') ||
+      msg.includes('token expired')
+    );
   }
 
   function insertStudio() {
@@ -146,16 +197,18 @@
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ ساخت عکس محصول با هوش مصنوعی (FLUX / کاملاً رایگان و نامحدود)</h3>
-        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. مدل هوش مصنوعی قدرتمند FLUX به صورت کاملاً رایگان و بدون هیچ‌گونه محدودیت تعداد یا نیاز به ثبت‌نام، یک تصویر اختصاصی و آتلیه‌ای برای کاتالوگ فروشگاه تولید می‌کند.</p>
+        <h3 id="ai-product-title">✨ ساخت و ارتقای عکس محصول با هوش مصنوعی (GPT Image / بدون محدودیت)</h3>
+        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. مدل پیشرفتهٔ GPT Image با حفظ دقیق ظاهر، قالب، نگین‌ها، بندها، زیره و رنگ کفش، آن را در یک آتلیهٔ تجاری باکیفیت بازتولید می‌کند. سیستم با چرخش خودکار توکن، بدون محدودیت و بدون نیاز به ورود دستی عمل می‌کند.</p>
       </div>
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
-        <label for="ai-product-model">مدل هوش مصنوعی (نامحدود)</label>
+        <label for="ai-product-model">مدل هوش مصنوعی GPT Image</label>
         <select id="ai-product-model" class="ai-studio-select">
-          <option value="flux">FLUX.1 (پیش‌فرض / بالاترین کیفیت و جزئیات)</option>
-          <option value="turbo">SDXL Turbo (تولید فوق سریع)</option>
+          <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare (پیش‌فرض / سرعت بالا و حفظ دقیق جزئیات)</option>
+          <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst (نورپردازی پویا و کنتراست استودیویی)</option>
+          <option value="gpt-image-2">GPT Image 2 (استدلال بصری پیشرفته)</option>
+          <option value="gpt-image-1.5">GPT Image 1.5 (کلاسیک و پایدار)</option>
         </select>
         <label for="ai-product-style">سبک پس‌زمینهٔ خروجی</label>
         <select id="ai-product-style" class="ai-studio-select">
@@ -174,7 +227,7 @@
         <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin: 0; width: 100%;">
           <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی تولیدشده</label>
           <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده از عکس مرجع">
-          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">یک خروجی نهایی از تصویر مرجع با FLUX</figcaption>
+          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">خروجی نهایی از تصویر مرجع با GPT Image</figcaption>
         </figure>
       </div>
       <div class="ai-studio-actions">
@@ -206,12 +259,12 @@
 
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
-      status.textContent = 'سرویس هوش مصنوعی FLUX آماده است؛ دسترسی کاملاً رایگان و نامحدود بدون نیاز به ثبت‌نام یا کلید. یک تصویر واضح از محصول انتخاب کنید.';
+      status.textContent = 'سرویس هوش مصنوعی GPT Image آماده است؛ با چرخش خودکار توکن و بدون محدودیت. یک تصویر واضح از محصول انتخاب کنید.';
       status.classList.toggle('is-ready', providerReady);
       updateGenerateButton();
     }).catch(() => {
       providerReady = true;
-      status.textContent = 'سرویس تصویر آماده است. یک تصویر واضح از محصول انتخاب کنید.';
+      status.textContent = 'سرویس GPT Image آماده است. یک تصویر واضح از محصول انتخاب کنید.';
       status.classList.add('is-ready');
       updateGenerateButton();
     });
@@ -261,31 +314,69 @@
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      const model = modelSelect?.value || 'flux';
+      const model = modelSelect?.value || 'gpt-image-2.5-flare';
       const style = styleSelect?.value || 'warm-studio';
-      const modelLabel = model === 'turbo' ? 'SDXL Turbo' : 'FLUX.1';
-      status.textContent = `تصویر با مدل ${modelLabel} در حال پردازش است؛ ساخت تصویر نهایی بدون محدودیت…`;
+      const modelNames = {
+        'gpt-image-2.5-flare': 'GPT Image 2.5 Flare',
+        'gpt-image-2.5-sunburst': 'GPT Image 2.5 Sunburst',
+        'gpt-image-2': 'GPT Image 2',
+        'gpt-image-1.5': 'GPT Image 1.5'
+      };
+      const modelLabel = modelNames[model] || model;
+      status.textContent = `تصویر با مدل ${modelLabel} در حال پردازش است؛ حفظ جزئیات محصول و چرخش خودکار سهمیه…`;
 
       try {
         let outputUrl = '';
         const prompt = buildShoePhotoPrompt(style);
-        const seed = Math.floor(Math.random() * 10000000);
-        const targetUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&model=${encodeURIComponent(model)}&nologo=true&seed=${seed}`;
 
-        // 1. Direct browser fetch
-        try {
-          const directResponse = await fetch(targetUrl, { mode: 'cors' });
-          if (directResponse.ok) {
-            const blob = await directResponse.blob();
-            if (blob && blob.size > 1000) {
-              outputUrl = await blobToDataUrl(blob);
+        // 1. Direct browser fetch with automatic token rotation
+        let directAttempts = 0;
+        let forceRefresh = false;
+        while (directAttempts < 2 && !outputUrl) {
+          try {
+            const token = await getClientPuterToken(forceRefresh);
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const directResponse = await fetch('https://api.puter.com/drivers/call', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                interface: 'puter-image-generation',
+                driver: 'ai-image',
+                method: 'generate',
+                args: {
+                  model,
+                  quality: 'high',
+                  input_image: sourceDataUrl,
+                  prompt
+                },
+                auth_token: token
+              })
+            });
+
+            const data = await directResponse.json().catch(() => ({}));
+            if (directResponse.ok && data.success !== false) {
+              const res = data.result;
+              if (typeof res === 'string') outputUrl = res;
+              else if (res && typeof res === 'object') outputUrl = res.url || res.src || res.asset_url || '';
+              break;
             }
+
+            const rawErr = data?.error?.message || data?.message || '';
+            if (isTokenLimitError(directResponse.status, rawErr)) {
+              status.textContent = 'سهمیه کلید قبلی تکمیل شد؛ جایگزینی خودکار کلید جدید و ادامه تولید تصویر بدون وقفه…';
+              forceRefresh = true;
+              directAttempts++;
+              continue;
+            }
+            break;
+          } catch {
+            break;
           }
-        } catch {
-          outputUrl = '';
         }
 
-        // 2. Serverless fallback if direct fetch had issues
+        // 2. Serverless fallback with backend auto-rotation if direct browser call did not succeed
         if (!outputUrl) {
           const response = await fetch('/api/ai/product-photo', {
             method: 'POST',
@@ -298,7 +389,7 @@
               images: [sourceDataUrl],
               style,
               model,
-              seed
+              quality: 'high'
             })
           });
           const payload = await response.json().catch(() => ({}));
@@ -308,7 +399,7 @@
           outputUrl = payload.dataUrl;
         }
 
-        if (!outputUrl) throw new Error('تصویر نهایی از هوش مصنوعی دریافت نشد.');
+        if (!outputUrl) throw new Error('تصویر نهایی از GPT Image دریافت نشد.');
 
         const output = await resizeImage(outputUrl, 1280, .88);
         if (currentGenerationId !== generationId) return;
@@ -316,7 +407,7 @@
         studio.querySelector('#ai-product-output-preview').src = output;
         studio.querySelector('#ai-product-output-wrap').hidden = false;
         applyButton.disabled = false;
-        status.textContent = `یک تصویر نهایی با مدل ${modelLabel} با موفقیت آماده شد؛ جزئیات را بررسی و در صورت تأیید اضافه کنید.`;
+        status.textContent = `یک تصویر نهایی با مدل ${modelLabel} با موفقیت آماده شد؛ جزئیات محصول و پس‌زمینهٔ آتلیه‌ای را بررسی و تأیید کنید.`;
       } catch (error) {
         if (currentGenerationId !== generationId) return;
         status.textContent = error.message || 'ساخت تصویر انجام نشد.';

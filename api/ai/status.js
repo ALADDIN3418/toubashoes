@@ -1,6 +1,6 @@
 'use strict';
 const { sendJson, MODEL, persistentAiQuotaConfig } = require('../../lib/vercel-api.js');
-const { DEFAULT_MODEL, SUPPORTED_MODELS } = require('../../services/pollinations-image.js');
+const { DEFAULT_MODEL, SUPPORTED_MODELS, defaultTokenManager } = require('../../services/puter-image.js');
 
 module.exports = function aiStatus(req, res) {
   if (req.method !== 'GET') return sendJson(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -9,9 +9,11 @@ module.exports = function aiStatus(req, res) {
     configured: true,
     keyless: true,
     unlimited: true,
+    autoRotating: true,
+    hasActiveToken: Boolean(defaultTokenManager.activeToken),
     persistentQuotaConfigured,
     quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-    provider: 'Pollinations.ai (FLUX / SDXL Turbo)',
+    provider: 'Puter.js (OpenAI GPT Image)',
     model: process.env.IMAGE_MODEL || DEFAULT_MODEL || MODEL,
     supportedModels: SUPPORTED_MODELS,
     localDailyLimit: 50,

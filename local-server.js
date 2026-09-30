@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS } = require('./services/pollinations-image.js');
+const { generateProductPhoto, MODEL, DEFAULT_MODEL, SUPPORTED_MODELS, defaultTokenManager } = require('./services/puter-image.js');
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
@@ -190,14 +190,15 @@ const server = http.createServer(async (req, res) => {
       configured: true,
       keyless: true,
       unlimited: true,
+      autoRotating: true,
       persistentQuotaConfigured,
       quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-      provider: 'Pollinations.ai (FLUX / SDXL Turbo)',
+      provider: 'Puter.js (OpenAI GPT Image)',
       model: process.env.IMAGE_MODEL || DEFAULT_MODEL || MODEL,
       supportedModels: SUPPORTED_MODELS,
       localDailyLimit: 50,
       referenceMaxSide: 1024,
-      note: 'Pollinations.ai unlimited free FLUX image generation enabled.'
+      note: 'Puter GPT Image with automatic credential rotation enabled.'
     });
   }
   if (pathname === '/api/ai/describe') {
