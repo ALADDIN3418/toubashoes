@@ -8,7 +8,9 @@ const SUPPORTED_MODELS = Object.freeze([
   'gpt-image-2.5-sunburst',
   'gpt-image-2',
   'gpt-image-1.5',
-  'gpt-image-1'
+  'gpt-image-1',
+  'gemini-2.5-flash-image',
+  'auto-free'
 ]);
 
 const DEFAULT_QUALITY = 'high';
@@ -244,6 +246,86 @@ async function callGptImageEditsWithRotation({
   throw lastError || new Error('تلاش‌های چرخش خودکار کلیدهای GPT Image به سقف مجاز رسید.');
 }
 
+async function callGeminiImageGeneration({
+  prompt,
+  inputBuffer,
+  apiKey = null,
+  fetchFn = null
+}) {
+  const key = apiKey || process.env.GEMINI_API_KEY || '';
+  if (!key) {
+    const err = new Error('کلید Google AI Studio (Gemini) یافت نشد. می‌توانید با هر جیمیل ساده از aistudio.google.com کلید رایگان ۵۰۰ عکس در روز دریافت فرمایید.');
+    err.status = 401;
+    err.code = 'GEMINI_KEY_REQUIRED';
+    throw err;
+  }
+
+  const execFetch = fetchFn || globalThis.fetch;
+  const base64Data = inputBuffer.toString('base64');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${encodeURIComponent(key)}`;
+
+  const response = await execFetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: base64Data
+              }
+            },
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseModalities: ['TEXT', 'IMAGE']
+      }
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.error) {
+    const rawError = data?.error?.message || data?.message || `خطای سرویس Gemini (${response.status})`;
+    const err = new Error(rawError);
+    err.status = response.status >= 400 ? response.status : 502;
+    err.code = data?.error?.code || 'GEMINI_IMAGE_ERROR';
+    throw err;
+  }
+
+  let outputDataUrl = '';
+  for (const candidate of data.candidates || []) {
+    for (const part of candidate.content?.parts || []) {
+      const inline = part.inline_data || part.inlineData;
+      if (inline?.data) {
+        const mime = inline.mime_type || inline.mimeType || 'image/jpeg';
+        outputDataUrl = `data:${mime};base64,${inline.data}`;
+        break;
+      }
+    }
+    if (outputDataUrl) break;
+  }
+
+  if (!outputDataUrl) {
+    throw new Error('مدل Gemini تصویری در خروجی ارسال نکرد؛ لطفاً درخواست را دوباره بررسی کنید.');
+  }
+
+  return {
+    outputUrl: outputDataUrl,
+    usedKey: key,
+    provider: 'Google Gemini 2.5 Flash Image (Nano Banana / 500 Daily Free)'
+  };
+}
+
 async function generateProductPhoto({
   imageBytes,
   dataUrl,
@@ -252,9 +334,11 @@ async function generateProductPhoto({
   quality = DEFAULT_QUALITY,
   client = null,
   apiKey = null,
+  geminiApiKey = null,
   apiBase = null,
   keyManager = defaultKeyManager,
-  fetchFn = null
+  fetchFn = null,
+  autoFallback = true
 } = {}) {
   const selectedModel = parseModel(model);
   const selectedQuality = parseQuality(quality);
@@ -284,7 +368,8 @@ async function generateProductPhoto({
       quality: selectedQuality,
       style: selectedStyle,
       inputBuffer,
-      apiKey
+      apiKey,
+      geminiApiKey
     });
     const outputSrc = typeof res === 'string' ? res : res?.dataUrl || res?.outputUrl || '';
     return {
@@ -293,34 +378,86 @@ async function generateProductPhoto({
       model: selectedModel,
       quality: selectedQuality,
       style: selectedStyle,
-      provider: 'GPT Image (OpenAI / Rotating Pool)',
+      provider: res?.provider || 'GPT Image (OpenAI / Rotating Pool)',
       rotated: Boolean(res?.rotated),
       keyless: false
     };
   }
 
-  // 2. OpenAI GPT Image edits with automatic credential rotation
-  const result = await callGptImageEditsWithRotation({
-    prompt,
-    model: selectedModel,
-    quality: selectedQuality,
-    inputBuffer,
-    apiKey,
-    apiBase,
-    keyManager,
-    fetchFn
-  });
+  // 2. Direct Gemini model request or auto-free when Gemini key provided
+  const directGeminiKey = geminiApiKey || (apiKey?.startsWith('AIza') ? apiKey : null);
+  if (selectedModel === 'gemini-2.5-flash-image' || (selectedModel === 'auto-free' && directGeminiKey)) {
+    const geminiResult = await callGeminiImageGeneration({
+      prompt,
+      inputBuffer,
+      apiKey: directGeminiKey,
+      fetchFn: fetchFn || keyManager.fetchFn
+    });
+    return {
+      success: true,
+      dataUrl: geminiResult.outputUrl,
+      model: 'gemini-2.5-flash-image',
+      quality: selectedQuality,
+      style: selectedStyle,
+      provider: 'Google Gemini 2.5 Flash Image (Nano Banana / 500 Daily Free)',
+      rotated: false,
+      keyless: false
+    };
+  }
 
-  return {
-    success: true,
-    dataUrl: result.outputUrl,
-    model: selectedModel,
-    quality: selectedQuality,
-    style: selectedStyle,
-    provider: 'GPT Image (OpenAI / Rotating Pool)',
-    rotated: result.rotated,
-    keyless: false
-  };
+  // 3. OpenAI GPT Image edits with automatic credential rotation
+  try {
+    const effectiveModel = selectedModel === 'auto-free' ? DEFAULT_MODEL : selectedModel;
+    const result = await callGptImageEditsWithRotation({
+      prompt,
+      model: effectiveModel,
+      quality: selectedQuality,
+      inputBuffer,
+      apiKey: apiKey?.startsWith('AIza') ? null : apiKey,
+      apiBase,
+      keyManager,
+      fetchFn
+    });
+
+    return {
+      success: true,
+      dataUrl: result.outputUrl,
+      model: effectiveModel,
+      quality: selectedQuality,
+      style: selectedStyle,
+      provider: 'GPT Image (OpenAI / Rotating Pool)',
+      rotated: result.rotated,
+      keyless: false
+    };
+  } catch (gptErr) {
+    // If autoFallback is allowed and Gemini key is available (or in process.env.GEMINI_API_KEY):
+    const fallbackKey = geminiApiKey || (apiKey?.startsWith('AIza') ? apiKey : null) || process.env.GEMINI_API_KEY;
+    if (autoFallback && fallbackKey) {
+      try {
+        const geminiResult = await callGeminiImageGeneration({
+          prompt,
+          inputBuffer,
+          apiKey: fallbackKey,
+          fetchFn: fetchFn || keyManager.fetchFn
+        });
+        return {
+          success: true,
+          dataUrl: geminiResult.outputUrl,
+          model: 'gemini-2.5-flash-image',
+          quality: selectedQuality,
+          style: selectedStyle,
+          provider: 'Gemini 2.5 Flash Image (جایگزین خودکار ۵۰۰ عکس رایگان در روز)',
+          fallbackUsed: true,
+          originalError: gptErr.message,
+          rotated: true,
+          keyless: false
+        };
+      } catch (geminiFallbackErr) {
+        throw gptErr;
+      }
+    }
+    throw gptErr;
+  }
 }
 
 module.exports = {
@@ -339,5 +476,6 @@ module.exports = {
   GptImageKeyManager,
   defaultKeyManager,
   callGptImageEditsWithRotation,
+  callGeminiImageGeneration,
   generateProductPhoto
 };

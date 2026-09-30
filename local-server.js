@@ -261,7 +261,9 @@ const server = http.createServer(async (req, res) => {
         model: body.model,
         quality: body.quality,
         apiKey: body.apiKey || body.authToken,
-        apiBase: body.apiBase
+        geminiApiKey: body.geminiApiKey,
+        apiBase: body.apiBase,
+        autoFallback: body.autoFallback !== false
       });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });

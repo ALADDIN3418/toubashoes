@@ -132,6 +132,8 @@
 
   const STORAGE_KEYS_KEY = 'touba_gpt_image_keys';
   const STORAGE_BASE_KEY = 'touba_gpt_image_base';
+  const STORAGE_GEMINI_KEY = 'touba_gemini_api_key';
+  const STORAGE_QUALITY_KEY = 'touba_gpt_image_quality';
 
   function getClientGptKeys() {
     try {
@@ -150,13 +152,35 @@
     }
   }
 
-  function setClientGptKeys(keysArray, base = '') {
+  function getClientGeminiKey() {
     try {
-      if (Array.isArray(keysArray)) {
-        localStorage.setItem(STORAGE_KEYS_KEY, keysArray.join('\n'));
+      return (localStorage.getItem(STORAGE_GEMINI_KEY) || '').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function getClientQuality() {
+    try {
+      return (localStorage.getItem(STORAGE_QUALITY_KEY) || 'high').trim();
+    } catch {
+      return 'high';
+    }
+  }
+
+  function setClientSettings({ keys, base, geminiKey, quality }) {
+    try {
+      if (Array.isArray(keys)) {
+        localStorage.setItem(STORAGE_KEYS_KEY, keys.join('\n'));
       }
       if (base !== undefined) {
         localStorage.setItem(STORAGE_BASE_KEY, base.trim());
+      }
+      if (geminiKey !== undefined) {
+        localStorage.setItem(STORAGE_GEMINI_KEY, geminiKey.trim());
+      }
+      if (quality !== undefined) {
+        localStorage.setItem(STORAGE_QUALITY_KEY, quality.trim());
       }
     } catch { /* ignore */ }
   }
@@ -194,38 +218,65 @@
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ ساخت و ارتقای عکس محصول با هوش مصنوعی (GPT Image / بدون محدودیت)</h3>
-        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. مدل پیشرفتهٔ GPT Image با حفظ دقیق ظاهر، قالب، نگین‌ها، بندها، زیره و رنگ کفش، آن را در یک آتلیهٔ تجاری باکیفیت بازتولید می‌کند. سیستم با چرخش خودکار توکن و کلیدهای API، بدون وقفه و محدودیت عمل می‌کند.</p>
+        <h3 id="ai-product-title">✨ آتلیهٔ هوشمند عکاسی محصول (GPT Image & Gemini / سهمیه رایگان روزانه ۵۰ تا ۵۰۰ تصویر)</h3>
+        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. سیستم با شرطی‌سازی مستقیم روی عکس مرجع، بدون تغییر در قالب، نگین‌ها، بندها یا زیره، کفش را در آتلیه تجاری بازتولید می‌کند. با اتصال کلید رایگان Google AI Studio یا پروکسی GPT Image، روزانه ۵۰ تا ۵۰۰ تصویر کاملاً رایگان تولید فرمایید.</p>
       </div>
 
-      <!-- Settings Card for GPT Image API Key Pool -->
+      <!-- Settings Card for Free Daily Quotas & API Key Pool -->
       <div class="ai-key-settings-card" style="margin-bottom: 16px; padding: 12px 14px; background: #f6f8f5; border: 1px solid #d5e0d1; border-radius: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" id="ai-key-toggle-btn">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 15px;">🔑</span>
-            <strong style="font-size: 13px; color: #213a21;">تنظیمات کلیدهای API و چرخش خودکار (GPT Image)</strong>
+            <strong style="font-size: 13px; color: #213a21;">تنظیمات روش‌های رایگان و کلیدهای API (سهمیه روزانه ۵۰ تا ۵۰۰ تصویر)</strong>
           </div>
           <span id="ai-key-badge" style="font-size: 11px; padding: 3px 10px; border-radius: 12px; background: #e3eedb; color: #264a25; font-weight: 500;">
             بررسی کلیدها…
           </span>
         </div>
         <div id="ai-key-drawer" style="margin-top: 12px; display: none; border-top: 1px dashed #cddcc7; padding-top: 10px;">
-          <label for="ai-keys-textarea" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; color: #2d452d;">
-            کلیدهای API مدل GPT Image (می‌توانید چند کلید را با ویرگول یا خط جدید وارد کنید تا سیستم خودکار بین آن‌ها بچرخد):
-          </label>
-          <textarea id="ai-keys-textarea" rows="2" placeholder="sk-proj-..., sk-proj-..." style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr; resize: vertical;"></textarea>
           
-          <div style="margin-top: 8px;">
-            <label for="ai-base-input" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; color: #2d452d;">
-              آدرس پایه API (اختیاری - پیش‌فرض https://api.openai.com/v1 یا پروکسی اختصاصی شما):
+          <!-- Method 1: Google AI Studio 500 free images/day -->
+          <div style="margin-bottom: 12px; padding: 10px; background: #ffffff; border: 1px solid #dce8d8; border-radius: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <strong style="font-size: 12px; color: #1c4b22;">🎁 روش اول (پیشنهادی و تضمینی): ۵۰۰ عکس رایگان در روز با Google AI Studio</strong>
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #155724; text-decoration: underline;">
+                دریافت کلید در ۳۰ ثانیه (بدون کارت بانکی) ↗
+              </a>
+            </div>
+            <p style="font-size: 11px; color: #4d664e; margin: 0 0 6px 0;">گوگل روزانه ۵۰۰ عکس با مدل Gemini 2.5 Flash Image به صورت ۱۰۰٪ رایگان در اختیار هر اکانت جیمیل قرار می‌دهد. کلید را در کادر زیر وارد کنید:</p>
+            <input id="ai-gemini-key-input" type="password" placeholder="AIzaSy..." style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr;" />
+          </div>
+
+          <!-- Method 2: GPT Image OpenAI Key Pool / Proxy -->
+          <div style="margin-bottom: 12px; padding: 10px; background: #ffffff; border: 1px solid #dce8d8; border-radius: 6px;">
+            <strong style="display: block; font-size: 12px; color: #1c4b22; margin-bottom: 6px;">⚡ روش دوم: مدل‌های اختصاصی GPT Image (با پروکسی، ورکر یا کلید شخصی)</strong>
+            <label for="ai-keys-textarea" style="display: block; font-size: 11px; margin-bottom: 4px; color: #3d553e;">
+              کلیدهای OpenAI یا پروکسی GPT Image (چند کلید را با ویرگول یا خط جدید جدا کنید):
             </label>
-            <input id="ai-base-input" type="text" placeholder="https://api.openai.com/v1" style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr;" />
+            <textarea id="ai-keys-textarea" rows="2" placeholder="sk-proj-..., sk-proj-..." style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr; resize: vertical;"></textarea>
+            
+            <div style="margin-top: 8px; display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+              <div>
+                <label for="ai-base-input" style="display: block; font-size: 11px; margin-bottom: 4px; color: #3d553e;">
+                  آدرس پایه API (اختیاری - برای پروکسی یا اندپوینت اختصاصی):
+                </label>
+                <input id="ai-base-input" type="text" placeholder="https://api.openai.com/v1" style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr;" />
+              </div>
+              <div>
+                <label for="ai-quality-select" style="display: block; font-size: 11px; margin-bottom: 4px; color: #3d553e;">کیفیت تصویر:</label>
+                <select id="ai-quality-select" class="ai-studio-select" style="height: 33px; font-size: 11px;">
+                  <option value="low">کم‌هزینه و سریع (Low)</option>
+                  <option value="medium">متوسط (Medium)</option>
+                  <option value="high" selected>حداکثر کیفیت (High)</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
             <span id="ai-key-feedback" style="font-size: 11px; color: #2d5a2b;"></span>
-            <button type="button" class="btn" id="ai-key-save-btn" style="padding: 5px 14px; font-size: 12px; background: #2f5930; color: #fff; border: none; border-radius: 5px; cursor: pointer;">
-              ذخیره تنظیمات کلید
+            <button type="button" class="btn" id="ai-key-save-btn" style="padding: 6px 16px; font-size: 12px; background: #2f5930; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">
+              ذخیره کلیه تنظیمات
             </button>
           </div>
         </div>
@@ -234,10 +285,11 @@
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
-        <label for="ai-product-model">مدل هوش مصنوعی GPT Image</label>
+        <label for="ai-product-model">موتور و مدل هوش مصنوعی</label>
         <select id="ai-product-model" class="ai-studio-select">
-          <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare (پیش‌فرض / سرعت بالا و حفظ دقیق جزئیات)</option>
-          <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst (نورپردازی پویا و کنتراست استودیویی)</option>
+          <option value="auto-free">⚡ حالت هوشمند خودکار (سهمیه رایگان روزانه ۵۰۰ عکس با سوئیچ خودکار)</option>
+          <option value="gemini-2.5-flash-image">Gemini 2.5 Flash Image (نانو بنانا - ۵۰۰ عکس رایگان در روز با یک جیمیل)</option>
+          <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare (مدل پیش‌فرض OpenAI - با پروکسی یا کلید شخصی)</option>
           <option value="gpt-image-2">GPT Image 2 (استدلال بصری پیشرفته)</option>
           <option value="gpt-image-1.5">GPT Image 1.5 (کلاسیک و پایدار)</option>
         </select>
@@ -247,6 +299,8 @@
           <option value="dark-luxury">استودیوی دارک و لوکس</option>
           <option value="natural-stone">سنگ طبیعی و نور روز</option>
         </select>
+        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>تولید یک تصویر نهایی</button>
+      </div>
         <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>تولید یک تصویر نهایی</button>
       </div>
       <div class="ai-source-grid" id="ai-product-previews-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
@@ -280,27 +334,40 @@
     const keyToggleBtn = studio.querySelector('#ai-key-toggle-btn');
     const keyDrawer = studio.querySelector('#ai-key-drawer');
     const keyBadge = studio.querySelector('#ai-key-badge');
+    const geminiKeyInput = studio.querySelector('#ai-gemini-key-input');
     const keysTextarea = studio.querySelector('#ai-keys-textarea');
     const baseInput = studio.querySelector('#ai-base-input');
+    const qualitySelect = studio.querySelector('#ai-quality-select');
     const keySaveBtn = studio.querySelector('#ai-key-save-btn');
     const keyFeedback = studio.querySelector('#ai-key-feedback');
 
     function updateKeyBadge() {
       const keys = getClientGptKeys();
-      if (keys.length > 0) {
-        keyBadge.textContent = `${keys.length} کلید تنظیم‌شده | چرخش خودکار فعال`;
+      const geminiKey = getClientGeminiKey();
+      if (geminiKey && keys.length > 0) {
+        keyBadge.textContent = `سهمیه گوگل: فعال (۵۰۰/روز) + ${keys.length} کلید GPT`;
+        keyBadge.style.background = '#d9eed3';
+        keyBadge.style.color = '#1f481e';
+      } else if (geminiKey) {
+        keyBadge.textContent = `سهمیه ۵۰۰ عکس در روز فعال (Gemini 2.5)`;
+        keyBadge.style.background = '#d9eed3';
+        keyBadge.style.color = '#1f481e';
+      } else if (keys.length > 0) {
+        keyBadge.textContent = `${keys.length} کلید GPT Image فعال`;
         keyBadge.style.background = '#d9eed3';
         keyBadge.style.color = '#1f481e';
       } else {
-        keyBadge.textContent = 'استفاده از استخر سرور یا ورود کلید';
-        keyBadge.style.background = '#eef3eb';
-        keyBadge.style.color = '#385336';
+        keyBadge.textContent = 'نیاز به کلید (سهمیه رایگان در پنل)';
+        keyBadge.style.background = '#fef3e2';
+        keyBadge.style.color = '#8a5314';
       }
     }
 
-    if (keysTextarea && baseInput) {
+    if (keysTextarea && baseInput && geminiKeyInput && qualitySelect) {
       keysTextarea.value = getClientGptKeys().join('\n');
       baseInput.value = getClientGptBase();
+      geminiKeyInput.value = getClientGeminiKey();
+      qualitySelect.value = getClientQuality();
       updateKeyBadge();
     }
 
@@ -312,9 +379,11 @@
     keySaveBtn?.addEventListener('click', () => {
       const enteredKeys = keysTextarea.value.split(/[\r\n,]+/).map(k => k.trim()).filter(Boolean);
       const enteredBase = baseInput.value.trim();
-      setClientGptKeys(enteredKeys, enteredBase);
+      const enteredGeminiKey = geminiKeyInput.value.trim();
+      const enteredQuality = qualitySelect.value;
+      setClientSettings({ keys: enteredKeys, base: enteredBase, geminiKey: enteredGeminiKey, quality: enteredQuality });
       updateKeyBadge();
-      keyFeedback.textContent = 'تنظیمات کلید ذخیره شد.';
+      keyFeedback.textContent = '✅ کلیه تنظیمات با موفقیت ذخیره شدند.';
       setTimeout(() => { if (keyFeedback) keyFeedback.textContent = ''; }, 3000);
     });
 
@@ -332,12 +401,12 @@
 
     fetch('/api/ai/status').then(response => response.json()).then(data => {
       providerReady = !!data.configured;
-      status.textContent = 'سرویس هوش مصنوعی GPT Image آماده است؛ با چرخش خودکار توکن و بدون محدودیت. یک تصویر واضح از محصول انتخاب کنید.';
+      status.textContent = 'سرویس هوش مصنوعی آماده است؛ روزانه ۵۰ تا ۵۰۰ تصویر با حفظ کامل عکس مرجع. یک عکس واضح از کفش انتخاب کنید.';
       status.classList.toggle('is-ready', providerReady);
       updateGenerateButton();
     }).catch(() => {
       providerReady = true;
-      status.textContent = 'سرویس GPT Image آماده است. یک تصویر واضح از محصول انتخاب کنید.';
+      status.textContent = 'سرویس تصویر آماده است. یک تصویر واضح از محصول انتخاب کنید.';
       status.classList.add('is-ready');
       updateGenerateButton();
     });
@@ -387,24 +456,52 @@
       generateButton.disabled = true;
       clearGenerated();
       const currentGenerationId = generationId;
-      const model = modelSelect?.value || 'gpt-image-2.5-flare';
+      const model = modelSelect?.value || 'auto-free';
       const style = styleSelect?.value || 'warm-studio';
       const modelNames = {
+        'auto-free': 'موتور هوشمند خودکار',
+        'gemini-2.5-flash-image': 'Gemini 2.5 Flash Image (نانو بنانا)',
         'gpt-image-2.5-flare': 'GPT Image 2.5 Flare',
         'gpt-image-2.5-sunburst': 'GPT Image 2.5 Sunburst',
         'gpt-image-2': 'GPT Image 2',
         'gpt-image-1.5': 'GPT Image 1.5'
       };
       const modelLabel = modelNames[model] || model;
-      status.textContent = `تصویر با مدل ${modelLabel} در حال پردازش است؛ حفظ جزئیات محصول و چرخش خودکار سهمیه…`;
+      status.textContent = `تصویر با مدل ${modelLabel} در حال پردازش است؛ حفظ دقیق فرم کفش و پس‌زمینهٔ آتلیه‌ای…`;
 
       try {
         let outputUrl = '';
         const userKeys = getClientGptKeys();
         const userBase = getClientGptBase();
+        const geminiKey = getClientGeminiKey();
+        const quality = getClientQuality();
 
-        if (userKeys.length > 0) {
-          // Automatic rotation across user-provided API key pool
+        // 1. Direct Gemini generation if chosen or auto-free with gemini key
+        if (model === 'gemini-2.5-flash-image' || (model === 'auto-free' && geminiKey && userKeys.length === 0)) {
+          status.textContent = 'در حال تولید تصویر با سهمیه رایگان روزانه (Google Gemini 2.5 Flash)؛ حفظ جزئیات دقیق کفش…';
+          const response = await fetch('/api/ai/product-photo', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...await adminAuthHeaders()
+            },
+            body: JSON.stringify({
+              image: sourceDataUrl,
+              images: [sourceDataUrl],
+              style,
+              model: 'gemini-2.5-flash-image',
+              quality,
+              geminiApiKey: geminiKey || undefined,
+              autoFallback: true
+            })
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `خطای سرویس (${response.status})`);
+          outputUrl = payload.dataUrl;
+        }
+
+        // 2. GPT Image key pool with auto-rotation and fallback
+        if (!outputUrl && userKeys.length > 0) {
           let keyIdx = 0;
           let lastErr = null;
           while (keyIdx < userKeys.length) {
@@ -421,10 +518,12 @@
                   image: sourceDataUrl,
                   images: [sourceDataUrl],
                   style,
-                  model,
-                  quality: 'high',
+                  model: model === 'auto-free' ? 'gpt-image-2.5-flare' : model,
+                  quality,
                   apiKey: currentKey,
-                  apiBase: userBase || undefined
+                  geminiApiKey: geminiKey || undefined,
+                  apiBase: userBase || undefined,
+                  autoFallback: true
                 })
               });
               const payload = await response.json().catch(() => ({}));
@@ -449,8 +548,10 @@
               throw kErr;
             }
           }
-        } else {
-          // Use server-side key pool and automatic rotation
+        }
+
+        // 3. Fallback to server-side pool / Gemini environment key
+        if (!outputUrl) {
           const response = await fetch('/api/ai/product-photo', {
             method: 'POST',
             headers: {
@@ -461,15 +562,17 @@
               image: sourceDataUrl,
               images: [sourceDataUrl],
               style,
-              model,
-              quality: 'high',
-              apiBase: userBase || undefined
+              model: model === 'auto-free' ? 'gpt-image-2.5-flare' : model,
+              quality,
+              geminiApiKey: geminiKey || undefined,
+              apiBase: userBase || undefined,
+              autoFallback: true
             })
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             const errMsg = payload.error || `خطای سرویس (${response.status})`;
-            if (errMsg.includes('کلید API') || errMsg.includes('GPT_IMAGE_KEY_REQUIRED') || response.status === 401) {
+            if (errMsg.includes('کلید') || errMsg.includes('KEY_REQUIRED') || response.status === 401) {
               if (keyDrawer) keyDrawer.style.display = 'block';
             }
             throw new Error(errMsg);
@@ -477,7 +580,7 @@
           outputUrl = payload.dataUrl;
         }
 
-        if (!outputUrl) throw new Error('تصویر نهایی از GPT Image دریافت نشد.');
+        if (!outputUrl) throw new Error('تصویر نهایی دریافت نشد.');
 
         const output = await resizeImage(outputUrl, 1280, .88);
         if (currentGenerationId !== generationId) return;

@@ -172,6 +172,82 @@ async function run() {
   assert.equal(photoResult.model, 'gpt-image-2.5-flare');
   assert.equal(photoResult.dataUrl, 'data:image/jpeg;base64,mockShoePhotoDataUrl');
 
+  // 7. Gemini 2.5 Flash Image direct generation (500 free images per day)
+  const mockGeminiFetch = async (url) => {
+    assert.ok(url.includes('gemini-2.5-flash-image:generateContent'));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{
+          content: {
+            parts: [{
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: 'bW9ja0dlbWluaUltYWdlRGF0YQ=='
+              }
+            }]
+          }
+        }]
+      })
+    };
+  };
+
+  const geminiResult = await generateProductPhoto({
+    dataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+    model: 'gemini-2.5-flash-image',
+    geminiApiKey: 'AIzaSyMockGeminiKey',
+    fetchFn: mockGeminiFetch
+  });
+
+  assert.equal(geminiResult.success, true);
+  assert.equal(geminiResult.model, 'gemini-2.5-flash-image');
+  assert.equal(geminiResult.dataUrl, 'data:image/jpeg;base64,bW9ja0dlbWluaUltYWdlRGF0YQ==');
+  assert.ok(geminiResult.provider.includes('Gemini 2.5 Flash Image'));
+
+  // 8. Auto-fallback from GPT Image to Gemini when GPT Image hits quota limit
+  const mockFallbackFetch = async (url) => {
+    if (url.includes('/images/edits')) {
+      return {
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { message: 'insufficient_quota', code: 'insufficient_quota' } })
+      };
+    }
+    if (url.includes('gemini-2.5-flash-image:generateContent')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [{
+            content: {
+              parts: [{
+                inline_data: {
+                  mime_type: 'image/jpeg',
+                  data: 'bW9ja0ZhbGxiYWNrR2VtaW5pSW1hZ2VEYXRh'
+                }
+              }]
+            }
+          }]
+        })
+      };
+    }
+    throw new Error(`Unexpected url: ${url}`);
+  };
+
+  const fallbackResult = await generateProductPhoto({
+    dataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+    model: 'gpt-image-2.5-flare',
+    apiKey: 'sk-depleted-key',
+    geminiApiKey: 'AIzaSyMockGeminiFallbackKey',
+    fetchFn: mockFallbackFetch,
+    autoFallback: true
+  });
+
+  assert.equal(fallbackResult.success, true);
+  assert.equal(fallbackResult.fallbackUsed, true);
+  assert.equal(fallbackResult.dataUrl, 'data:image/jpeg;base64,bW9ja0ZhbGxiYWNrR2VtaW5pSW1hZ2VEYXRh');
+
   console.log('PASS: GPT Image assistant, auto-rotating key manager, reference shoe conditioning, and rate-limit/quota auto-healing');
 }
 
