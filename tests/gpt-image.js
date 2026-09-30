@@ -13,10 +13,10 @@ const {
   parseModel,
   parseQuality,
   parseStyle,
-  PuterTokenManager,
-  callPuterDriverWithRotation,
+  GptImageKeyManager,
+  callGptImageEditsWithRotation,
   generateProductPhoto
-} = require('../services/puter-image.js');
+} = require('../services/gpt-image.js');
 
 async function run() {
   // 1. Defaults and configuration
@@ -53,94 +53,94 @@ async function run() {
   assert.match(darkPrompt, /luxury dark ecommerce studio setting/i);
   assert.match(darkPrompt, /no human feet/i);
 
-  // 3. PuterTokenManager unit tests
-  const tokenManager = new PuterTokenManager({
-    tokens: ['token_alpha', 'token_beta', 'token_gamma']
+  // 3. GptImageKeyManager unit tests
+  const keyManager = new GptImageKeyManager({
+    keys: ['sk-alpha', 'sk-beta', 'sk-gamma']
   });
 
-  assert.equal(tokenManager.configuredTokens.length, 3);
-  assert.equal(await tokenManager.getValidToken(false), 'token_alpha');
+  assert.equal(keyManager.configuredKeys.length, 3);
+  assert.equal(await keyManager.getValidKey(false), 'sk-alpha');
 
   // Limit error detection
-  assert.ok(tokenManager.isLimitError(429, 'Too many requests'));
-  assert.ok(tokenManager.isLimitError(402, 'Usage limit exceeded'));
-  assert.ok(tokenManager.isLimitError(401, 'Missing authentication token'));
-  assert.ok(tokenManager.isLimitError(200, 'Monthly quota reached for this key'));
-  assert.equal(tokenManager.isLimitError(500, 'Internal Server Error'), false);
+  assert.ok(keyManager.isLimitError(429, 'Too many requests'));
+  assert.ok(keyManager.isLimitError(429, 'Rate limit reached'));
+  assert.ok(keyManager.isLimitError(402, 'Usage limit exceeded'));
+  assert.ok(keyManager.isLimitError(401, 'Invalid API key'));
+  assert.ok(keyManager.isLimitError(200, 'insufficient_quota: You exceeded your current quota'));
+  assert.equal(keyManager.isLimitError(500, 'Internal Server Error'), false);
 
-  // Rotate token on limit
-  const secondToken = await tokenManager.getValidToken(true, 'quota exceeded on alpha');
-  assert.equal(secondToken, 'token_beta');
-  assert.ok(tokenManager.exhaustedTokens.has('token_alpha'));
+  // Rotate key on limit
+  const secondKey = await keyManager.getValidKey(true, 'quota exceeded on alpha');
+  assert.equal(secondKey, 'sk-beta');
+  assert.ok(keyManager.exhaustedKeys.has('sk-alpha'));
 
-  const thirdToken = await tokenManager.getValidToken(true, 'rate limit on beta');
-  assert.equal(thirdToken, 'token_gamma');
-  assert.ok(tokenManager.exhaustedTokens.has('token_beta'));
+  const thirdKey = await keyManager.getValidKey(true, 'rate limit on beta');
+  assert.equal(thirdKey, 'sk-gamma');
+  assert.ok(keyManager.exhaustedKeys.has('sk-beta'));
 
-  // Token exhaustion when pool has no more tokens
-  const emptyTokenManager = new PuterTokenManager({
-    tokens: []
+  // Key exhaustion when pool has no more keys
+  const emptyKeyManager = new GptImageKeyManager({
+    keys: []
   });
-  assert.equal(await emptyTokenManager.getValidToken(false), null);
+  assert.equal(await emptyKeyManager.getValidKey(false), null);
 
-  // 4. Automatic rotation during callPuterDriverWithRotation
+  // 4. Automatic rotation during callGptImageEditsWithRotation
   let callCount = 0;
-  const callTokens = [];
+  const callKeys = [];
   const mockRotateFetch = async (url, options) => {
-    if (url.endsWith('/drivers/call')) {
+    if (url.endsWith('/images/edits')) {
       callCount++;
       const authHeader = options.headers['Authorization'] || '';
-      const tokenUsed = authHeader.replace('Bearer ', '');
-      callTokens.push(tokenUsed);
+      const keyUsed = authHeader.replace('Bearer ', '');
+      callKeys.push(keyUsed);
 
-      if (tokenUsed === 'token_limited_1') {
-        // First token hits rate limit
+      if (keyUsed === 'key_limited_1') {
+        // First key hits quota limit
         return {
           ok: false,
           status: 429,
-          json: async () => ({ success: false, error: { message: 'Usage limit exceeded' } })
+          json: async () => ({ error: { message: 'insufficient_quota', code: 'insufficient_quota' } })
         };
       }
-      if (tokenUsed === 'token_limited_2') {
-        // Second token hits auth error
+      if (keyUsed === 'key_limited_2') {
+        // Second key hits rate limit
         return {
           ok: false,
-          status: 401,
-          json: async () => ({ success: false, error: { message: 'Missing authentication token' } })
+          status: 429,
+          json: async () => ({ error: { message: 'Rate limit reached for requests', code: 'rate_limit_exceeded' } })
         };
       }
-      // Third token succeeds!
+      // Third key succeeds!
       return {
         ok: true,
         status: 200,
         json: async () => ({
-          success: true,
-          result: { url: 'data:image/jpeg;base64,mockGeneratedShoeImageBase64' }
+          data: [{ b64_json: 'bW9ja0dlbmVyYXRlZFNob2VJbWFnZUJhc2U2NA==' }]
         })
       };
     }
     throw new Error(`Unexpected URL: ${url}`);
   };
 
-  const rotatingManager = new PuterTokenManager({
-    tokens: ['token_limited_1', 'token_limited_2', 'token_working_3'],
+  const rotatingManager = new GptImageKeyManager({
+    keys: ['key_limited_1', 'key_limited_2', 'key_working_3'],
     fetchFn: mockRotateFetch
   });
 
-  const driverResult = await callPuterDriverWithRotation({
+  const editsResult = await callGptImageEditsWithRotation({
     prompt: 'Sample shoe prompt',
     model: 'gpt-image-2.5-flare',
     quality: 'high',
-    inputImage: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
-    tokenManager: rotatingManager,
+    inputBuffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+    keyManager: rotatingManager,
     fetchFn: mockRotateFetch
   });
 
-  assert.equal(driverResult.outputUrl, 'data:image/jpeg;base64,mockGeneratedShoeImageBase64');
-  assert.equal(driverResult.rotated, true, 'Result must indicate auto-rotation occurred');
-  assert.equal(driverResult.usedToken, 'token_working_3');
-  assert.equal(callCount, 3, 'Must attempt 3 times and seamlessly succeed on the 3rd token');
-  assert.deepEqual(callTokens, ['token_limited_1', 'token_limited_2', 'token_working_3']);
+  assert.equal(editsResult.outputUrl, 'data:image/jpeg;base64,bW9ja0dlbmVyYXRlZFNob2VJbWFnZUJhc2U2NA==');
+  assert.equal(editsResult.rotated, true, 'Result must indicate auto-rotation occurred');
+  assert.equal(editsResult.usedKey, 'key_working_3');
+  assert.equal(callCount, 3, 'Must attempt 3 times and seamlessly succeed on the 3rd key');
+  assert.deepEqual(callKeys, ['key_limited_1', 'key_limited_2', 'key_working_3']);
 
   // 5. Input validation on generateProductPhoto
   await assert.rejects(
@@ -151,12 +151,12 @@ async function run() {
   // 6. Custom mock client integration
   let clientCalled = false;
   const mockClient = {
-    generate: async ({ prompt, model, style, inputImage }) => {
+    generate: async ({ prompt, model, style, inputBuffer }) => {
       clientCalled = true;
       assert.ok(prompt.includes('reference image'));
       assert.equal(model, 'gpt-image-2.5-flare');
       assert.equal(style, 'warm-studio');
-      assert.ok(inputImage.startsWith('data:image/jpeg;base64,'));
+      assert.ok(Buffer.isBuffer(inputBuffer));
       return { dataUrl: 'data:image/jpeg;base64,mockShoePhotoDataUrl' };
     }
   };
@@ -168,11 +168,11 @@ async function run() {
 
   assert.ok(clientCalled);
   assert.equal(photoResult.success, true);
-  assert.equal(photoResult.provider, 'Puter.js (OpenAI GPT Image)');
+  assert.equal(photoResult.provider, 'GPT Image (OpenAI / Rotating Pool)');
   assert.equal(photoResult.model, 'gpt-image-2.5-flare');
   assert.equal(photoResult.dataUrl, 'data:image/jpeg;base64,mockShoePhotoDataUrl');
 
-  console.log('PASS: Puter.js GPT Image assistant, auto-rotating token manager, reference shoe conditioning, and rate-limit auto-healing');
+  console.log('PASS: GPT Image assistant, auto-rotating key manager, reference shoe conditioning, and rate-limit/quota auto-healing');
 }
 
 run().catch(err => {

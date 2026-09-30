@@ -73,10 +73,10 @@ async function main() {
     aiStatus({ method:'GET' }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).configured, true);
-    assert.equal(payload(res).keyless, true);
+    assert.equal(payload(res).keyless, false);
     assert.equal(payload(res).unlimited, true);
     assert.equal(payload(res).autoRotating, true);
-    assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
+    assert.equal(payload(res).provider, 'GPT Image (OpenAI / Rotating Pool)');
     assert.equal(payload(res).model, 'gpt-image-2.5-flare');
     assert.equal(payload(res).localDailyLimit, 50);
     assert(Array.isArray(payload(res).supportedModels));
@@ -102,25 +102,15 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates photo using Puter GPT Image with auto-rotation
+    // Verify productPhoto generates photo using GPT Image with auto-rotation
     const oldFetchApi = global.fetch;
-    let puterCalled = false;
-    let calledModel = '';
+    let gptImageCalled = false;
     global.fetch = async (url, options = {}) => {
       const urlStr = String(url);
-      if (urlStr.includes('/signup')) {
-        return new Response(JSON.stringify({ token: 'temp_token_123', user: { is_temp: true } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (urlStr.includes('/drivers/call')) {
-        puterCalled = true;
-        const body = JSON.parse(options.body || '{}');
-        calledModel = body?.args?.model || '';
+      if (urlStr.includes('/images/edits')) {
+        gptImageCalled = true;
         return new Response(JSON.stringify({
-          success: true,
-          result: { url: 'data:image/jpeg;base64,mockPuterOutputJpeg' }
+          data: [{ b64_json: 'mockGptImageOutputBase64' }]
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
@@ -133,15 +123,14 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare', authToken: 'mock_test_token' }
+        body: { image: referenceDataUrl, style: 'warm-studio', model: 'gpt-image-2.5-flare', apiKey: 'mock_test_key' }
       }, res);
       assert.equal(res.statusCode, 200);
-      assert.equal(puterCalled, true);
-      assert.equal(calledModel, 'gpt-image-2.5-flare');
+      assert.equal(gptImageCalled, true);
       assert.equal(payload(res).success, true);
       assert.equal(payload(res).model, 'gpt-image-2.5-flare');
-      assert.equal(payload(res).provider, 'Puter.js (OpenAI GPT Image)');
-      assert.equal(payload(res).keyless, true);
+      assert.equal(payload(res).provider, 'GPT Image (OpenAI / Rotating Pool)');
+      assert.equal(payload(res).keyless, false);
     } finally {
       global.fetch = oldFetchApi;
     }
@@ -150,14 +139,8 @@ async function main() {
     const failingFetchApi = global.fetch;
     global.fetch = async (url) => {
       const urlStr = String(url);
-      if (urlStr.includes('/signup')) {
-        return new Response(JSON.stringify({ token: 'temp_token_fail', user: { is_temp: true } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      if (urlStr.includes('/drivers/call')) {
-        return new Response(JSON.stringify({ success: false, error: { message: 'Upstream driver failure' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      if (urlStr.includes('/images/edits')) {
+        return new Response(JSON.stringify({ error: { message: 'Upstream GPT Image failure' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -166,11 +149,11 @@ async function main() {
       await productPhoto({
         method: 'POST',
         headers: { origin: 'https://touba.test', host: 'touba.test' },
-        body: { image: referenceDataUrl, authToken: 'mock_test_token' }
+        body: { image: referenceDataUrl, apiKey: 'mock_test_key' }
       }, res);
       assert.equal(res.statusCode, 502);
       assert.equal(payload(res).quotaConsumed, false);
-      assert.match(payload(res).error, /Upstream driver failure/);
+      assert.match(payload(res).error, /Upstream GPT Image failure/);
     } finally {
       global.fetch = failingFetchApi;
     }

@@ -130,53 +130,51 @@
     return `Professional commercial product catalog photography of the exact footwear shown in the reference image, ${desc}. Maintain the exact footwear design, shape, silhouette, straps, studs, embellishments, colors, and textures from the reference photo. Single shoe product view only. No human feet, legs, or models. Crisp commercial advertising quality, sharp focus, 8k resolution.`;
   }
 
-  async function getClientPuterToken(forceRefresh = false) {
-    if (forceRefresh) {
-      localStorage.removeItem('touba_ai_puter_token');
-    }
-    let token = localStorage.getItem('touba_ai_puter_token') || window.puter?.authToken || null;
-    if (token && !forceRefresh) return token;
+  const STORAGE_KEYS_KEY = 'touba_gpt_image_keys';
+  const STORAGE_BASE_KEY = 'touba_gpt_image_base';
 
-    if (typeof window.puter !== 'undefined' && window.puter?.auth?.signIn) {
-      try {
-        await window.puter.auth.signIn({ attempt_temp_user_creation: true });
-        token = window.puter.authToken || localStorage.getItem('touba_ai_puter_token') || null;
-        if (token) {
-          localStorage.setItem('touba_ai_puter_token', token);
-          return token;
-        }
-      } catch { /* proceed to backend fallback */ }
-    }
-
+  function getClientGptKeys() {
     try {
-      const resp = await fetch('/api/ai/rotate-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() }
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data?.token) {
-          localStorage.setItem('touba_ai_puter_token', data.token);
-          return data.token;
-        }
-      }
-    } catch { /* no-op */ }
-
-    return token || null;
+      const raw = localStorage.getItem(STORAGE_KEYS_KEY) || '';
+      return raw.split(/[\r\n,]+/).map(k => k.trim()).filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
-  function isTokenLimitError(status, message = '') {
+  function getClientGptBase() {
+    try {
+      return (localStorage.getItem(STORAGE_BASE_KEY) || '').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function setClientGptKeys(keysArray, base = '') {
+    try {
+      if (Array.isArray(keysArray)) {
+        localStorage.setItem(STORAGE_KEYS_KEY, keysArray.join('\n'));
+      }
+      if (base !== undefined) {
+        localStorage.setItem(STORAGE_BASE_KEY, base.trim());
+      }
+    } catch { /* ignore */ }
+  }
+
+  function isKeyLimitError(status, message = '') {
     const code = Number(status) || 0;
     if (code === 429 || code === 402 || code === 401 || code === 403) return true;
     const msg = String(message || '').toLowerCase();
     return (
-      msg.includes('usage limit') ||
+      msg.includes('insufficient_quota') ||
+      msg.includes('rate_limit') ||
       msg.includes('rate limit') ||
-      msg.includes('too many requests') ||
       msg.includes('quota') ||
+      msg.includes('exceeded') ||
+      msg.includes('too many requests') ||
       msg.includes('credit') ||
-      msg.includes('missing authentication token') ||
-      msg.includes('token expired')
+      msg.includes('unauthorized') ||
+      msg.includes('invalid_api_key')
     );
   }
 
@@ -197,8 +195,42 @@
     studio.innerHTML = `
       <div class="ai-studio-heading">
         <h3 id="ai-product-title">✨ ساخت و ارتقای عکس محصول با هوش مصنوعی (GPT Image / بدون محدودیت)</h3>
-        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. مدل پیشرفتهٔ GPT Image با حفظ دقیق ظاهر، قالب، نگین‌ها، بندها، زیره و رنگ کفش، آن را در یک آتلیهٔ تجاری باکیفیت بازتولید می‌کند. سیستم با چرخش خودکار توکن، بدون محدودیت و بدون نیاز به ورود دستی عمل می‌کند.</p>
+        <p class="ai-studio-note">یک تصویر واضح از محصول انتخاب کنید. مدل پیشرفتهٔ GPT Image با حفظ دقیق ظاهر، قالب، نگین‌ها، بندها، زیره و رنگ کفش، آن را در یک آتلیهٔ تجاری باکیفیت بازتولید می‌کند. سیستم با چرخش خودکار توکن و کلیدهای API، بدون وقفه و محدودیت عمل می‌کند.</p>
       </div>
+
+      <!-- Settings Card for GPT Image API Key Pool -->
+      <div class="ai-key-settings-card" style="margin-bottom: 16px; padding: 12px 14px; background: #f6f8f5; border: 1px solid #d5e0d1; border-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" id="ai-key-toggle-btn">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 15px;">🔑</span>
+            <strong style="font-size: 13px; color: #213a21;">تنظیمات کلیدهای API و چرخش خودکار (GPT Image)</strong>
+          </div>
+          <span id="ai-key-badge" style="font-size: 11px; padding: 3px 10px; border-radius: 12px; background: #e3eedb; color: #264a25; font-weight: 500;">
+            بررسی کلیدها…
+          </span>
+        </div>
+        <div id="ai-key-drawer" style="margin-top: 12px; display: none; border-top: 1px dashed #cddcc7; padding-top: 10px;">
+          <label for="ai-keys-textarea" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; color: #2d452d;">
+            کلیدهای API مدل GPT Image (می‌توانید چند کلید را با ویرگول یا خط جدید وارد کنید تا سیستم خودکار بین آن‌ها بچرخد):
+          </label>
+          <textarea id="ai-keys-textarea" rows="2" placeholder="sk-proj-..., sk-proj-..." style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr; resize: vertical;"></textarea>
+          
+          <div style="margin-top: 8px;">
+            <label for="ai-base-input" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; color: #2d452d;">
+              آدرس پایه API (اختیاری - پیش‌فرض https://api.openai.com/v1 یا پروکسی اختصاصی شما):
+            </label>
+            <input id="ai-base-input" type="text" placeholder="https://api.openai.com/v1" style="width: 100%; font-family: monospace; font-size: 12px; padding: 7px; border: 1px solid #c2d4bc; border-radius: 6px; box-sizing: border-box; direction: ltr;" />
+          </div>
+
+          <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span id="ai-key-feedback" style="font-size: 11px; color: #2d5a2b;"></span>
+            <button type="button" class="btn" id="ai-key-save-btn" style="padding: 5px 14px; font-size: 12px; background: #2f5930; color: #fff; border: none; border-radius: 5px; cursor: pointer;">
+              ذخیره تنظیمات کلید
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
@@ -243,6 +275,48 @@
     const styleSelect = studio.querySelector('#ai-product-style');
     const sourceWrap = studio.querySelector('#ai-product-source-wrap');
     const sourcePreview = studio.querySelector('#ai-product-source-preview');
+
+    // Key settings elements
+    const keyToggleBtn = studio.querySelector('#ai-key-toggle-btn');
+    const keyDrawer = studio.querySelector('#ai-key-drawer');
+    const keyBadge = studio.querySelector('#ai-key-badge');
+    const keysTextarea = studio.querySelector('#ai-keys-textarea');
+    const baseInput = studio.querySelector('#ai-base-input');
+    const keySaveBtn = studio.querySelector('#ai-key-save-btn');
+    const keyFeedback = studio.querySelector('#ai-key-feedback');
+
+    function updateKeyBadge() {
+      const keys = getClientGptKeys();
+      if (keys.length > 0) {
+        keyBadge.textContent = `${keys.length} کلید تنظیم‌شده | چرخش خودکار فعال`;
+        keyBadge.style.background = '#d9eed3';
+        keyBadge.style.color = '#1f481e';
+      } else {
+        keyBadge.textContent = 'استفاده از استخر سرور یا ورود کلید';
+        keyBadge.style.background = '#eef3eb';
+        keyBadge.style.color = '#385336';
+      }
+    }
+
+    if (keysTextarea && baseInput) {
+      keysTextarea.value = getClientGptKeys().join('\n');
+      baseInput.value = getClientGptBase();
+      updateKeyBadge();
+    }
+
+    keyToggleBtn?.addEventListener('click', () => {
+      const isHidden = keyDrawer.style.display === 'none';
+      keyDrawer.style.display = isHidden ? 'block' : 'none';
+    });
+
+    keySaveBtn?.addEventListener('click', () => {
+      const enteredKeys = keysTextarea.value.split(/[\r\n,]+/).map(k => k.trim()).filter(Boolean);
+      const enteredBase = baseInput.value.trim();
+      setClientGptKeys(enteredKeys, enteredBase);
+      updateKeyBadge();
+      keyFeedback.textContent = 'تنظیمات کلید ذخیره شد.';
+      setTimeout(() => { if (keyFeedback) keyFeedback.textContent = ''; }, 3000);
+    });
 
     function updateGenerateButton() {
       generateButton.disabled = !providerReady || !sourceDataUrl;
@@ -326,93 +400,57 @@
 
       try {
         let outputUrl = '';
-        const prompt = buildShoePhotoPrompt(style);
+        const userKeys = getClientGptKeys();
+        const userBase = getClientGptBase();
 
-        // 1. Direct browser execution with official Puter.js SDK
-        if (typeof window.puter !== 'undefined' && window.puter?.ai && typeof window.puter.ai.txt2img === 'function') {
-          try {
-            status.textContent = `در حال پردازش تصویر با مدل ${modelLabel}؛ حفظ جزئیات دقیق محصول…`;
-            const puterImg = await window.puter.ai.txt2img(prompt, {
-              model: model,
-              quality: 'high',
-              input_image: sourceDataUrl
-            });
-            if (typeof puterImg === 'string') outputUrl = puterImg;
-            else if (puterImg && puterImg.src) outputUrl = puterImg.src;
-            else if (puterImg && typeof puterImg.toString === 'function') outputUrl = puterImg.toString();
-          } catch (sdkError) {
-            // If Puter SDK needs auth or hits limit, try signing in / rotating session
-            if (window.puter?.auth && typeof window.puter.auth.signIn === 'function') {
-              status.textContent = 'تنظیم سشن Puter GPT Image و چرخش خودکار…';
-              try {
-                if (window.puter.auth.signOut) await window.puter.auth.signOut().catch(() => {});
-                await window.puter.auth.signIn({ attempt_temp_user_creation: true });
-                const retryImg = await window.puter.ai.txt2img(prompt, {
-                  model: model,
-                  quality: 'high',
-                  input_image: sourceDataUrl
-                });
-                if (typeof retryImg === 'string') outputUrl = retryImg;
-                else if (retryImg && retryImg.src) outputUrl = retryImg.src;
-                else if (retryImg && typeof retryImg.toString === 'function') outputUrl = retryImg.toString();
-              } catch { /* proceed to backend fallback */ }
-            }
-          }
-        }
-
-        // 2. Direct browser driver call if token is available
-        if (!outputUrl) {
-          let directAttempts = 0;
-          let forceRefresh = false;
-          while (directAttempts < 2 && !outputUrl) {
+        if (userKeys.length > 0) {
+          // Automatic rotation across user-provided API key pool
+          let keyIdx = 0;
+          let lastErr = null;
+          while (keyIdx < userKeys.length) {
+            const currentKey = userKeys[keyIdx];
+            status.textContent = `در حال پردازش تصویر با مدل ${modelLabel} (کلید ${keyIdx + 1} از ${userKeys.length})؛ حفظ جزئیات محصول…`;
             try {
-              const token = await getClientPuterToken(forceRefresh);
-              if (!token) break;
-              const headers = { 'Content-Type': 'application/json' };
-              headers['Authorization'] = `Bearer ${token}`;
-
-              const directResponse = await fetch('https://api.puter.com/drivers/call', {
+              const response = await fetch('/api/ai/product-photo', {
                 method: 'POST',
-                headers,
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...await adminAuthHeaders()
+                },
                 body: JSON.stringify({
-                  interface: 'puter-image-generation',
-                  driver: 'ai-image',
-                  method: 'generate',
-                  args: {
-                    model,
-                    quality: 'high',
-                    input_image: sourceDataUrl,
-                    prompt
-                  },
-                  auth_token: token
+                  image: sourceDataUrl,
+                  images: [sourceDataUrl],
+                  style,
+                  model,
+                  quality: 'high',
+                  apiKey: currentKey,
+                  apiBase: userBase || undefined
                 })
               });
-
-              const data = await directResponse.json().catch(() => ({}));
-              if (directResponse.ok && data.success !== false) {
-                const res = data.result;
-                if (typeof res === 'string') outputUrl = res;
-                else if (res && typeof res === 'object') outputUrl = res.url || res.src || res.asset_url || '';
-                break;
+              const payload = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                const errMsg = payload.error || `خطای سرویس (${response.status})`;
+                if (isKeyLimitError(response.status, errMsg) && keyIdx + 1 < userKeys.length) {
+                  status.textContent = `سهمیه کلید شماره ${keyIdx + 1} پر شد؛ چرخش خودکار به کلید بعدی (${keyIdx + 2}) و ادامه ساخت تصویر…`;
+                  keyIdx++;
+                  continue;
+                }
+                throw new Error(errMsg);
               }
-
-              const rawErr = data?.error?.message || data?.message || '';
-              if (isTokenLimitError(directResponse.status, rawErr)) {
-                status.textContent = 'سهمیه کلید قبلی تکمیل شد؛ دریافت خودکار کلید جدید و ادامه تولید تصویر بدون وقفه…';
-                forceRefresh = true;
-                directAttempts++;
+              outputUrl = payload.dataUrl;
+              break;
+            } catch (kErr) {
+              lastErr = kErr;
+              if (isKeyLimitError(kErr.status || 500, kErr.message) && keyIdx + 1 < userKeys.length) {
+                status.textContent = `سهمیه کلید شماره ${keyIdx + 1} پر شد؛ چرخش خودکار به کلید بعدی (${keyIdx + 2}) و ادامه ساخت تصویر…`;
+                keyIdx++;
                 continue;
               }
-              break;
-            } catch {
-              break;
+              throw kErr;
             }
           }
-        }
-
-        // 3. Serverless fallback with backend auto-rotation
-        if (!outputUrl) {
-          const clientToken = window.puter?.authToken || localStorage.getItem('touba_ai_puter_token') || null;
+        } else {
+          // Use server-side key pool and automatic rotation
           const response = await fetch('/api/ai/product-photo', {
             method: 'POST',
             headers: {
@@ -425,12 +463,16 @@
               style,
               model,
               quality: 'high',
-              authToken: clientToken
+              apiBase: userBase || undefined
             })
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
-            throw new Error(payload.error || `خطای سرویس (${response.status})`);
+            const errMsg = payload.error || `خطای سرویس (${response.status})`;
+            if (errMsg.includes('کلید API') || errMsg.includes('GPT_IMAGE_KEY_REQUIRED') || response.status === 401) {
+              if (keyDrawer) keyDrawer.style.display = 'block';
+            }
+            throw new Error(errMsg);
           }
           outputUrl = payload.dataUrl;
         }
