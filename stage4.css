@@ -460,52 +460,133 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .mobile-menu-toggle { display: none; }
 
-/* Luxury Hero Section */
+/* Luxury Hero Section — Reference Match
+   کالا کاملاً شارپ و واضح می‌ماند؛ فقط پنل شیشهٔ سمت راست (و حلقهٔ نازک
+   پشت آن) افکت backdrop-filter: blur(28px) دارند. */
 .lux-hero {
-  min-height: 540px;
+  min-height: 600px;
   position: relative;
   overflow: hidden;
   background: #08140e;
   color: #ffffff;
+  isolation: isolate;
 }
-.lux-hero-image, .lux-hero-shade {
+.lux-hero-image, .lux-hero-shade, .lux-hero-glow {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
 .lux-hero-image {
+  z-index: 0;
   object-fit: cover;
-  object-position: center 52%;
-  filter: brightness(0.92) contrast(1.05);
+  object-position: center;
+  filter: brightness(1.02) contrast(1.07) saturate(1.06);
 }
 .lux-hero-shade {
-  background: linear-gradient(270deg, rgba(6, 17, 10, 0.95) 0%, rgba(6, 17, 10, 0.85) 32%, rgba(6, 17, 10, 0.35) 65%, rgba(6, 17, 10, 0.1) 100%);
+  z-index: 1;
+  background:
+    linear-gradient(270deg, rgba(3, 10, 6, 0.88) 0%, rgba(4, 12, 8, 0.58) 18%, rgba(5, 14, 9, 0.20) 40%, rgba(5, 14, 9, 0) 62%),
+    linear-gradient(180deg, rgba(3, 10, 6, 0.34) 0%, rgba(3, 10, 6, 0) 24%, rgba(3, 10, 6, 0.36) 100%);
+}
+.lux-hero-glow {
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(30% 40% at 60% 88%, rgba(16, 185, 129, 0.10) 0%, rgba(16, 185, 129, 0) 74%);
+  mix-blend-mode: screen;
+}
+.lux-hero-watermark {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  bottom: 1.2vw;
+  width: 100%;
+  padding-left: 4vw;
+  text-align: left;
+  font: 900 clamp(36px, 6.2vw, 112px) / 0.86 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  direction: ltr;
+  color: rgba(255, 255, 255, 0.045);
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.11);
+  pointer-events: none;
+  user-select: none;
 }
 .lux-hero-content {
-  height: 540px;
+  height: 600px;
   display: flex;
   align-items: center;
   position: relative;
   z-index: 2;
 }
+.lux-hero-ring {
+  position: absolute;
+  z-index: 0;
+  inset-inline-start: -180px;
+  bottom: -26%;
+  width: min(780px, 56vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.008) 62%, rgba(16, 185, 129, 0.028) 100%);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 40px 90px -45px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+.lux-hero-ring::after {
+  content: "";
+  position: absolute;
+  inset: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
 .lux-hero-copy {
-  width: min(540px, 52%);
+  width: min(570px, 48%);
   margin-right: 0;
-  padding: 20px 0;
+}
+.lux-hero-copy.lux-hero-glass {
+  position: relative;
+  z-index: 1;
+  padding: 46px 42px 40px;
+  border-radius: 46px 46px 46px 150px;
+  overflow: hidden;
+  /* شیشهٔ تقریباً بی‌رنگ: تینت بسیار کم + بلور بالا؛ عمق فقط از لبه‌ها و بازتاب‌ها می‌آید */
+  background: linear-gradient(152deg, rgba(255, 255, 255, 0.065) 0%, rgba(255, 255, 255, 0.024) 40%, rgba(255, 255, 255, 0.010) 68%, rgba(255, 255, 255, 0.016) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(34px) saturate(130%) brightness(1.05);
+  -webkit-backdrop-filter: blur(34px) saturate(130%) brightness(1.05);
+  box-shadow:
+    0 44px 96px -44px rgba(0, 0, 0, 0.68),
+    inset 0 1px 0 rgba(255, 255, 255, 0.60),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 72px rgba(255, 255, 255, 0.035);
+}
+.lux-hero-glass-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(112% 88% at 94% -16%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(124deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.055) 44%, rgba(255, 255, 255, 0.11) 50%, rgba(255, 255, 255, 0) 64%),
+    radial-gradient(130% 110% at -10% 110%, rgba(16, 185, 129, 0.07) 0%, rgba(16, 185, 129, 0) 52%);
 }
 .hero-kicker {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 7px 15px;
   border-radius: var(--radius-full);
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.3);
-  color: var(--green-emerald-light);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #a7f3d0;
   font-size: 12px;
   font-weight: 600;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 .hero-kicker i, .hero-note-dot {
   width: 7px;
@@ -515,49 +596,71 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35);
 }
 .lux-hero h1 {
-  font-size: clamp(36px, 4.5vw, 56px);
-  line-height: 1.25;
-  letter-spacing: -0.035em;
-  margin: 18px 0 14px;
+  position: relative;
+  font-size: clamp(36px, 4vw, 52px);
+  line-height: 1.22;
+  letter-spacing: -0.04em;
+  margin: 20px 0 14px;
   font-weight: 800;
   color: #ffffff;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.38);
 }
 .lux-hero-copy > p {
-  color: #cbd5e1;
-  font-size: 15px;
-  line-height: 2.1;
-  max-width: 460px;
+  position: relative;
+  color: #dbe5df;
+  font-size: 14.5px;
+  line-height: 2.05;
+  max-width: 100%;
   margin: 0 0 26px;
 }
 .hero-actions {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 .hero-primary {
-  padding: 13px 26px;
+  padding: 15px 30px;
   font-size: 13.5px;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #34d399 0%, #10b981 48%, #047857 100%);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  box-shadow: 0 20px 44px -16px rgba(16, 185, 129, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), background 0.22s var(--ease);
+}
+.hero-primary:hover {
+  background: linear-gradient(135deg, #4ade80 0%, #10b981 52%, #065f46 100%);
+  box-shadow: 0 26px 54px -16px rgba(16, 185, 129, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transform: translateY(-2px);
+}
+.hero-primary svg {
+  transition: transform 0.25s var(--ease);
+}
+.hero-primary:hover svg {
+  transform: translateX(-3px);
 }
 .hero-secondary {
-  color: #e2e8f0;
+  color: #eaf1ec;
   font-size: 13px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 18px;
+  padding: 14px 22px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: all 0.2s var(--ease);
 }
 .hero-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.17);
   color: #ffffff;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 .hero-secondary span {
   color: var(--green-emerald-light);
@@ -568,11 +671,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transform: translateX(-4px);
 }
 .hero-note {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 32px;
-  color: #94a3b8;
+  margin-top: 28px;
+  color: #a3b3aa;
   font-size: 12px;
 }
 .hero-side-label {
@@ -585,6 +689,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   letter-spacing: 0.25em;
   color: rgba(255, 255, 255, 0.35);
   z-index: 2;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lux-hero-copy.lux-hero-glass {
+    animation: heroGlassIn 0.9s var(--ease) both;
+  }
+  .lux-hero-watermark {
+    animation: heroWatermarkIn 1.2s var(--ease) both;
+  }
+  @keyframes heroGlassIn {
+    from { opacity: 0; transform: translateY(18px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes heroWatermarkIn {
+    from { opacity: 0; transform: translateX(-26px); }
+    to { opacity: 1; transform: none; }
+  }
 }
 
 /* Trust Bar */
@@ -2310,7 +2430,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: none;
 }
 
-@media (max-width: 860px) {
+/* Tablet & mobile header: compact nav applies up to 1100px so the header never overflows */
+@media (max-width: 1100px) {
   .mobile-nav-backdrop {
     display: block;
     position: fixed;
@@ -2327,7 +2448,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     opacity: 1;
     pointer-events: auto;
   }
-  .container { width: calc(100% - 28px); }
   .store-header-wrap { position: sticky; top: 0; z-index: 60; }
   .store-header {
     background: rgba(6, 17, 10, 0.96);
@@ -2377,7 +2497,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .mobile-menu-toggle.is-open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
   .mobile-menu-toggle.is-open span:nth-child(2) { opacity: 0; }
   .mobile-menu-toggle.is-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-  
   .store-brand {
     display: inline-flex;
     align-items: center;
@@ -2399,7 +2518,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
   }
   .brand-emblem svg { width: 20px; height: 20px; }
-  
   .store-actions {
     display: flex !important;
     align-items: center;
@@ -2480,7 +2598,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     line-height: 1;
     cursor: pointer;
   }
-  
   .header-action {
     width: 38px;
     height: 38px;
@@ -2523,7 +2640,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     padding: 0 4px;
   }
   .cart-label { display: none !important; }
-  
   /* Minimalist Compact Mobile Navigation Panel */
   .store-nav {
     display: flex !important;
@@ -2594,7 +2710,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     background: var(--green-emerald);
   }
   .store-nav > a:after, .nav-categories > a:after { display: none !important; }
-  
   .nav-categories {
     flex-direction: column;
     align-items: stretch;
@@ -2688,37 +2803,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     stroke: currentColor;
     stroke-width: 1.8;
   }
-  
+}
+
+@media (max-width: 860px) {
+  .container { width: calc(100% - 28px); }
   .lux-hero { min-height: 500px; }
   .lux-hero-content { height: 500px; align-items: flex-end; padding-bottom: 36px; }
   .lux-hero-copy { width: 100%; max-width: 500px; }
   .lux-hero h1 { font-size: 36px; }
-  
   .trust-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .trust-item { border-left: 0; justify-content: flex-start; }
   .trust-item:nth-child(odd) { border-left: 1px solid rgba(255, 255, 255, 0.08); }
-  
   .category-scroll { grid-template-columns: repeat(8, 92px); margin-left: -16px; margin-right: -16px; padding: 0 16px 8px; }
   .lux-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  
   .collection-banner { grid-template-columns: 1fr; margin-top: 40px; margin-bottom: 32px; }
   .collection-visual { height: 210px; min-height: 210px; }
   .collection-content { padding: 24px; }
   .collection-content h2 { font-size: 28px; }
-  
   .why-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .about-section { grid-template-columns: 1fr; gap: 28px; padding-top: 48px; }
   .about-photo-wrap { height: 260px; order: 1; }
   .about-copy { order: 2; }
-  
   .review-grid { grid-template-columns: 1fr; }
   .newsletter-card { grid-template-columns: 1fr; gap: 20px; padding: 24px; }
   .footer-main { grid-template-columns: 1fr 1fr; gap: 24px; }
   .footer-brand-col { grid-column: 1 / -1; }
-  
   .product-layout, .checkout-layout, .shop-layout { grid-template-columns: 1fr; display: flex; flex-direction: column; }
   .gallery-main { height: 320px; }
-  
   .mobile-product-bar {
     position: fixed;
     z-index: 30;
@@ -2738,6 +2849,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .mobile-product-bar small { font-size: 10px; color: var(--ink-muted); }
   .mobile-product-bar b { font-size: 14px; font-weight: 800; color: #047857; }
 }
+
 
 /* ==========================================================================
    Minimal Header Buttons — Clean, Zero-Border, Modern Aesthetic
@@ -5622,3 +5734,55 @@ body {
   color: #9c2727;
 }
 
+/* Hero glass — responsive tuning
+   در همهٔ بریک‌پوینت‌ها تصویر کالا شارپ می‌ماند و فقط پنل متن شیشه‌ای است. */
+@media (max-width: 1280px) {
+  .lux-hero-copy { width: min(530px, 50%); }
+  .lux-hero-copy.lux-hero-glass { padding: 40px 34px 34px; border-radius: 44px 44px 44px 126px; }
+  .lux-hero h1 { font-size: clamp(34px, 3.9vw, 48px); }
+  .lux-hero-ring { width: min(640px, 52vw); inset-inline-start: -140px; }
+  .lux-hero-watermark { font-size: clamp(34px, 6vw, 96px); }
+}
+@media (max-width: 1100px) {
+  .lux-hero { min-height: 560px; }
+  .lux-hero-content { height: 560px; }
+  .lux-hero-ring { display: none; }
+  .lux-hero-copy { width: min(520px, 58%); }
+  .lux-hero-copy.lux-hero-glass { padding: 36px 30px 30px; border-radius: 38px 38px 38px 112px; }
+  .lux-hero-watermark { font-size: clamp(30px, 5.4vw, 64px); }
+}
+/* در موبایل پنل شیشه‌ای پایین قاب می‌نشیند تا تصویر کالا در بالای بنر شارپ بماند. */
+@media (max-width: 860px) {
+  .lux-hero { min-height: 0; }
+  .lux-hero-image {
+    position: relative;
+    inset: auto;
+    height: 336px;
+    object-position: 32% 44%;
+    transform: none;
+  }
+  .lux-hero-shade {
+    background: linear-gradient(180deg, rgba(3, 10, 6, 0.26) 0%, rgba(3, 10, 6, 0.04) 34%, rgba(3, 10, 6, 0.42) 68%, rgba(3, 10, 6, 0.72) 100%);
+  }
+  .lux-hero-glow { background: radial-gradient(64% 26% at 50% 30%, rgba(16, 185, 129, 0.14) 0%, rgba(16, 185, 129, 0) 74%); }
+  .lux-hero-content { height: auto; min-height: 0; margin-top: -36px; padding: 0 0 24px; align-items: flex-start; }
+  .lux-hero-copy { width: 100%; max-width: none; }
+  .lux-hero-copy.lux-hero-glass { padding: 26px 22px 22px; border-radius: 30px 30px 30px 88px; }
+  .lux-hero h1 { font-size: 30px; }
+  .lux-hero-watermark { top: 16px; bottom: auto; padding-left: 0; text-align: center; font-size: clamp(30px, 11.5vw, 50px); }
+}
+@media (max-width: 640px) {
+  .lux-hero-image { height: 292px; object-position: 30% 46%; }
+  .lux-hero-content { margin-top: -30px; padding: 0 0 18px; }
+  .lux-hero-copy.lux-hero-glass { padding: 24px 20px 22px; border-radius: 26px 26px 26px 70px; }
+  .lux-hero h1 { font-size: 27px; margin: 16px 0 10px; }
+  .lux-hero-copy > p { font-size: 13px; line-height: 1.95; margin-bottom: 18px; }
+  .lux-hero-watermark { top: 16px; font-size: clamp(26px, 10.5vw, 40px); }
+  .hero-side-label { display: none; }
+  .hero-actions { gap: 10px; }
+  .hero-primary, .hero-secondary { padding: 12px 20px; font-size: 12.5px; }
+  .hero-note { margin-top: 20px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lux-hero-copy.lux-hero-glass, .lux-hero-watermark { animation: none !important; }
+}
