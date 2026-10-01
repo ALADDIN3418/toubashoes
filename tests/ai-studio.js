@@ -167,7 +167,7 @@ async function runTests() {
     assert.equal(cfFallbackResult.success, true);
     assert(cfFallbackResult.provider.includes('Cloudflare Workers AI'));
 
-    // Ensure real Cloudflare errors are NOT swallowed when provider is 'qwen-edit' and allowMock is false
+    // Ensure real Cloudflare auth errors are NOT swallowed when provider is 'qwen-edit' and allowMock is false
     global.fetch = async (url) => {
       if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
         return {
@@ -188,6 +188,105 @@ async function runTests() {
       }),
       /Authentication error: invalid API token/
     );
+
+    // Test automatic fallback from flux-2-klein-9b (429 daily limit) to flux-2-klein-4b
+    const pngHex = '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2d450000000049454e44ae426082';
+    global.fetch = async (url) => {
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
+        return {
+          ok: false,
+          status: 429,
+          headers: new Map([['content-type', 'application/json']]),
+          json: async () => ({ success: false, errors: [{ code: 4006, message: 'Daily free allocation of 10,000 neurons exceeded' }] })
+        };
+      }
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-4b')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'image/png']]),
+          arrayBuffer: async () => Buffer.from(pngHex, 'hex')
+        };
+      }
+      throw new Error('Connection refused');
+    };
+    const auto4bResult = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(auto4bResult.success, true);
+    assert.equal(auto4bResult.fallbackUsed, true);
+    assert.equal(auto4bResult.model, '@cf/black-forest-labs/flux-2-klein-4b');
+    assert(auto4bResult.provider.includes('جایگزین خودکار'));
+
+    // Test automatic fallback to Google Gemini when all Cloudflare models hit 429
+    const oldGeminiKey = process.env.GEMINI_API_KEY;
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    try {
+      global.fetch = async (url) => {
+        if (String(url).includes('api.cloudflare.com')) {
+          return {
+            ok: false,
+            status: 429,
+            headers: new Map([['content-type', 'application/json']]),
+            json: async () => ({ success: false, errors: [{ code: 4006, message: 'Rate limit exceeded' }] })
+          };
+        }
+        if (String(url).includes('generativelanguage.googleapis.com')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              candidates: [{
+                content: {
+                  parts: [{
+                    inlineData: {
+                      mimeType: 'image/png',
+                      data: Buffer.from(pngHex, 'hex').toString('base64')
+                    }
+                  }]
+                }
+              }]
+            })
+          };
+        }
+        throw new Error('Connection refused');
+      };
+
+      const geminiFallbackRes = await generateStudioPhoto({
+        image: sampleDataUrl,
+        style: 'dark-luxury',
+        provider: 'qwen-edit',
+        allowMock: false
+      });
+      assert.equal(geminiFallbackRes.success, true);
+      assert.equal(geminiFallbackRes.fallbackUsed, true);
+      assert(geminiFallbackRes.provider.includes('Google Gemini AI'));
+
+      // Test built-in studio fallback when ALL cloud providers hit 429 daily quota
+      global.fetch = async () => ({
+        ok: false,
+        status: 429,
+        headers: new Map([['content-type', 'application/json']]),
+        text: async () => 'Quota exceeded',
+        json: async () => ({ success: false, errors: [{ message: 'Daily quota exceeded' }] })
+      });
+      const studioExhaustedFallback = await generateStudioPhoto({
+        image: sampleDataUrl,
+        style: 'catalog-white',
+        provider: 'qwen-edit',
+        allowMock: false
+      });
+      assert.equal(studioExhaustedFallback.success, true);
+      assert.equal(studioExhaustedFallback.fallbackUsed, true);
+      assert.equal(studioExhaustedFallback.quotaExhaustedFallback, true);
+      assert.equal(studioExhaustedFallback.mode, 'client-studio-fallback');
+    } finally {
+      if (oldGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = oldGeminiKey;
+    }
   } finally {
     global.fetch = originalFetch;
     process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;

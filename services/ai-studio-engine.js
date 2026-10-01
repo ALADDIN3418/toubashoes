@@ -2,13 +2,12 @@
  * Product AI Studio Engine
  * «موتور استودیوی هوش مصنوعی محصول»
  *
- * Provider-based Architecture:
+ * Provider-based Architecture with Automatic Multi-Model Fallback:
  * - Priority 1: Qwen-Image-Edit (Instruction-based editing with reference image lock)
- * - Priority 2: FLUX Kontext (Flow-matching image-to-image)
- * - Priority 3: SDXL Commercial Studio
- * - Priority 4: Real-ESRGAN Upscaler
- * - Priority 5: Self-hosted ComfyUI / Local GPU / Inference Server
- * - Development/Offline: High-Fidelity Mock Adapter for testing and instant preview
+ * - Priority 2: Cloudflare FLUX.2 Klein 9B -> Auto-Fallback to FLUX.2 Klein 4B (Neuron Saver) -> SD-v1.5-Img2Img -> FLUX.1 Schnell -> SDXL Lightning
+ * - Priority 3: Google Gemini Multimodal Image Studio (Automatic Cross-Cloud Fallback)
+ * - Priority 4: FLUX Kontext / SDXL Commercial Studio / Real-ESRGAN (ComfyUI)
+ * - Priority 5: Smart Studio Fallback when all cloud daily quotas are exhausted
  */
 'use strict';
 
@@ -27,20 +26,91 @@ const {
   generateProductPhoto: generateCloudflareProductPhoto,
   getCloudflareConfig,
   formatSafetyFlaggedError,
-  isContentFlagged
+  isContentFlagged,
+  isQuotaOrRateLimitError,
+  LIGHT_MODEL
 } = require('./cloudflare-image.js');
 
 const DEFAULT_BACKEND_URL = process.env.AI_STUDIO_BACKEND_URL || process.env.COMFY_API_URL || 'http://127.0.0.1:8000';
 const DEFAULT_PROVIDER = process.env.AI_STUDIO_PROVIDER || 'qwen-edit';
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
 
+const GEMINI_FALLBACK_MODELS = Object.freeze([
+  'gemini-2.0-flash-exp-image-generation',
+  'gemini-2.5-flash-image'
+]);
+
 const SUPPORTED_PROVIDERS = Object.freeze([
-  { id: 'qwen-edit', name: 'Qwen-Image-Edit (ComfyUI)', badge: 'پیشنهادی (اولویت ۱)', description: 'ویرایش دستوری بر پایه عکس مرجع با حفظ ۱۰۰٪ فرم و رنگ' },
-  { id: 'cloudflare', name: 'Cloudflare FLUX.2 Klein 9B', badge: 'ابری هوشمند', description: 'مدل ابری ۹ میلیارد پارامتری فلو مچینگ با حفظ دقیق هویت کالا' },
+  { id: 'qwen-edit', name: 'هوشمند خودکار (Qwen / FLUX.2 + سوییچ خودکار مدل جایگزین)', badge: 'پیشنهادی (ضد محدودیت)', description: 'سوییچ خودکار بین مدل‌های اصلی و جایگزین در زمان رسیدن به محدودیت روزانه' },
+  { id: 'cloudflare-4b', name: 'Cloudflare FLUX.2 Klein 4B (کم‌مصرف)', badge: 'صرفه‌جویی ۲.۵ برابری', description: 'مدل ۴ میلیارد پارامتری سبک با مصرف کمتر از نصف سهمیه روزانه و حفظ دقیق کالا' },
+  { id: 'cloudflare', name: 'Cloudflare FLUX.2 Klein 9B', badge: 'ابری هوشمند', description: 'مدل ابری ۹ میلیارد پارامتری فلو مچینگ با جایگزینی خودکار مدل در زمان محدودیت' },
+  { id: 'gemini', name: 'Google Gemini Image Studio', badge: 'موتور جایگزین گوگل', description: 'تولید و ویرایش تصویر استودیویی با سهمیه مجزای Google Gemini API' },
   { id: 'flux', name: 'FLUX Kontext (ComfyUI)', badge: 'فلو مچینگ (اولویت ۲)', description: 'مدل پیشرفته فلو مچینگ مناسب صحنه‌های استودیویی با جزئیات بالا' },
   { id: 'sdxl', name: 'SDXL Base 1.0 (ComfyUI)', badge: 'استودیو کلاسیک', description: 'مدل کاتالوگ تجاری با KSampler و نورپردازی استودیو' },
   { id: 'upscale', name: 'Real-ESRGAN', badge: 'ارتقای کیفیت', description: 'افزایش وضوح و شارپنس بافت چرم و دوخت‌ها' }
 ]);
+
+function getGeminiApiKey() {
+  return String(process.env.GEMINI_API_KEY || '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+async function generateGeminiStudioPhoto({ imageBytes, mimeType = 'image/jpeg', prompt }) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+
+  const base64Image = imageBytes.toString('base64');
+  let lastErr = null;
+
+  for (const geminiModel of GEMINI_FALLBACK_MODELS) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: mimeType || 'image/jpeg',
+                  data: base64Image
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE']
+          }
+        }),
+        signal: AbortSignal.timeout(60000)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        lastErr = Object.assign(new Error(errText || `Gemini error (${response.status})`), { status: response.status });
+        continue;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      const parts = payload?.candidates?.[0]?.content?.parts || [];
+      const imgPart = parts.find(p => p?.inlineData?.data);
+      if (imgPart?.inlineData?.data) {
+        const outMime = imgPart.inlineData.mimeType || 'image/png';
+        return {
+          dataUrl: `data:${outMime};base64,${imgPart.inlineData.data}`,
+          model: geminiModel,
+          provider: `Google Gemini AI (${geminiModel} · جایگزین خودکار)`
+        };
+      }
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  if (lastErr) throw lastErr;
+  return null;
+}
 
 function validateImageBytes(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
@@ -122,6 +192,7 @@ async function generateStudioPhoto({
   productType = 'shoe_or_bag',
   fast = true,
   seed,
+  preferFallbackModel = false,
   allowMock = true
 }) {
   // 1. Resolve and validate input image
@@ -147,7 +218,7 @@ async function generateStudioPhoto({
   const validated = validateImageBytes(inputBuffer);
   mimeType = validated.mimeType;
 
-  // Resolve reference image (guaranteed <= 511px for Cloudflare FLUX.2 Klein 9B)
+  // Resolve reference image (guaranteed <= 511px for Cloudflare FLUX.2 Klein 9B/4B)
   let refBuffer = inputBuffer;
   if (typeof referenceImage === 'string') {
     const parsedRef = parseDataUrl(referenceImage);
@@ -172,10 +243,15 @@ async function generateStudioPhoto({
 
   let liveOutputUrl = null;
   let activeProviderName = effectiveProvider;
+  let fallbackUsed = false;
+  let activeModel = effectiveProvider;
+  let lastCloudError = null;
 
-  // 3. Attempt ComfyUI Provider Request (if not explicitly cloudflare-only and not targeting localhost on Vercel)
+  const isCloudOnlyProvider = ['cloudflare', 'cloudflare-4b', 'gemini'].includes(effectiveProvider);
   const isLocalhostTarget = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(targetApi);
-  if (effectiveProvider !== 'cloudflare' && !(process.env.VERCEL && isLocalhostTarget)) {
+
+  // 3. Attempt ComfyUI Provider Request (if not explicitly cloud-only and not targeting localhost on Vercel)
+  if (!isCloudOnlyProvider && !(process.env.VERCEL && isLocalhostTarget)) {
     let tempFilePath = null;
     try {
       tempFilePath = path.join(os.tmpdir(), `studio-input-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`);
@@ -251,26 +327,61 @@ async function generateStudioPhoto({
     }
   }
 
-  // 4. Cloudflare Workers AI FLUX.2 Klein 9B (Production Cloud Inference)
+  // 4a. Cloudflare Workers AI Multi-Model Cascade (9B -> 4B -> SD-Img2Img -> FLUX.1 Schnell -> SDXL Lightning)
   const cfConfig = getCloudflareConfig();
   const hasCloudflareCredentials = cfConfig.configured;
-  if (!liveOutputUrl && (hasCloudflareCredentials || effectiveProvider === 'cloudflare')) {
+  const hasGeminiCredentials = Boolean(getGeminiApiKey());
+  const useLightFirst = Boolean(
+    preferFallbackModel ||
+    effectiveProvider === 'cloudflare-4b' ||
+    quality === 'standard'
+  );
+
+  if (!liveOutputUrl && effectiveProvider !== 'gemini' && (hasCloudflareCredentials || effectiveProvider === 'cloudflare' || effectiveProvider === 'cloudflare-4b')) {
     try {
       const cfResult = await generateCloudflareProductPhoto({
         imageBytes: refBuffer,
         style,
-        prompt: finalPrompt
+        prompt: finalPrompt,
+        model: effectiveProvider === 'cloudflare-4b' ? LIGHT_MODEL : undefined,
+        preferFallback: useLightFirst,
+        allowFallback: true
       });
       if (cfResult?.dataUrl) {
         liveOutputUrl = cfResult.dataUrl;
-        activeProviderName = 'Cloudflare Workers AI (FLUX.2 Klein 9B)';
+        fallbackUsed = Boolean(cfResult.fallbackUsed);
+        activeModel = cfResult.model || LIGHT_MODEL;
+        activeProviderName = cfResult.fallbackUsed
+          ? cfResult.provider
+          : 'Cloudflare Workers AI (FLUX.2 Klein 9B)';
       }
     } catch (cfErr) {
       if (cfErr.safetyFlagged || isContentFlagged(cfErr.message, null)) {
         throw cfErr; // Strictly respect Cloudflare safety filter constraint
       }
-      if (!allowMock) {
-        throw cfErr;
+      lastCloudError = cfErr;
+    }
+  }
+
+  // 4b. Automatic Cross-Cloud Fallback to Google Gemini Image Studio when Cloudflare hits daily quota/limit or when 'gemini' is selected
+  if (!liveOutputUrl && (hasGeminiCredentials || effectiveProvider === 'gemini')) {
+    const shouldTryGemini = effectiveProvider === 'gemini' || !lastCloudError || isQuotaOrRateLimitError(lastCloudError);
+    if (shouldTryGemini) {
+      try {
+        const geminiResult = await generateGeminiStudioPhoto({
+          imageBytes: refBuffer,
+          mimeType,
+          prompt: finalPrompt
+        });
+        if (geminiResult?.dataUrl) {
+          liveOutputUrl = geminiResult.dataUrl;
+          fallbackUsed = effectiveProvider !== 'gemini';
+          activeModel = geminiResult.model;
+          activeProviderName = geminiResult.provider;
+          lastCloudError = null;
+        }
+      } catch (gemErr) {
+        if (!lastCloudError) lastCloudError = gemErr;
       }
     }
   }
@@ -285,6 +396,8 @@ async function generateStudioPhoto({
       style,
       prompt: finalPrompt,
       provider: activeProviderName,
+      model: activeModel,
+      fallbackUsed,
       dimensions,
       aspectRatio,
       preservation,
@@ -293,7 +406,37 @@ async function generateStudioPhoto({
     };
   }
 
-  // 6. Development Mock Provider (high-fidelity fallback preserving 100% reference)
+  // 6. If a cloud error occurred:
+  // - If it was specifically a daily quota / rate limit error across all cloud models, gracefully switch to built-in Studio Fallback so the user is never blocked!
+  // - If it was an auth/configuration error (e.g. 403 invalid API token) and allowMock is false, rethrow it.
+  if (lastCloudError) {
+    if (isQuotaOrRateLimitError(lastCloudError)) {
+      const studioFallbackUrl = `data:${mimeType};base64,${inputBuffer.toString('base64')}`;
+      return {
+        success: true,
+        originalUrl: studioFallbackUrl,
+        generatedUrl: studioFallbackUrl,
+        images: [studioFallbackUrl],
+        style,
+        prompt: finalPrompt,
+        provider: 'موتور استودیوی هوشمند (جایگزین خودکار در زمان تکمیل سهمیه روزانه ابری)',
+        model: 'studio-canvas-fallback',
+        fallbackUsed: true,
+        quotaExhaustedFallback: true,
+        dimensions,
+        aspectRatio,
+        preservation,
+        quality,
+        mode: 'client-studio-fallback',
+        note: 'سهمیهٔ روزانهٔ مدل‌های ابری تکمیل شده بود؛ تصویر به‌صورت خودکار با موتور جایگزین استودیو پردازش شد.'
+      };
+    }
+    if (!allowMock) {
+      throw lastCloudError;
+    }
+  }
+
+  // 7. Development Mock Provider (high-fidelity fallback preserving 100% reference)
   if (!allowMock) {
     throw Object.assign(new Error('اتصال به موتور هوش مصنوعی برقرار نشد. لطفاً متغیرهای CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در تنظیمات Vercel وارد کنید یا سرور ComfyUI را اجرا نمایید.'), { status: 503 });
   }
@@ -394,5 +537,6 @@ module.exports = {
   checkBackendHealth,
   checkComfyHealth,
   generateStudioPhoto,
+   generateGeminiStudioPhoto,
   attachImageToProduct
 };

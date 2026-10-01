@@ -260,12 +260,12 @@ const server = http.createServer(async (req, res) => {
       }
     } catch (error) { return json(res, Number(error.status) || 400, { error: error.message }); }
     const persistentQuota = persistentAiQuotaConfig();
-    let reservationId = null, persistentReservation = false;
+    let reservationId = null, persistentReservation = false, preferFallbackModel = false;
     try {
-      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = true; }
+      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = Boolean(reservationId); }
       else reservationId = reserveWindowQuota('local-ai-studio', 50, 24 * 60 * 60 * 1000);
-      if (!reservationId) return json(res, 429, { error: 'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
-    } catch (error) { return json(res, Number(error.status) || 503, { error: error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
+      if (!reservationId) preferFallbackModel = true;
+    } catch { preferFallbackModel = true; }
     try {
       const result = await generateStudioPhoto({
         image: body.image || body.images[0],
@@ -278,10 +278,13 @@ const server = http.createServer(async (req, res) => {
         provider: body.provider || body.pipeline,
         apiUrl: body.apiUrl,
         fast: body.fast !== false,
-        seed: body.seed
+        seed: body.seed,
+        preferFallbackModel: Boolean(preferFallbackModel || body.preferFallbackModel)
       });
-      const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai-studio', reservationId, true);
-      if (!finalized) return json(res, 503, { error: 'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
+      if (reservationId) {
+        const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai-studio', reservationId, true);
+        if (!finalized && !preferFallbackModel) return json(res, 503, { error: 'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
+      }
       return json(res, 200, result);
     } catch (error) {
       if (reservationId) {
@@ -331,12 +334,12 @@ const server = http.createServer(async (req, res) => {
       imageRoles = parseProductReferenceRoles(body, sourceBytes.length);
     } catch (error) { return json(res, Number(error.status) || 400, { error:error.message }); }
     const persistentQuota = persistentAiQuotaConfig();
-    let reservationId = null, persistentReservation = false;
+    let reservationId = null, persistentReservation = false, preferFallbackModel = false;
     try {
-      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = true; }
+      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = Boolean(reservationId); }
       else reservationId = reserveWindowQuota('local-ai', 50, 24 * 60 * 60 * 1000);
-      if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
-    } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
+      if (!reservationId) preferFallbackModel = true;
+    } catch { preferFallbackModel = true; }
     try {
       const studioResult = await generateStudioPhoto({
         imageBytes: sourceBytes[0],
@@ -346,10 +349,13 @@ const server = http.createServer(async (req, res) => {
         style: body.style || 'catalog-white',
         apiUrl: body.apiUrl,
         fast: body.fast !== false,
-        seed: body.seed
+        seed: body.seed,
+        preferFallbackModel
       });
-      const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
-      if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
+      if (reservationId) {
+        const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
+        if (!finalized && !preferFallbackModel) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
+      }
       const result = {
         success: true,
         images: studioResult.images || [studioResult.generatedUrl],

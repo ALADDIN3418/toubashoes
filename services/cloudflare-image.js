@@ -1,14 +1,54 @@
 'use strict';
 
 const MODEL = '@cf/black-forest-labs/flux-2-klein-9b';
+const LIGHT_MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
 const DEFAULT_MODEL = MODEL;
+const FALLBACK_MODELS = Object.freeze([
+  '@cf/black-forest-labs/flux-2-klein-9b',
+  '@cf/black-forest-labs/flux-2-klein-4b',
+  '@cf/runwayml/stable-diffusion-v1-5-img2img',
+  '@cf/black-forest-labs/flux-1-schnell',
+  '@cf/bytedance/stable-diffusion-xl-lightning'
+]);
+
 // Keep base64 JSON responses below Vercel Functions' response-body ceiling.
 const MAX_OUTPUT_BYTES = 3 * 1024 * 1024;
+const MODEL_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes cooldown for rate-limited models
 
 const REFERENCE_ROLES = Object.freeze(['front three-quarter view', 'outer side profile', 'rear and heel view']);
 const REFERENCE_VIEW_IDS = Object.freeze(['front', 'side', 'heel']);
 const VIEW_LABELS = Object.freeze({ front:REFERENCE_ROLES[0], side:REFERENCE_ROLES[1], heel:REFERENCE_ROLES[2] });
 const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+const modelCooldowns = new Map();
+let lastFetchRef = null;
+
+function syncFetchTracker() {
+  if (lastFetchRef !== global.fetch) {
+    modelCooldowns.clear();
+    lastFetchRef = global.fetch;
+  }
+}
+
+function markModelCooldown(modelId, durationMs = MODEL_COOLDOWN_MS) {
+  syncFetchTracker();
+  modelCooldowns.set(modelId, Date.now() + durationMs);
+}
+
+function isModelOnCooldown(modelId) {
+  syncFetchTracker();
+  const until = modelCooldowns.get(modelId);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    modelCooldowns.delete(modelId);
+    return false;
+  }
+  return true;
+}
+
+function clearModelCooldowns() {
+  modelCooldowns.clear();
+}
 
 function promptFor(style, imageRoles = REFERENCE_VIEW_IDS) {
   // Support both (style, imageRoles) and legacy (style, productHint, imageRoles) signatures,
@@ -51,6 +91,18 @@ function isContentFlagged(text, payload) {
   return /flagged/i.test(combined);
 }
 
+function isQuotaOrRateLimitError(errorOrMessage, payload = null, status = 0) {
+  const errObj = typeof errorOrMessage === 'object' && errorOrMessage !== null ? errorOrMessage : null;
+  if (errObj?.safetyFlagged || isContentFlagged(errObj?.message || errorOrMessage, payload)) return false;
+  const code = payload?.errors?.[0]?.code ?? payload?.internalCode ?? payload?.code ?? errObj?.code;
+  const httpStatus = Number(status || errObj?.status || 0);
+  if (httpStatus === 429 || httpStatus === 503 || httpStatus === 504) return true;
+  if ([3036, 3040, 4006, 429].includes(Number(code))) return true;
+  const rawText = typeof errorOrMessage === 'string' ? errorOrMessage : (errObj?.message || '');
+  const combined = `${rawText} ${JSON.stringify(payload || '')}`;
+  return /quota|rate\s*limit|daily|neuron|allocation|exceeded|too\s*many\s*requests|capacity|overloaded|temporarily\s*unavailable|model\s*is\s*busy|out\s*of\s*capacity|سقف.*پر شده|محدودیت روزانه|سهمیه/i.test(combined);
+}
+
 function formatSafetyFlaggedError(rawMessage, payload, headers) {
   const cloudflareId = extractCloudflareId(rawMessage, payload, headers);
   const idText = cloudflareId ? ` (شناسهٔ Cloudflare: ${cloudflareId})` : '';
@@ -88,33 +140,75 @@ function buildEndpoint(accountId, model = MODEL) {
   return `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${cleanModel}`;
 }
 
-async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio', prompt }) {
-  const { accountId, apiToken, model } = getCloudflareConfig();
-  if (!accountId || !apiToken) throw Object.assign(new Error('برای فعال‌سازی رایگان روزانه، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در فایل محلی .env تنظیم کنید.'), { status:503 });
+function buildCandidateModelChain({ primaryModel = MODEL, preferFallback = false, allowFallback = true }) {
+  const startModel = preferFallback ? LIGHT_MODEL : (primaryModel || MODEL);
+  if (!allowFallback) return [startModel];
 
-  const references = Array.isArray(imageBytes) ? imageBytes : [imageBytes];
-  if (references.length < 1 || references.length > 3 || references.some(image => !image?.length)) {
-    throw Object.assign(new Error('برای ساخت تصویر، یک تصویر واضح از محصول لازم است.'), { status:400 });
+  const unique = [];
+  for (const m of [startModel, ...FALLBACK_MODELS]) {
+    if (m && !unique.includes(m)) unique.push(m);
   }
-  const roles = Array.isArray(imageRoles) ? imageRoles : (references.length === 1 ? ['front'] : REFERENCE_VIEW_IDS.slice(0, references.length));
 
-  const form = new FormData();
-  form.append('prompt', prompt || promptFor(style, roles));
-  references.forEach((image, index) => {
-    form.append(`input_image_${index}`, new Blob([image], { type:'image/jpeg' }), `shoe-view-${index + 1}.jpg`);
-  });
-  form.append('width', '1024');
-  form.append('height', '1024');
+  // Place models not currently on cooldown first so we don't waste calls/neurons on exhausted models
+  const active = unique.filter(m => !isModelOnCooldown(m));
+  const cooled = unique.filter(m => isModelOnCooldown(m));
+  return [...active, ...cooled];
+}
+
+function buildModelRequest(candidateModel, finalPrompt, references) {
+  if (candidateModel.includes('flux-2-klein')) {
+    const form = new FormData();
+    form.append('prompt', finalPrompt);
+    references.forEach((image, index) => {
+      form.append(`input_image_${index}`, new Blob([image], { type:'image/jpeg' }), `shoe-view-${index + 1}.jpg`);
+    });
+    form.append('width', '1024');
+    form.append('height', '1024');
+    return {
+      headers: {},
+      body: form
+    };
+  }
+
+  if (candidateModel.includes('img2img')) {
+    return {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: finalPrompt,
+        image: Array.from(references[0]),
+        strength: 0.35,
+        guidance: 7.5,
+        num_steps: 20
+      })
+    };
+  }
+
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: finalPrompt,
+      num_steps: 4
+    })
+  };
+}
+
+async function runSingleCloudflareModel({ accountId, apiToken, candidateModel, finalPrompt, references }) {
+  const endpoint = buildEndpoint(accountId, candidateModel);
+  const reqConfig = buildModelRequest(candidateModel, finalPrompt, references);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
+
   try {
-    const response = await fetch(buildEndpoint(accountId, model), {
-      method:'POST',
-      headers:{ 'Authorization':`Bearer ${apiToken}` },
-      body:form,
-      signal:controller.signal
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiToken}`,
+        ...reqConfig.headers
+      },
+      body: reqConfig.body,
+      signal: controller.signal
     });
-    const contentType = String(response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    const contentType = String(response.headers?.get ? response.headers.get('content-type') : '').split(';')[0].toLowerCase();
     let bytes;
     if (contentType === 'application/json' || contentType.endsWith('+json')) {
       const payload = await response.json().catch(() => ({}));
@@ -124,7 +218,12 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
           throw formatSafetyFlaggedError(rawMessage, payload, response.headers);
         }
         const message = rawMessage || `Cloudflare Workers AI پاسخ نداد (${response.status}).`;
-        throw Object.assign(new Error(message), { status:response.status === 429 ? 429 : response.status === 403 ? 403 : 502 });
+        const isQuota = isQuotaOrRateLimitError(message, payload, response.status);
+        throw Object.assign(new Error(message), {
+          status: response.status === 429 || isQuota ? 429 : response.status === 403 ? 403 : 502,
+          isQuotaLimit: isQuota,
+          model: candidateModel
+        });
       }
       const encoded = payload.result?.image || payload.image;
       if (typeof encoded !== 'string') throw Object.assign(new Error('مدل Cloudflare خروجی تصویر برنگرداند.'), { status:502 });
@@ -136,18 +235,111 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
       if (isContentFlagged(detail, null)) {
         throw formatSafetyFlaggedError(detail, null, response.headers);
       }
-      throw Object.assign(new Error(detail || `Cloudflare Workers AI پاسخ نداد (${response.status}).`), { status:response.status === 429 ? 429 : 502 });
+      const isQuota = isQuotaOrRateLimitError(detail, null, response.status);
+      throw Object.assign(new Error(detail || `Cloudflare Workers AI پاسخ نداد (${response.status}).`), {
+        status: response.status === 429 || isQuota ? 429 : 502,
+        isQuotaLimit: isQuota,
+        model: candidateModel
+      });
     }
-    if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) throw Object.assign(new Error('حجم خروجی مدل از سقف امن پاسخ سرور (۳ مگابایت) بیشتر است؛ تولید را دوباره با خروجی استاندارد امتحان کنید.'), { status:502 });
-    return { dataUrl:`data:image/png;base64,${bytes.toString('base64')}`, model, provider:'Cloudflare Workers AI' };
+    if (!bytes.length || bytes.length > MAX_OUTPUT_BYTES) {
+      throw Object.assign(new Error('حجم خروجی مدل از سقف امن پاسخ سرور (۳ مگابایت) بیشتر است؛ تولید را دوباره با خروجی استاندارد امتحان کنید.'), {
+        status: 502,
+        nonRetryableSizeError: true
+      });
+    }
+    return {
+      dataUrl: `data:image/png;base64,${bytes.toString('base64')}`,
+      model: candidateModel
+    };
   } catch (error) {
-    if (error.name === 'AbortError') throw Object.assign(new Error('زمان پاسخ مدل Cloudflare تمام شد؛ دوباره تلاش کنید.'), { status:504 });
+    if (error.name === 'AbortError') {
+      throw Object.assign(new Error('زمان پاسخ مدل Cloudflare تمام شد؛ دوباره تلاش کنید.'), {
+        status: 504,
+        isQuotaLimit: true,
+        model: candidateModel
+      });
+    }
     if (error.safetyFlagged) throw error;
     if (isContentFlagged(error.message, null)) {
       throw formatSafetyFlaggedError(error.message, null, null);
     }
     throw error;
-  } finally { clearTimeout(timeout); }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function generateProductPhoto({
+  imageBytes,
+  imageRoles,
+  style = 'warm-studio',
+  prompt,
+  model: requestedModel,
+  preferFallback = false,
+  allowFallback = true
+}) {
+  const { accountId, apiToken, model: envModel } = getCloudflareConfig();
+  if (!accountId || !apiToken) throw Object.assign(new Error('برای فعال‌سازی رایگان روزانه، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در فایل محلی .env تنظیم کنید.'), { status:503 });
+
+  const references = Array.isArray(imageBytes) ? imageBytes : [imageBytes];
+  if (references.length < 1 || references.length > 3 || references.some(image => !image?.length)) {
+    throw Object.assign(new Error('برای ساخت تصویر، یک تصویر واضح از محصول لازم است.'), { status:400 });
+  }
+  const roles = Array.isArray(imageRoles) ? imageRoles : (references.length === 1 ? ['front'] : REFERENCE_VIEW_IDS.slice(0, references.length));
+  const finalPrompt = prompt || promptFor(style, roles);
+  const primaryModel = sanitizeEnv(requestedModel) || envModel || DEFAULT_MODEL;
+
+  // Validate endpoint format up front for the primary model
+  buildEndpoint(accountId, primaryModel);
+
+  const candidates = buildCandidateModelChain({
+    primaryModel,
+    preferFallback,
+    allowFallback
+  });
+
+  const attemptedModels = [];
+  let lastError = null;
+
+  for (let index = 0; index < candidates.length; index++) {
+    const candidateModel = candidates[index];
+    attemptedModels.push(candidateModel);
+    try {
+      const res = await runSingleCloudflareModel({
+        accountId,
+        apiToken,
+        candidateModel,
+        finalPrompt,
+        references
+      });
+      const usedFallback = candidateModel !== primaryModel || index > 0 || Boolean(preferFallback);
+      return {
+        dataUrl: res.dataUrl,
+        model: res.model,
+        fallbackUsed: usedFallback,
+        attemptedModels,
+        provider: usedFallback
+          ? `Cloudflare Workers AI (${res.model.split('/').pop()} · جایگزین خودکار)`
+          : 'Cloudflare Workers AI'
+      };
+    } catch (error) {
+      lastError = error;
+      if (error.safetyFlagged || error.nonRetryableSizeError) {
+        throw error;
+      }
+      const retryable = isQuotaOrRateLimitError(error, null, error.status);
+      if (retryable) {
+        markModelCooldown(candidateModel);
+        if (allowFallback && index < candidates.length - 1) {
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+
+  throw lastError || Object.assign(new Error('خطا در تولید تصویر با مدل‌های Cloudflare.'), { status: 502 });
 }
 
 module.exports = {
@@ -157,9 +349,15 @@ module.exports = {
   buildEndpoint,
   extractCloudflareId,
   isContentFlagged,
+  isQuotaOrRateLimitError,
   formatSafetyFlaggedError,
+  markModelCooldown,
+  isModelOnCooldown,
+  clearModelCooldowns,
   MODEL,
+  LIGHT_MODEL,
   DEFAULT_MODEL,
+  FALLBACK_MODELS,
   REFERENCE_ROLES,
   REFERENCE_VIEW_IDS
 };

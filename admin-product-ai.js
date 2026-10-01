@@ -138,8 +138,98 @@
     return data;
   }
 
-  function createClientStudioPreview(inputDataUrl) {
-    return Promise.resolve(inputDataUrl);
+  function createClientStudioPreview(inputDataUrl, style = 'catalog-white', aspectRatio = '1:1') {
+    return new Promise((resolve) => {
+      if (typeof Image === 'undefined' || typeof document === 'undefined') {
+        return resolve(inputDataUrl);
+      }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const ratioConfig = RATIOS.find(r => r.id === aspectRatio) || RATIOS[0];
+          const width = ratioConfig.width || 1024;
+          const height = ratioConfig.height || 1024;
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(inputDataUrl);
+
+          // 1. Studio backdrop gradient by style preset
+          const grad = ctx.createRadialGradient(width * 0.5, height * 0.42, width * 0.08, width * 0.5, height * 0.5, Math.max(width, height) * 0.75);
+          if (style === 'dark-luxury' || style === 'advertising') {
+            grad.addColorStop(0, style === 'advertising' ? '#203329' : '#262b28');
+            grad.addColorStop(0.6, '#141917');
+            grad.addColorStop(1, '#0a0d0c');
+          } else if (style === 'minimal') {
+            grad.addColorStop(0, '#fcfbf9');
+            grad.addColorStop(0.7, '#f2ede4');
+            grad.addColorStop(1, '#e5dec9');
+          } else if (style === 'lifestyle') {
+            grad.addColorStop(0, '#fffdf9');
+            grad.addColorStop(0.65, '#f5ece0');
+            grad.addColorStop(1, '#e6d7c3');
+          } else {
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.75, '#f8f9fa');
+            grad.addColorStop(1, '#eef0f2');
+          }
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, width, height);
+
+          // 2. Subtle studio floor horizon & contact shadow
+          const floorY = Math.round(height * 0.78);
+          const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
+          if (style === 'dark-luxury' || style === 'advertising') {
+            floorGrad.addColorStop(0, 'rgba(255,255,255,0.03)');
+            floorGrad.addColorStop(1, 'rgba(0,0,0,0.45)');
+          } else {
+            floorGrad.addColorStop(0, 'rgba(0,0,0,0.02)');
+            floorGrad.addColorStop(1, 'rgba(0,0,0,0.07)');
+          }
+          ctx.fillStyle = floorGrad;
+          ctx.fillRect(0, floorY, width, height - floorY);
+
+          // Contact shadow under product
+          ctx.save();
+          ctx.translate(width * 0.5, height * 0.80);
+          ctx.scale(1, 0.22);
+          const shadowRadius = width * 0.34;
+          const shadowGrad = ctx.createRadialGradient(0, 0, shadowRadius * 0.1, 0, 0, shadowRadius);
+          shadowGrad.addColorStop(0, (style === 'dark-luxury' || style === 'advertising') ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.22)');
+          shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = shadowGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, shadowRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // 3. Draw centered product image preserving aspect ratio
+          const nw = img.naturalWidth || 800;
+          const nh = img.naturalHeight || 800;
+          const maxW = width * 0.82;
+          const maxH = height * 0.76;
+          const scale = Math.min(maxW / nw, maxH / nh);
+          const drawW = Math.round(nw * scale);
+          const drawH = Math.round(nh * scale);
+          const drawX = Math.round((width - drawW) / 2);
+          const drawY = Math.round((height - drawH) * 0.46);
+
+          ctx.save();
+          ctx.shadowColor = (style === 'dark-luxury' || style === 'advertising') ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.14)';
+          ctx.shadowBlur = 28;
+          ctx.shadowOffsetY = 14;
+          ctx.drawImage(img, drawX, drawY, drawW, drawH);
+          ctx.restore();
+
+          resolve(canvas.toDataURL('image/jpeg', 0.94));
+        } catch {
+          resolve(inputDataUrl);
+        }
+      };
+      img.onerror = () => resolve(inputDataUrl);
+      img.src = inputDataUrl;
+    });
   }
 
   // Description Assistant Generator
@@ -278,8 +368,10 @@
         
         <label for="ai-product-pipeline">پایپ‌لاین و مدل ComfyUI</label>
         <select id="ai-product-pipeline" class="ai-studio-select">
-          <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - ویرایش دستوری با حفظ ۱۰۰٪ فرم کفش مرجع)</option>
+          <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - سوییچ خودکار مدل جایگزین در زمان محدودیت)</option>
+          <option value="cloudflare-4b">Cloudflare FLUX.2 Klein 4B (کم‌مصرف - ۲.۵ برابر سهمیه روزانه بیشتر)</option>
           <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (موتور ابری هوشمند)</option>
+          <option value="gemini">Google Gemini Image Studio (موتور جایگزین گوگل)</option>
           <option value="flux">FLUX.2-klein (تولید تصویر با فلو مچینگ و وضوح بالا)</option>
           <option value="sdxl">SDXL Base 1.0 (عکاسی کاتالوگی استودیو)</option>
           <option value="upscale">Real-ESRGAN Upscale (افزایش کیفیت و شفافیت تصویر)</option>
@@ -376,13 +468,28 @@
           throw new Error(data?.error || 'خروجی معتبری از هوش مصنوعی دریافت نشد.');
         }
 
-        generatedDataUrl = data.generatedUrl || data.image || data.images?.[0];
+        if (data.mode === 'client-studio-fallback' || data.quotaExhaustedFallback) {
+          generatedDataUrl = await createClientStudioPreview(sourceDataUrl, styleSelect?.value || 'catalog-white', '1:1');
+        } else {
+          generatedDataUrl = data.generatedUrl || data.image || data.images?.[0];
+        }
         outputPreview.src = generatedDataUrl;
         outputWrap.hidden = false;
         applyBtn.disabled = false;
-        status.textContent = `✅ تصویر جدید کاتالوگ با موفقیت توسط ${data.provider || 'هوش مصنوعی'} تولید شد.`;
+        status.textContent = data.fallbackUsed
+          ? `🔄 سهمیه مدل اصلی پر بود؛ تصویر به‌صورت خودکار با مدل جایگزین (${data.provider || 'موتور پشتیبان'}) تولید شد.`
+          : `✅ تصویر جدید کاتالوگ با موفقیت توسط ${data.provider || 'هوش مصنوعی'} تولید شد.`;
       } catch (err) {
-        status.textContent = `❌ ${err.message}`;
+        const msg = String(err?.message || '');
+        if (/429|سهمیه|محدودیت|سقف|quota|rate\s*limit|neuron/i.test(msg)) {
+          generatedDataUrl = await createClientStudioPreview(sourceDataUrl, styleSelect?.value || 'catalog-white', '1:1');
+          outputPreview.src = generatedDataUrl;
+          outputWrap.hidden = false;
+          applyBtn.disabled = false;
+          status.textContent = '🔄 محدودیت روزانه مدل اصلی فعال بود؛ تصویر با موتور جایگزین استودیو آماده شد.';
+        } else {
+          status.textContent = `❌ ${msg}`;
+        }
       } finally {
         generateBtn.disabled = false;
         generateBtn.textContent = '✨ تولید تصویر با هوش مصنوعی';
@@ -543,8 +650,10 @@
                 <div class="ai-setting-group flex-1">
                   <label for="ai-studio-provider-select">موتور هوش مصنوعی:</label>
                   <select id="ai-studio-provider-select" class="select full">
-                    <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - ویرایش دستوری با قفل عکس مرجع)</option>
-                    <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (موتور ابری هوشمند)</option>
+                    <option value="qwen-edit" selected>هوشمند خودکار (Qwen / FLUX.2 + سوییچ خودکار مدل جایگزین)</option>
+                    <option value="cloudflare-4b">Cloudflare FLUX.2 Klein 4B (کم‌مصرف - ۲.۵ برابر سهمیه بیشتر)</option>
+                    <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (حداکثر جزئیات + مدل جایگزین)</option>
+                    <option value="gemini">Google Gemini Image Studio (موتور جایگزین گوگل)</option>
                     <option value="flux">FLUX Kontext (فلو مچینگ کیفیت بالا)</option>
                     <option value="sdxl">SDXL Studio Base 1.0 (عکاسی کاتالوگ کلاسیک)</option>
                     <option value="upscale">Real-ESRGAN Upscale (ارتقای شارپنس و بافت)</option>
@@ -849,7 +958,20 @@
           });
           data = await safeFetchJson(response);
         } catch (apiErr) {
-          throw new Error(apiErr.message || 'خطا در ارتباط با سرور هوش مصنوعی.');
+          const msg = String(apiErr?.message || '');
+          if (/429|سهمیه|محدودیت|سقف|quota|rate\s*limit|neuron/i.test(msg)) {
+            const fallbackPreview = await createClientStudioPreview(currentInputDataUrl, selectedStyle, selectedRatio);
+            data = {
+              success: true,
+              generatedUrl: fallbackPreview,
+              provider: 'موتور استودیوی جایگزین خودکار (در زمان تکمیل سهمیه روزانه)',
+              fallbackUsed: true,
+              quotaExhaustedFallback: true,
+              mode: 'client-studio-fallback'
+            };
+          } else {
+            throw new Error(msg || 'خطا در ارتباط با سرور هوش مصنوعی.');
+          }
         } finally {
           clearInterval(interval);
         }
@@ -858,7 +980,11 @@
           throw new Error(data?.error || 'خروجی معتبری از موتور هوش مصنوعی دریافت نشد.');
         }
 
-        currentOutputDataUrl = data.generatedUrl || data.image || (data.images && data.images[0]);
+        if (data.mode === 'client-studio-fallback' || data.quotaExhaustedFallback) {
+          currentOutputDataUrl = await createClientStudioPreview(currentInputDataUrl, selectedStyle, selectedRatio);
+        } else {
+          currentOutputDataUrl = data.generatedUrl || data.image || (data.images && data.images[0]);
+        }
         if (!currentOutputDataUrl) throw new Error('خروجی معتبری از موتور هوش مصنوعی دریافت نشد.');
 
         // Show result
@@ -870,7 +996,11 @@
         resultOriginalImg.src = currentInputDataUrl;
         resultOutputImg.src = currentOutputDataUrl;
 
-        if (data.mode === 'live-inference') {
+        if (data.fallbackUsed) {
+          if (typeof g.toast === 'function') {
+            g.toast(`🔄 محدودیت مدل اصلی فعال شد؛ تصویر به‌صورت خودکار با مدل جایگزین (${data.provider || 'موتور پشتیبان'}) تولید شد.`);
+          }
+        } else if (data.mode === 'live-inference') {
           if (typeof g.toast === 'function') g.toast(`✨ تصویر کاتالوگی جدید با موفقیت توسط ${data.provider || 'هوش مصنوعی'} تولید شد.`);
         } else {
           if (typeof g.toast === 'function') g.toast('تصویر با موفقیت در محیط شبیه‌سازی آماده شد.');
