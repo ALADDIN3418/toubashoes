@@ -354,39 +354,6 @@ function home(){
         </div>
       </div>
     </div>
-
-    <!-- Bottom Floating Brand & Collection Capsule Bar -->
-    <div class="container lux-hero-capsule-wrap">
-      <div class="lux-hero-capsule-bar" dir="ltr">
-        <span class="lux-capsule-top-glow" aria-hidden="true"></span>
-
-        <a href="/shop" class="lux-capsule-collection">
-          <div class="lux-collection-avatar">
-            <img src="/product-shoes.jpg" alt="جدیدترین کالکشن کفش طوبی" loading="lazy">
-          </div>
-          <div class="lux-collection-meta" dir="rtl">
-            <strong>جدیدترین کالکشن</strong>
-            <span>بهار / تابستان ۱۴۰۵</span>
-          </div>
-          <span class="lux-diamond-badge" aria-hidden="true"><i>‹</i></span>
-        </a>
-
-        <div class="lux-capsule-divider" aria-hidden="true"></div>
-
-        <div class="lux-capsule-brands">
-          <a href="/shop" class="lux-brand-item lux-brand-nike" aria-label="Nike">
-            <svg viewBox="0 0 72 30" class="lux-brand-svg"><text x="14" y="16" font-family="Arial Black, Impact, sans-serif" font-style="italic" font-weight="900" font-size="13" fill="currentColor">NIKE</text><path d="M16 14c-4.5 3.8-8.5 8-4.5 10.6 2.8 1.8 8.4.3 15-2.4L58 9.5c-15 4.2-30 8.2-36.5 7.7-3.2-.2-4.8-1.5-4.5-3.2z" fill="currentColor"/></svg>
-          </a>
-          <a href="/shop" class="lux-brand-item lux-brand-adidas" aria-label="Adidas">
-            <svg viewBox="0 0 72 34" class="lux-brand-svg"><polygon points="23,17 28,17 24,10 19,10" fill="currentColor"/><polygon points="31,17 36,17 30,6 25,6" fill="currentColor"/><polygon points="39,17 44,17 36,1 31,1" fill="currentColor"/><text x="11" y="29" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="13.5" letter-spacing="0.5" fill="currentColor">adidas</text></svg>
-          </a>
-          <a href="/shop" class="lux-brand-item lux-brand-zara" aria-label="Zara">ZARA</a>
-          <a href="/shop" class="lux-brand-item lux-brand-aldo" aria-label="Aldo">ALDO</a>
-          <a href="/shop" class="lux-brand-item lux-brand-cat" aria-label="CAT">CAT<sup style="font-size:9px">®</sup></a>
-          <a href="/shop" class="lux-brand-item lux-brand-guess" aria-label="Guess">GUESS</a>
-        </div>
-      </div>
-    </div>
   </section>
 
   <section class="trust-section lux-cream-trust">
