@@ -5799,67 +5799,68 @@ body {
 }
 
 .lux-hero {
-  min-height: 670px;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(circle at 72% 40%, #173d2c 0%, #0b2218 52%, #05120c 100%);
+  min-height: 540px !important;
+  height: auto !important;
+  position: relative !important;
+  overflow: hidden !important;
+  background: #081c13 !important;
   color: #ffffff;
   isolation: isolate;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 36px 0 28px;
+  padding: 24px 0 18px !important;
 }
 
 .lux-hero-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  object-fit: cover;
-  object-position: right center;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+  object-fit: cover !important;
+  object-position: right center !important;
   filter: brightness(1.01) contrast(1.05);
 }
 
 .lux-hero-shade {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
   background:
-    linear-gradient(90deg, rgba(5, 19, 13, 0.92) 0%, rgba(7, 25, 17, 0.80) 36%, rgba(8, 28, 19, 0.22) 58%, rgba(8, 28, 19, 0.04) 100%),
-    linear-gradient(180deg, rgba(4, 15, 10, 0.30) 0%, rgba(4, 15, 10, 0) 30%, rgba(4, 15, 10, 0.58) 100%);
+    linear-gradient(90deg, rgba(5, 19, 13, 0.90) 0%, rgba(7, 25, 17, 0.72) 38%, rgba(8, 28, 19, 0.14) 58%, rgba(8, 28, 19, 0.02) 100%),
+    linear-gradient(180deg, rgba(4, 15, 10, 0.18) 0%, rgba(4, 15, 10, 0) 40%, rgba(4, 15, 10, 0.45) 100%) !important;
 }
 
 .lux-hero-glow {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
   pointer-events: none;
-  background: radial-gradient(40% 50% at 26% 42%, rgba(214, 177, 132, 0.10) 0%, rgba(16, 185, 129, 0.06) 45%, transparent 75%);
+  background: radial-gradient(40% 50% at 24% 48%, rgba(214, 177, 132, 0.10) 0%, rgba(16, 185, 129, 0.06) 45%, transparent 75%) !important;
 }
 
 .lux-hero-content {
-  position: relative;
-  z-index: 2;
+  position: relative !important;
+  z-index: 2 !important;
   height: auto !important;
-  min-height: 460px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end; /* In RTL, flex-end places the editorial block on the LEFT half */
-  padding-top: 24px;
-  padding-bottom: 18px;
+  min-height: 360px !important;
+  margin-top: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important; /* Places content & buttons in the empty LEFT side of the banner */
+  padding: 12px 0 10px !important;
 }
 
 .lux-editorial-box {
-  width: min(540px, 48%);
-  margin-right: auto;
-  margin-left: 0;
+  width: min(500px, 46%) !important;
+  margin-right: auto !important;
+  margin-left: 0 !important;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 18px 14px;
+  padding: 10px 8px !important;
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
@@ -6215,76 +6216,173 @@ body {
 }
 
 @media (max-width: 1024px) {
+  .lux-hero {
+    min-height: 440px !important;
+    padding: 16px 0 14px !important;
+  }
+  .lux-hero-content {
+    min-height: 290px !important;
+  }
   .lux-editorial-box {
-    width: min(480px, 54%);
+    width: 50% !important;
   }
   .lux-hero-capsule-bar {
-    flex-direction: column;
-    border-radius: 28px;
-    padding: 18px 20px;
-    gap: 14px;
-  }
-  .lux-capsule-divider {
-    width: 100%;
-    height: 1px;
+    min-height: 68px;
+    padding: 8px 20px 8px 14px;
+    gap: 12px;
   }
   .lux-collection-avatar {
-    width: 74px;
-    height: 74px;
-    margin: 0;
+    width: 72px;
+    height: 72px;
+    margin-top: -12px;
+    margin-bottom: -10px;
   }
 }
 
 @media (max-width: 860px) {
   .lux-hero {
-    padding: 0 0 22px;
+    min-height: 270px !important;
+    padding: 12px 0 10px !important;
   }
   .lux-hero-image {
-    position: relative;
-    height: 310px;
-    object-position: 78% center;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: right center !important;
   }
   .lux-hero-shade {
-    background: linear-gradient(180deg, rgba(5, 18, 12, 0.15) 0%, rgba(5, 18, 12, 0.72) 45%, rgba(5, 18, 12, 0.98) 100%);
+    background: linear-gradient(90deg, rgba(5, 19, 13, 0.90) 0%, rgba(6, 22, 15, 0.72) 45%, rgba(6, 22, 15, 0.12) 72%, rgba(6, 22, 15, 0) 100%) !important;
   }
   .lux-hero-content {
-    min-height: 0;
-    justify-content: center;
-    margin-top: -32px;
-    padding: 0 14px 16px;
+    min-height: 195px !important;
+    margin-top: 0 !important;
+    padding: 6px 10px 8px !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
   }
   .lux-editorial-box {
-    width: 100%;
-    margin: 0 auto;
+    width: 54% !important;
+    margin-right: auto !important;
+    margin-left: 0 !important;
+    align-items: center !important;
+    padding: 4px !important;
+  }
+  .lux-editorial-kicker {
+    font-size: 10.5px;
+    gap: 6px;
+    margin-bottom: 2px;
+  }
+  .lux-kicker-line {
+    width: 28px;
   }
   .lux-editorial-title {
-    font-size: 46px !important;
+    font-size: clamp(26px, 6.8vw, 38px) !important;
+    margin: 2px 0 4px !important;
   }
   .lux-editorial-subtitle {
-    font-size: 16.5px !important;
-    margin-bottom: 20px !important;
+    font-size: clamp(11px, 2.9vw, 14px) !important;
+    margin: 0 0 10px !important;
+    line-height: 1.4 !important;
   }
   .lux-editorial-features {
-    gap: 22px;
-    margin-bottom: 22px;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .lux-feat-item {
+    font-size: 10px;
+    gap: 4px;
+  }
+  .lux-feat-item svg {
+    width: 18px;
+    height: 18px;
+  }
+  .lux-editorial-actions {
+    gap: 6px;
   }
   .lux-pill-btn {
-    min-width: 145px;
-    height: 46px;
-    font-size: 14px !important;
+    min-width: 0 !important;
+    height: 34px !important;
+    padding: 0 12px !important;
+    font-size: 11px !important;
+    gap: 4px;
   }
+  .lux-pill-chevron {
+    font-size: 14px;
+  }
+  .lux-auth-mini {
+    display: none !important;
+  }
+  .lux-hero-capsule-wrap {
+    margin-top: 4px;
+  }
+  .lux-hero-capsule-bar {
+    flex-direction: row !important;
+    min-height: 50px;
+    border-radius: 999px;
+    padding: 6px 14px 6px 10px;
+    gap: 8px;
+  }
+  .lux-collection-avatar {
+    width: 48px;
+    height: 48px;
+    margin: -6px 0 -6px -4px;
+    border-width: 2px;
+  }
+  .lux-collection-meta strong {
+    font-size: 11px;
+  }
+  .lux-collection-meta span {
+    font-size: 9.5px;
+  }
+  .lux-diamond-badge {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+  }
+  .lux-diamond-badge i {
+    font-size: 12px;
+  }
+  .lux-capsule-divider {
+    width: 1px;
+    height: 28px;
+  }
+  .lux-capsule-brands {
+    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .lux-brand-svg {
+    height: 20px;
+  }
+  .lux-brand-zara { font-size: 14px; }
+  .lux-brand-aldo { font-size: 12px; }
+  .lux-brand-cat { font-size: 14px; }
+  .lux-brand-guess { font-size: 12px; }
   .lux-cream-trust-grid {
-    grid-template-columns: 1fr !important;
-    gap: 14px;
+    grid-template-columns: repeat(3, 1fr) !important;
+    padding: 14px 0 !important;
+    gap: 6px;
   }
   .lux-cream-trust-item {
-    border-left: 0 !important;
-    border-bottom: 1px solid rgba(145, 118, 90, 0.18);
-    padding-bottom: 12px !important;
+    border-left: 1px solid rgba(145, 118, 90, 0.22) !important;
+    border-bottom: 0 !important;
+    padding: 0 6px !important;
+    gap: 6px !important;
   }
   .lux-cream-trust-item:last-child {
-    border-bottom: 0;
-    padding-bottom: 0 !important;
+    border-left: 0 !important;
+  }
+  .lux-cream-trust-item > svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  .lux-cream-trust-item b {
+    font-size: 11.5px !important;
+  }
+  .lux-cream-trust-item span {
+    font-size: 9.5px !important;
   }
 }
 
