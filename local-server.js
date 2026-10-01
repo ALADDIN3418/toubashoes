@@ -276,6 +276,9 @@ const server = http.createServer(async (req, res) => {
         preservation: body.preservation,
         quality: body.quality,
         provider: body.provider || body.pipeline,
+        geminiApiKey: body.geminiApiKey,
+        geminiAccessToken: body.geminiAccessToken,
+        geminiProjectId: body.geminiProjectId,
         fast: body.fast !== false,
         seed: body.seed,
         preferFallbackModel: Boolean(preferFallbackModel || body.preferFallbackModel)

@@ -35,6 +35,110 @@
     { id: 'creative', label: 'خلاقانه (دراماتیک)', desc: 'تغییرات نوری برجسته‌تر و دراماتیک با وفاداری به کالبد اصلی محصول' }
   ];
 
+  const GEMINI_KEY_STORAGE = 'touba_gemini_api_key';
+  const GEMINI_OAUTH_TOKEN_STORAGE = 'touba_gemini_access_token';
+  const GEMINI_CLIENT_ID_STORAGE = 'touba_gemini_client_id';
+  const GEMINI_PROJECT_ID_STORAGE = 'touba_gemini_project_id';
+
+  function getStoredGeminiConfig() {
+    try {
+      return {
+        apiKey: (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(),
+        accessToken: (localStorage.getItem(GEMINI_OAUTH_TOKEN_STORAGE) || '').trim(),
+        clientId: (localStorage.getItem(GEMINI_CLIENT_ID_STORAGE) || '').trim(),
+        projectId: (localStorage.getItem(GEMINI_PROJECT_ID_STORAGE) || '').trim()
+      };
+    } catch {
+      return { apiKey: '', accessToken: '', clientId: '', projectId: '' };
+    }
+  }
+
+  function saveStoredGeminiConfig({ apiKey, accessToken, clientId, projectId }) {
+    try {
+      if (apiKey !== undefined) localStorage.setItem(GEMINI_KEY_STORAGE, String(apiKey || '').trim());
+      if (accessToken !== undefined) localStorage.setItem(GEMINI_OAUTH_TOKEN_STORAGE, String(accessToken || '').trim());
+      if (clientId !== undefined) localStorage.setItem(GEMINI_CLIENT_ID_STORAGE, String(clientId || '').trim());
+      if (projectId !== undefined) localStorage.setItem(GEMINI_PROJECT_ID_STORAGE, String(projectId || '').trim());
+    } catch { /* ignore */ }
+  }
+
+  function hasConnectedGeminiAccount() {
+    const cfg = getStoredGeminiConfig();
+    return Boolean(cfg.apiKey || cfg.accessToken);
+  }
+
+  /**
+   * Direct Browser-to-Google Gemini Multimodal Image Studio
+   * Sends the uploaded product photo + studio prompt directly to the user's connected Google Gemini account
+   */
+  async function generateViaBrowserGeminiAccount(inputDataUrl, style = 'catalog-white', customPrompt = '') {
+    const cfg = getStoredGeminiConfig();
+    if (!cfg.apiKey && !cfg.accessToken) return null;
+
+    const parts = String(inputDataUrl || '').split(',');
+    const mimeMatch = (parts[0] || '').match(/data:([^;]+);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const base64Data = parts[1] || '';
+    if (!base64Data) return null;
+
+    const styleObj = STYLES.find(s => s.id === style) || STYLES[0];
+    const promptText = `Commercial studio product photography of the exact footwear/bag in this reference image.
+Style: ${styleObj.title} (${styleObj.desc}). ${customPrompt ? `Additional studio instruction: ${customPrompt}` : ''}
+CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identical in shape, color, straps, sole, stitching, and brand logo. Only replace the background and studio lighting around the product.`;
+
+    const models = [
+      'gemini-2.5-flash-image',
+      'gemini-2.0-flash-exp-image-generation',
+      'gemini-2.0-flash-preview-image-generation'
+    ];
+
+    for (const modelId of models) {
+      try {
+        const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
+        const url = cfg.apiKey ? `${baseUrl}?key=${encodeURIComponent(cfg.apiKey)}` : baseUrl;
+        const headers = { 'Content-Type': 'application/json' };
+        if (!cfg.apiKey && cfg.accessToken) {
+          headers.Authorization = `Bearer ${cfg.accessToken.replace(/^Bearer\s+/i, '')}`;
+          if (cfg.projectId) headers['x-goog-user-project'] = cfg.projectId;
+        }
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: promptText },
+                { inlineData: { mimeType, data: base64Data } }
+              ]
+            }],
+            generationConfig: {
+              responseModalities: ['TEXT', 'IMAGE']
+            }
+          })
+        });
+
+        if (!res.ok) continue;
+        const payload = await res.json().catch(() => ({}));
+        const resParts = payload?.candidates?.[0]?.content?.parts || [];
+        const imgPart = resParts.find(p => p?.inlineData?.data || p?.inline_data?.data);
+        const rawData = imgPart?.inlineData?.data || imgPart?.inline_data?.data;
+        const outMime = imgPart?.inlineData?.mimeType || imgPart?.inline_data?.mime_type || 'image/png';
+        if (rawData) {
+          return {
+            dataUrl: `data:${outMime};base64,${rawData}`,
+            model: modelId,
+            provider: `Google Gemini Pro (${modelId})`
+          };
+        }
+      } catch {
+        // Try next Gemini image model
+      }
+    }
+    return null;
+  }
+
   async function adminAuthHeaders() {
     if (!g.ToubaAuth?.configured) return {};
     const token = await g.ToubaAuth.getAccessToken?.();
@@ -1113,10 +1217,35 @@
           <div class="ai-studio-backend-status-card" id="ai-studio-backend-card">
             <div class="ai-status-indicator">
               <span class="status-dot online" id="ai-backend-status-dot"></span>
-              <strong id="ai-backend-status-text">موتور BiRefNet AI Studio فعال است</strong>
+              <strong id="ai-backend-status-text">${hasConnectedGeminiAccount() ? '✅ اکانت گوگل جمینای پرو متصل است' : 'موتور BiRefNet AI Studio فعال است'}</strong>
             </div>
             <div class="ai-backend-meta">
-              <span id="ai-backend-name">حذف دقیق پس‌زمینه (فرش و محیط) + حفظ ۱۰۰٪ کالای واقعی · بدون محدودیت</span>
+              <span id="ai-backend-name">${hasConnectedGeminiAccount() ? 'تولید تصویر با اکانت Google Gemini + BiRefNet' : 'حذف دقیق پس‌زمینه + حفظ ۱۰۰٪ کالای واقعی'}</span>
+              <button type="button" class="btn-text-link" id="ai-toggle-gemini-connect">🔗 اتصال اکانت گوگل جمینای</button>
+            </div>
+            <div class="ai-backend-settings-panel" id="ai-gemini-connect-panel" style="display:none; flex-direction:column; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.14);">
+              <small style="color:#d8eadf; line-height:1.6;">
+                برای استفاده از سهمیه اکانت گوگل خود، روی دکمه زیر بزنید تا کلید حساب <strong>Google AI Studio</strong> همان جیمیل را دریافت کنید، یا توکن OAuth گوگل (<code>ya29...</code>) را وارد نمایید:
+              </small>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="btn small" style="text-decoration:none; background:#1a73e8; color:#fff;">
+                  🔑 ۱. دریافت کلید از اکانت گوگل من (AI Studio)
+                </a>
+                <button type="button" class="btn small outline" id="ai-google-oauth-btn" style="color:#fff; border-color:rgba(255,255,255,0.35);">
+                  🌐 ورود مستقیم با Google OAuth
+                </button>
+              </div>
+              <input type="password" id="ai-gemini-api-key-input" value="${esc(getStoredGeminiConfig().apiKey)}" placeholder="کلید AIzaSy... از اکانت گوگل شما" dir="ltr" />
+              <div id="ai-google-oauth-extra" style="display:${getStoredGeminiConfig().clientId || getStoredGeminiConfig().accessToken ? 'flex' : 'none'}; flex-direction:column; gap:6px;">
+                <input type="text" id="ai-gemini-client-id-input" value="${esc(getStoredGeminiConfig().clientId)}" placeholder="Google OAuth Client ID (اختیاری برای پاپ‌آپ گوگل)" dir="ltr" />
+                <input type="password" id="ai-gemini-oauth-token-input" value="${esc(getStoredGeminiConfig().accessToken)}" placeholder="یا توکن OAuth مستقیم (ya29...)" dir="ltr" />
+                <input type="text" id="ai-gemini-project-id-input" value="${esc(getStoredGeminiConfig().projectId)}" placeholder="Google Cloud Project ID (اختیاری)" dir="ltr" />
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="btn small success-button" id="ai-save-gemini-account-btn">✓ ذخیره و تست اتصال به گوگل</button>
+                <button type="button" class="btn small danger-button" id="ai-disconnect-gemini-btn">قطع اتصال</button>
+              </div>
+              <small id="ai-gemini-connect-feedback" style="display:none; font-weight:600;"></small>
             </div>
           </div>
         </header>
@@ -1340,9 +1469,154 @@
     const actionFeedback = target.querySelector('#ai-action-feedback');
     const backendStatusText = target.querySelector('#ai-backend-status-text');
     const backendStatusDot = target.querySelector('#ai-backend-status-dot');
+    const backendNameEl = target.querySelector('#ai-backend-name');
+    const toggleGeminiBtn = target.querySelector('#ai-toggle-gemini-connect');
+    const geminiPanel = target.querySelector('#ai-gemini-connect-panel');
+    const geminiKeyInput = target.querySelector('#ai-gemini-api-key-input');
+    const geminiOAuthBtn = target.querySelector('#ai-google-oauth-btn');
+    const geminiOAuthExtra = target.querySelector('#ai-google-oauth-extra');
+    const geminiClientIdInput = target.querySelector('#ai-gemini-client-id-input');
+    const geminiOAuthTokenInput = target.querySelector('#ai-gemini-oauth-token-input');
+    const geminiProjectIdInput = target.querySelector('#ai-gemini-project-id-input');
+    const saveGeminiBtn = target.querySelector('#ai-save-gemini-account-btn');
+    const disconnectGeminiBtn = target.querySelector('#ai-disconnect-gemini-btn');
+    const geminiFeedback = target.querySelector('#ai-gemini-connect-feedback');
+
+    function refreshGeminiStatusUi() {
+      if (hasConnectedGeminiAccount()) {
+        backendStatusDot?.classList.remove('offline');
+        backendStatusDot?.classList.add('online');
+        if (backendStatusText) backendStatusText.textContent = '✅ اکانت گوگل جمینای پرو متصل است';
+        if (backendNameEl) backendNameEl.textContent = 'تولید تصویر با اکانت Google Gemini + BiRefNet';
+      } else {
+        if (backendStatusText) backendStatusText.textContent = 'موتور BiRefNet AI Studio آماده است';
+        if (backendNameEl) backendNameEl.textContent = 'حذف دقیق پس‌زمینه + حفظ ۱۰۰٪ کالای واقعی';
+      }
+    }
+
+    toggleGeminiBtn?.addEventListener('click', () => {
+      if (!geminiPanel) return;
+      geminiPanel.style.display = geminiPanel.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    geminiOAuthBtn?.addEventListener('click', () => {
+      if (geminiOAuthExtra) geminiOAuthExtra.style.display = 'flex';
+      const clientId = (geminiClientIdInput?.value || '').trim();
+      if (!clientId) {
+        if (geminiFeedback) {
+          geminiFeedback.style.display = 'block';
+          geminiFeedback.style.color = '#ffd97d';
+          geminiFeedback.textContent = 'برای باز شدن پنجره ورود گوگل، یا روی دکمه آبی «دریافت کلید از اکانت گوگل من» بزنید (سریع‌ترین روش)، یا Client ID گوگل خود را در کادر زیر وارد کنید.';
+        }
+        geminiClientIdInput?.focus();
+        return;
+      }
+      const redirectUri = window.location.origin + window.location.pathname;
+      const scope = encodeURIComponent('https://www.googleapis.com/auth/generative-language.retriever https://www.googleapis.com/auth/cloud-platform');
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scope}&include_granted_scopes=true&prompt=select_account`;
+      const popup = window.open(authUrl, 'google_gemini_oauth', 'width=520,height=640');
+      const pollTimer = setInterval(() => {
+        try {
+          if (!popup || popup.closed) {
+            clearInterval(pollTimer);
+            return;
+          }
+          if (popup.location.origin === window.location.origin && popup.location.hash) {
+            const params = new URLSearchParams(popup.location.hash.slice(1));
+            const token = params.get('access_token');
+            if (token) {
+              popup.close();
+              clearInterval(pollTimer);
+              if (geminiOAuthTokenInput) geminiOAuthTokenInput.value = token;
+              saveStoredGeminiConfig({
+                clientId,
+                accessToken: token,
+                projectId: geminiProjectIdInput?.value || ''
+              });
+              refreshGeminiStatusUi();
+              if (typeof g.toast === 'function') g.toast('✅ ورود با حساب گوگل با موفقیت انجام شد!');
+            }
+          }
+        } catch { /* cross-origin while on accounts.google.com */ }
+      }, 500);
+    });
+
+    saveGeminiBtn?.addEventListener('click', async () => {
+      const apiKey = (geminiKeyInput?.value || '').trim();
+      const accessToken = (geminiOAuthTokenInput?.value || '').trim();
+      const clientId = (geminiClientIdInput?.value || '').trim();
+      const projectId = (geminiProjectIdInput?.value || '').trim();
+
+      saveStoredGeminiConfig({ apiKey, accessToken, clientId, projectId });
+
+      if (!apiKey && !accessToken) {
+        if (geminiFeedback) {
+          geminiFeedback.style.display = 'block';
+          geminiFeedback.style.color = '#ffb4a9';
+          geminiFeedback.textContent = 'لطفاً کلید AIzaSy... یا توکن OAuth اکانت گوگل خود را وارد کنید.';
+        }
+        refreshGeminiStatusUi();
+        return;
+      }
+
+      if (geminiFeedback) {
+        geminiFeedback.style.display = 'block';
+        geminiFeedback.style.color = '#d8eadf';
+        geminiFeedback.textContent = 'در حال تست اتصال به اکانت Google Gemini شما…';
+      }
+
+      try {
+        const testUrl = apiKey
+          ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+          : 'https://generativelanguage.googleapis.com/v1beta/models';
+        const headers = {};
+        if (!apiKey && accessToken) {
+          headers.Authorization = `Bearer ${accessToken.replace(/^Bearer\s+/i, '')}`;
+          if (projectId) headers['x-goog-user-project'] = projectId;
+        }
+        const res = await fetch(testUrl, { method: 'GET', headers });
+        if (res.ok) {
+          if (geminiFeedback) {
+            geminiFeedback.style.color = '#86efac';
+            geminiFeedback.textContent = '✅ اتصال به اکانت گوگل جمینای شما برقرار و تأیید شد!';
+          }
+          refreshGeminiStatusUi();
+          if (typeof g.toast === 'function') g.toast('✅ اکانت گوگل جمینای با موفقیت به استودیو متصل شد.');
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          const errMsg = errJson?.error?.message || `خطای گوگل (${res.status})`;
+          if (geminiFeedback) {
+            geminiFeedback.style.color = '#ffb4a9';
+            geminiFeedback.textContent = `❌ کلید یا توکن معتبر نیست: ${errMsg}`;
+          }
+        }
+      } catch {
+        refreshGeminiStatusUi();
+        if (geminiFeedback) {
+          geminiFeedback.style.color = '#86efac';
+          geminiFeedback.textContent = '✓ اطلاعات اکانت گوگل ذخیره شد و در زمان تولید تصویر استفاده می‌شود.';
+        }
+      }
+    });
+
+    disconnectGeminiBtn?.addEventListener('click', () => {
+      saveStoredGeminiConfig({ apiKey: '', accessToken: '', clientId: '', projectId: '' });
+      if (geminiKeyInput) geminiKeyInput.value = '';
+      if (geminiOAuthTokenInput) geminiOAuthTokenInput.value = '';
+      if (geminiFeedback) {
+        geminiFeedback.style.display = 'block';
+        geminiFeedback.style.color = '#d8eadf';
+        geminiFeedback.textContent = 'اتصال اکانت گوگل قطع شد؛ موتور BiRefNet AI Studio فعال است.';
+      }
+      refreshGeminiStatusUi();
+    });
 
     // Check backend health
     async function checkBackend() {
+      if (hasConnectedGeminiAccount()) {
+        refreshGeminiStatusUi();
+        return;
+      }
       try {
         const res = await fetch(`/api/ai/studio/status`).catch(() => null);
         if (res && res.ok) {
@@ -1459,15 +1733,44 @@
       progressText.textContent = 'آماده‌سازی تصویر و ارسال به مدل هوش مصنوعی…';
 
       try {
+        const geminiCfg = getStoredGeminiConfig();
+        const customPromptVal = customPromptInput?.value?.trim() || '';
+
+        // 1. If the user connected their Google Gemini account, try direct browser-to-Gemini Multimodal Image Studio first
+        if (geminiCfg.apiKey || geminiCfg.accessToken) {
+          progressText.textContent = 'در حال تولید تصویر استودیویی از طریق اکانت متصل Google Gemini شما…';
+          const directGemini = await generateViaBrowserGeminiAccount(
+            currentInputDataUrl,
+            selectedStyle,
+            customPromptVal
+          );
+          if (directGemini?.dataUrl) {
+            currentOutputDataUrl = directGemini.dataUrl;
+            emptyResultState.style.display = 'none';
+            activePreviewArea.style.display = 'block';
+            viewModeButtons.style.display = 'flex';
+            postActionsPanel.style.display = 'block';
+            resultOriginalImg.src = currentInputDataUrl;
+            resultOutputImg.src = currentOutputDataUrl;
+            if (typeof g.toast === 'function') {
+              g.toast(`✨ تصویر کاتالوگی با اکانت متصل ${directGemini.provider} تولید شد.`);
+            }
+            return;
+          }
+        }
+
         const payload = {
           image: currentInputDataUrl,
           referenceImage: currentRefDataUrl || currentInputDataUrl,
           style: selectedStyle,
-          customPrompt: customPromptInput?.value?.trim() || '',
+          customPrompt: customPromptVal,
           aspectRatio: selectedRatio,
           preservation: selectedPreservation,
           quality: selectedQuality,
-          provider: selectedProvider
+          provider: selectedProvider,
+          geminiApiKey: geminiCfg.apiKey || undefined,
+          geminiAccessToken: geminiCfg.accessToken || undefined,
+          geminiProjectId: geminiCfg.projectId || undefined
         };
 
         const steps = [

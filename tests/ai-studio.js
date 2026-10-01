@@ -266,6 +266,41 @@ async function runTests() {
     assert.equal(birefnetRes.model, 'ZhengPeng7/BiRefNet');
     assert(birefnetRes.provider.includes('BiRefNet'));
 
+    // Test connected Google Gemini Pro / AI Studio account (API key or OAuth token passed from Admin Panel)
+    global.fetch = async (url, options) => {
+      const target = String(url);
+      if (target.includes('generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent')) {
+        const body = JSON.parse(options.body);
+        assert(body.contents[0].parts.some(p => p.inlineData && p.inlineData.data));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [{
+              content: {
+                parts: [{
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: Buffer.from(pngHex, 'hex').toString('base64')
+                  }
+                }]
+              }
+            }]
+          })
+        };
+      }
+      throw new Error('Unexpected fetch');
+    };
+    const connectedGeminiRes = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'luxury-showcase',
+      geminiApiKey: 'AIzaSyTestConnectedUserKey',
+      allowMock: false
+    });
+    assert.equal(connectedGeminiRes.success, true);
+    assert.equal(connectedGeminiRes.model, 'gemini-2.5-flash-image');
+    assert(connectedGeminiRes.provider.includes('Google Gemini Pro Studio'));
+
     // Test built-in studio fallback when upstream hits 429 or "not allowed to access"
     global.fetch = async () => ({
       ok: false,

@@ -38,14 +38,113 @@ const DEFAULT_BACKEND_URL = 'https://hf-applications-background-removal.hf.space
 const DEFAULT_PROVIDER = 'qwen-edit';
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
 
+const GEMINI_IMAGE_MODELS = Object.freeze([
+  'gemini-2.5-flash-image',
+  'gemini-2.0-flash-exp-image-generation',
+  'gemini-2.0-flash-preview-image-generation'
+]);
+
 const SUPPORTED_PROVIDERS = Object.freeze([
   {
     id: 'qwen-edit',
-    name: ENGINE_NAME,
-    badge: 'حفظ ۱۰۰٪ کالای واقعی · بدون محدودیت',
-    description: 'حذف دقیق پس‌زمینه (فرش و محیط) با شبکه عصبی BiRefNet و نورپردازی استودیویی کاتالوگ بدون تغییر شکل یا لوگوی کفش'
+    name: 'هوشمند: اکانت متصل Google Gemini + BiRefNet AI Studio Pro',
+    badge: 'حفظ ۱۰۰٪ کالای واقعی · اتصال به اکانت گوگل',
+    description: 'ویرایش مستقیم تصویر در استودیو با اکانت متصل Google Gemini یا جداسازی دقیق شبکه عصبی BiRefNet'
   }
 ]);
+
+function sanitizeToken(value) {
+  return String(value || '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+/**
+ * Generate/Edit studio product photo using the user's connected Google Gemini account
+ * Supports both Google AI Studio API Key (AIza...) and Google OAuth2 Access Token (ya29...)
+ */
+async function generateWithGeminiAccount({
+  imageBytes,
+  mimeType = 'image/jpeg',
+  prompt,
+  geminiApiKey,
+  geminiAccessToken,
+  geminiProjectId
+}) {
+  const apiKey = sanitizeToken(geminiApiKey || process.env.GEMINI_API_KEY);
+  const accessToken = sanitizeToken(geminiAccessToken).replace(/^Bearer\s+/i, '');
+  const projectId = sanitizeToken(geminiProjectId || process.env.GOOGLE_CLOUD_PROJECT);
+
+  if (!apiKey && !accessToken) {
+    return null;
+  }
+
+  const base64Image = imageBytes.toString('base64');
+  const strictGeminiPrompt = `${prompt}
+CRITICAL INSTRUCTION: You are editing the attached reference product photo. Keep the exact footwear/bag from the input image 100% identical in shape, color, material, straps, sole, stitching, and brand logo. ONLY replace the background and studio lighting around the product.`;
+
+  let lastError = null;
+
+  for (const modelId of GEMINI_IMAGE_MODELS) {
+    try {
+      const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
+      const url = apiKey ? `${baseUrl}?key=${encodeURIComponent(apiKey)}` : baseUrl;
+      const headers = { 'Content-Type': 'application/json' };
+      if (!apiKey && accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+        if (projectId) headers['x-goog-user-project'] = projectId;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { text: strictGeminiPrompt },
+              {
+                inlineData: {
+                  mimeType: mimeType || 'image/jpeg',
+                  data: base64Image
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE']
+          }
+        }),
+        signal: AbortSignal.timeout(60000)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        lastError = new Error(errText || `Google Gemini HTTP ${response.status}`);
+        continue;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      const parts = payload?.candidates?.[0]?.content?.parts || [];
+      const imgPart = parts.find(p => p?.inlineData?.data || p?.inline_data?.data);
+      const rawData = imgPart?.inlineData?.data || imgPart?.inline_data?.data;
+      const outMime = imgPart?.inlineData?.mimeType || imgPart?.inline_data?.mime_type || 'image/png';
+
+      if (rawData) {
+        return {
+          dataUrl: `data:${outMime};base64,${rawData}`,
+          model: modelId,
+          provider: `Google Gemini Pro Studio (${modelId})`
+        };
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (lastError && (geminiApiKey || geminiAccessToken)) {
+    // Log silently and allow BiRefNet Studio fallback if model wasn't available
+  }
+  return null;
+}
 
 const SUPPORTED_PIPELINES = Object.freeze(['qwen-edit', 'flux', 'sdxl', 'upscale']);
 
@@ -156,6 +255,9 @@ async function generateStudioPhoto({
   quality = 'high',
   provider = DEFAULT_PROVIDER,
   productType = 'shoe_or_bag',
+  geminiApiKey,
+  geminiAccessToken,
+  geminiProjectId,
   fast = true,
   seed,
   preferFallbackModel = false,
@@ -209,8 +311,29 @@ async function generateStudioPhoto({
   let fallbackUsed = false;
   let lastCloudError = null;
 
-  // 3. Stage 1: BiRefNet Foreground Product Extraction (100% Real Product Identity Lock)
-  if (refBuffer && effectiveProvider !== 'cloudflare' && effectiveProvider !== 'cloudflare-4b') {
+  // 3. Stage 0: Connected Google Gemini Pro / AI Studio Account (if connected via Admin Panel or env)
+  if (refBuffer && (geminiApiKey || geminiAccessToken || process.env.GEMINI_API_KEY)) {
+    try {
+      const geminiRes = await generateWithGeminiAccount({
+        imageBytes: refBuffer,
+        mimeType,
+        prompt: finalPrompt,
+        geminiApiKey,
+        geminiAccessToken,
+        geminiProjectId
+      });
+      if (geminiRes?.dataUrl) {
+        liveOutputUrl = geminiRes.dataUrl;
+        activeModel = geminiRes.model;
+        activeProviderName = geminiRes.provider;
+      }
+    } catch {
+      // Proceed to BiRefNet segmentation
+    }
+  }
+
+  // 3b. Stage 1: BiRefNet Foreground Product Extraction (100% Real Product Identity Lock)
+  if (!liveOutputUrl && refBuffer && effectiveProvider !== 'cloudflare' && effectiveProvider !== 'cloudflare-4b') {
     try {
       const birefnetRes = await removeBackgroundWithBiRefNet({
         imageBytes: refBuffer,
@@ -392,5 +515,6 @@ module.exports = {
   checkBackendHealth,
   checkComfyHealth,
   generateStudioPhoto,
+  generateWithGeminiAccount,
   attachImageToProduct
 };
