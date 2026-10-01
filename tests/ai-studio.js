@@ -103,10 +103,9 @@ async function runTests() {
   assert.equal(parsed.mimeType, 'image/jpeg');
   assert.deepEqual(parsed.buffer, validJpeg);
 
-  // Providers list
+  // Providers list (Single unified BiRefNet AI Studio Pro engine)
   assert(SUPPORTED_PROVIDERS.some(p => p.id === 'qwen-edit'));
-  assert(SUPPORTED_PROVIDERS.some(p => p.id === 'flux'));
-  assert(SUPPORTED_PROVIDERS.some(p => p.id === 'sdxl'));
+  assert.equal(SUPPORTED_PROVIDERS.length, 1);
   assert.equal(DEFAULT_PROVIDER, 'qwen-edit');
 
   // Generation (Development / Mock provider)
@@ -154,6 +153,172 @@ async function runTests() {
     assert.equal(cfGenResult.success, true);
     assert(cfGenResult.provider.includes('Cloudflare Workers AI'));
     assert(cfGenResult.generatedUrl.startsWith('data:image/png;base64,'));
+
+    // Also test default provider ('qwen-edit') falling back to Cloudflare on Vercel with whitespace in env vars
+    process.env.CLOUDFLARE_ACCOUNT_ID = ' "1234567890abcdef1234567890abcdef" \n';
+    process.env.CLOUDFLARE_API_TOKEN = ' Bearer mock-cf-token-123 ';
+    const cfFallbackResult = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(cfFallbackResult.success, true);
+    assert(cfFallbackResult.provider.includes('Cloudflare Workers AI'));
+
+    // Ensure real Cloudflare auth errors are NOT swallowed when provider is 'qwen-edit' and allowMock is false
+    global.fetch = async (url) => {
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
+        return {
+          ok: false,
+          status: 403,
+          headers: new Map([['content-type', 'application/json']]),
+          json: async () => ({ success: false, errors: [{ message: 'Authentication error: invalid API token' }] })
+        };
+      }
+      throw new Error('Connection refused');
+    };
+    await assert.rejects(
+      () => generateStudioPhoto({
+        image: sampleDataUrl,
+        style: 'catalog-white',
+        provider: 'qwen-edit',
+        allowMock: false
+      }),
+      /Authentication error: invalid API token/
+    );
+
+    // Test automatic fallback from flux-2-klein-9b (429 daily limit) to flux-2-klein-4b
+    const pngHex = '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2d450000000049454e44ae426082';
+    global.fetch = async (url) => {
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
+        return {
+          ok: false,
+          status: 429,
+          headers: new Map([['content-type', 'application/json']]),
+          json: async () => ({ success: false, errors: [{ code: 4006, message: 'Daily free allocation of 10,000 neurons exceeded' }] })
+        };
+      }
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-4b')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'image/png']]),
+          arrayBuffer: async () => Buffer.from(pngHex, 'hex')
+        };
+      }
+      throw new Error('Connection refused');
+    };
+    const auto4bResult = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(auto4bResult.success, true);
+    assert.equal(auto4bResult.fallbackUsed, true);
+    assert.equal(auto4bResult.model, '@cf/black-forest-labs/flux-2-klein-4b');
+    assert(auto4bResult.provider.includes('جایگزین خودکار'));
+
+    // Test BiRefNet AI Studio segmentation via Hugging Face ZeroGPU Gradio 5 API
+    global.fetch = async (url) => {
+      const target = String(url);
+      if (target.endsWith('/gradio_api/upload')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ['/tmp/gradio/mock/product.jpg']
+        };
+      }
+      if (target.endsWith('/gradio_api/call/png')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ event_id: 'evt-birefnet-123' })
+        };
+      }
+      if (target.includes('/gradio_api/call/png/evt-birefnet-123')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => `event: complete\ndata: [{"path":"/tmp/gradio/mock/product.png","url":"https://hf-applications-background-removal.hf.space/gradio_api/file=/tmp/gradio/mock/product.png"}]\n`
+        };
+      }
+      if (target.includes('/gradio_api/file=/tmp/gradio/mock/product.png')) {
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => Buffer.from(pngHex, 'hex')
+        };
+      }
+      throw new Error('Unexpected fetch');
+    };
+
+    const birefnetRes = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(birefnetRes.success, true);
+    assert.equal(birefnetRes.backgroundRemoved, true);
+    assert.equal(birefnetRes.mode, 'birefnet-cutout');
+    assert.equal(birefnetRes.model, 'ZhengPeng7/BiRefNet');
+    assert(birefnetRes.provider.includes('BiRefNet'));
+
+    // Test connected Google Gemini Pro / AI Studio account (API key or OAuth token passed from Admin Panel)
+    global.fetch = async (url, options) => {
+      const target = String(url);
+      if (target.includes('generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent')) {
+        const body = JSON.parse(options.body);
+        assert(body.contents[0].parts.some(p => p.inlineData && p.inlineData.data));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [{
+              content: {
+                parts: [{
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: Buffer.from(pngHex, 'hex').toString('base64')
+                  }
+                }]
+              }
+            }]
+          })
+        };
+      }
+      throw new Error('Unexpected fetch');
+    };
+    const connectedGeminiRes = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'luxury-showcase',
+      geminiApiKey: 'AIzaSyTestConnectedUserKey',
+      allowMock: false
+    });
+    assert.equal(connectedGeminiRes.success, true);
+    assert.equal(connectedGeminiRes.model, 'gemini-2.5-flash-image');
+    assert(connectedGeminiRes.provider.includes('Google Gemini Pro Studio'));
+
+    // Test built-in studio fallback when upstream hits 429 or "not allowed to access"
+    global.fetch = async () => ({
+      ok: false,
+      status: 403,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => 'This account is not allowed to access @cf/runwayml/stable-diffusion-v1-5-img2img',
+      json: async () => ({ success: false, errors: [{ message: 'AiError: Ai: This account is not allowed to access @cf/runwayml/stable-diffusion-v1-5-img2img' }] })
+    });
+    const studioExhaustedFallback = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(studioExhaustedFallback.success, true);
+    assert.equal(studioExhaustedFallback.fallbackUsed, true);
+    assert.equal(studioExhaustedFallback.quotaExhaustedFallback, true);
+    assert.equal(studioExhaustedFallback.mode, 'client-studio-fallback');
   } finally {
     global.fetch = originalFetch;
     process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;

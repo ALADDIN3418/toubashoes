@@ -5783,6 +5783,584 @@ body {
   .hero-primary, .hero-secondary { padding: 12px 20px; font-size: 12.5px; }
   .hero-note { margin-top: 20px; font-size: 11px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .lux-hero-copy.lux-hero-glass, .lux-hero-watermark { animation: none !important; }
+/* ==========================================================================
+   Luxury Emerald-Green & Champagne Editorial Hero (Reference Match)
+   ========================================================================== */
+html, body, #app, main {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
 }
+
+.sr-only,
+.lux-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.lux-hero {
+  min-height: 500px !important;
+  height: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  position: relative !important;
+  overflow: hidden !important;
+  background: #081c13 !important;
+  color: #ffffff;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0 !important;
+}
+
+.lux-hero-image {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+  object-fit: cover !important;
+  object-position: 76% center !important;
+  filter: brightness(1.01) contrast(1.05);
+}
+
+.lux-hero-shade {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  background:
+    linear-gradient(90deg, rgba(5, 19, 13, 0.90) 0%, rgba(7, 25, 17, 0.72) 38%, rgba(8, 28, 19, 0.14) 58%, rgba(8, 28, 19, 0.02) 100%),
+    linear-gradient(180deg, rgba(4, 15, 10, 0.18) 0%, rgba(4, 15, 10, 0) 40%, rgba(4, 15, 10, 0.45) 100%) !important;
+}
+
+.lux-hero-glow {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none;
+  background: radial-gradient(40% 50% at 24% 48%, rgba(214, 177, 132, 0.10) 0%, rgba(16, 185, 129, 0.06) 45%, transparent 75%) !important;
+}
+
+.lux-hero-content {
+  position: relative !important;
+  z-index: 2 !important;
+  height: auto !important;
+  min-height: 350px !important;
+  margin-top: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important; /* Places content & buttons in the empty LEFT side of the banner */
+  padding: 12px 0 10px !important;
+}
+
+.lux-editorial-box {
+  width: min(470px, 46%) !important;
+  max-width: 46% !important;
+  margin-right: auto !important;
+  margin-left: 0 !important;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 12px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  overflow: visible !important;
+}
+
+.lux-editorial-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #e3c8a4;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0 !important;
+  margin-bottom: 6px;
+}
+
+.lux-kicker-line {
+  display: inline-block;
+  width: 64px;
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(227, 200, 164, 0.15), #d5b082);
+}
+
+.lux-hero h1.lux-editorial-title,
+.lux-editorial-title {
+  display: inline-block !important;
+  font-size: clamp(46px, 5.4vw, 78px) !important;
+  font-weight: 900 !important;
+  line-height: 1.32 !important;
+  margin: 2px 0 8px !important;
+  padding: 4px 16px !important;
+  letter-spacing: 0 !important;
+  word-spacing: 2px;
+  color: #e6c294 !important;
+  -webkit-text-fill-color: #e6c294 !important;
+  background: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  filter: none !important;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 244, 226, 0.32) !important;
+  overflow: visible !important;
+  max-width: 100%;
+}
+
+.lux-editorial-subtitle {
+  color: #eef5f0 !important;
+  font-size: clamp(18px, 1.9vw, 25px) !important;
+  font-weight: 500;
+  line-height: 1.6 !important;
+  margin: 0 0 28px !important;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.lux-editorial-features {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 38px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.lux-feat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  color: #e8d3b7;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.lux-feat-item svg {
+  width: 30px;
+  height: 30px;
+  stroke: #d8b487;
+  opacity: 0.92;
+}
+
+.lux-editorial-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lux-pill-btn {
+  min-width: 172px;
+  height: 50px;
+  padding: 0 28px !important;
+  border-radius: 999px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  text-decoration: none;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+.lux-pill-gold {
+  background: linear-gradient(135deg, #d8b386 0%, #be9463 100%) !important;
+  color: #17261e !important;
+  border: 1px solid rgba(255, 238, 214, 0.45) !important;
+  box-shadow: 0 14px 32px -10px rgba(190, 148, 99, 0.55) !important;
+}
+
+.lux-pill-gold:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #e4c399 0%, #c89f6e 100%) !important;
+  box-shadow: 0 18px 38px -10px rgba(216, 179, 134, 0.72) !important;
+}
+
+.lux-pill-chevron {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+  margin-top: -2px;
+}
+
+.lux-pill-outline {
+  background: rgba(10, 32, 22, 0.55);
+  color: #f3e3cc;
+  border: 1px solid rgba(216, 179, 134, 0.48);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.lux-pill-outline:hover {
+  background: rgba(216, 179, 134, 0.16);
+  border-color: #e2c197;
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.lux-auth-mini {
+  padding: 10px 18px !important;
+  font-size: 12.5px !important;
+  border-color: rgba(216, 179, 134, 0.28) !important;
+  color: #d8eadf !important;
+}
+
+/* Bottom Floating Capsule Bar (Brands + Collection Spotlight) */
+.lux-hero-capsule-wrap {
+  position: relative;
+  z-index: 3;
+  margin-top: 8px;
+}
+
+.lux-hero-capsule-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  min-height: 92px;
+  padding: 12px 36px 12px 24px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(6, 20, 14, 0.95) 0%, rgba(11, 33, 23, 0.90) 55%, rgba(8, 25, 18, 0.94) 100%);
+  border: 1px solid rgba(216, 179, 134, 0.24);
+  box-shadow: 0 26px 60px -20px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.lux-capsule-top-glow {
+  position: absolute;
+  top: -2px;
+  right: 64px;
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 14px 2px rgba(255, 255, 255, 0.85);
+}
+
+.lux-capsule-collection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-decoration: none;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.lux-collection-avatar {
+  width: 108px;
+  height: 108px;
+  margin-top: -26px;
+  margin-bottom: -18px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #f5efe6 0%, #dfd3c3 100%);
+  border: 4px solid rgba(15, 42, 30, 0.95);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lux-collection-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.06);
+}
+
+.lux-collection-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+
+.lux-collection-meta strong {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.lux-collection-meta span {
+  font-size: 12.5px;
+  color: #d6c3a9;
+}
+
+.lux-diamond-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #d8b386 0%, #b38856 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #12241b;
+  box-shadow: 0 6px 16px rgba(216, 179, 134, 0.38);
+  flex-shrink: 0;
+}
+
+.lux-diamond-badge i {
+  transform: rotate(-45deg);
+  font-style: normal;
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.lux-capsule-divider {
+  width: 1px;
+  height: 46px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.lux-capsule-brands {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.lux-brand-item {
+  color: rgba(255, 255, 255, 0.90);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  transition: color 0.2s ease, transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lux-brand-item:hover {
+  color: #e5c193;
+  transform: translateY(-2px);
+}
+
+.lux-brand-svg {
+  height: 34px;
+  width: auto;
+  display: block;
+}
+
+.lux-brand-zara {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 25px;
+  letter-spacing: -0.06em;
+  font-weight: 700;
+}
+
+.lux-brand-aldo {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 21px;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+}
+
+.lux-brand-cat {
+  font-family: Impact, "Arial Black", sans-serif;
+  font-size: 24px;
+  letter-spacing: 0.03em;
+}
+
+.lux-brand-guess {
+  font-family: Georgia, serif;
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+}
+
+/* Cream Luxury Feature Strip Directly Below Hero */
+.trust-section.lux-cream-trust {
+  background: linear-gradient(180deg, #f2e8dc 0%, #e9ddd0 100%) !important;
+  color: #3e3227 !important;
+  border-top: 1px solid rgba(214, 182, 138, 0.35) !important;
+  border-bottom: 1px solid rgba(168, 139, 107, 0.22) !important;
+}
+
+.lux-cream-trust-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  padding: 24px 0 !important;
+}
+
+.lux-cream-trust-item {
+  border-left: 1px solid rgba(145, 118, 90, 0.24) !important;
+  gap: 14px !important;
+  min-width: 0 !important;
+}
+
+.lux-cream-trust-item:last-child {
+  border-left: 0 !important;
+}
+
+.lux-cream-trust-item > svg {
+  width: 34px !important;
+  height: 34px !important;
+  stroke: #b58d63 !important;
+}
+
+.lux-cream-trust-item b {
+  display: block;
+  color: #2c231b !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  margin-bottom: 3px;
+}
+
+.lux-cream-trust-item span {
+  display: block;
+  color: #6e5b4b !important;
+  font-size: 12.5px !important;
+}
+
+@media (max-width: 1024px) {
+  .lux-hero {
+    min-height: 440px !important;
+    padding: 16px 0 14px !important;
+  }
+  .lux-hero-content {
+    min-height: 290px !important;
+  }
+  .lux-editorial-box {
+    width: 50% !important;
+  }
+  .lux-hero-capsule-bar {
+    min-height: 68px;
+    padding: 8px 20px 8px 14px;
+    gap: 12px;
+  }
+  .lux-collection-avatar {
+    width: 72px;
+    height: 72px;
+    margin-top: -12px;
+    margin-bottom: -10px;
+  }
+}
+
+@media (max-width: 860px) {
+  .lux-hero {
+    min-height: 240px !important;
+    padding: 14px 0 !important;
+  }
+  .lux-hero-image {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: 72% center !important;
+  }
+  .lux-hero-shade {
+    background: linear-gradient(90deg, rgba(5, 19, 13, 0.88) 0%, rgba(6, 22, 15, 0.68) 42%, rgba(6, 22, 15, 0.08) 68%, rgba(6, 22, 15, 0) 100%) !important;
+  }
+  .lux-hero-content {
+    min-height: 210px !important;
+    margin-top: 0 !important;
+    padding: 6px 10px !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+  }
+  .lux-editorial-box {
+    width: 50% !important;
+    max-width: 50% !important;
+    margin-right: auto !important;
+    margin-left: 0 !important;
+    align-items: center !important;
+    padding: 4px 6px !important;
+  }
+  .lux-editorial-kicker {
+    font-size: 10px;
+    gap: 5px;
+    margin-bottom: 2px;
+  }
+  .lux-kicker-line {
+    width: 22px;
+  }
+  .lux-hero h1.lux-editorial-title,
+  .lux-editorial-title {
+    font-size: clamp(24px, 6.2vw, 34px) !important;
+    line-height: 1.32 !important;
+    padding: 2px 10px !important;
+    margin: 0 0 4px !important;
+  }
+  .lux-editorial-subtitle {
+    font-size: clamp(11px, 2.8vw, 14px) !important;
+    margin: 0 0 10px !important;
+    line-height: 1.4 !important;
+  }
+  .lux-editorial-features {
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: nowrap;
+  }
+  .lux-feat-item {
+    font-size: 9.5px;
+    gap: 4px;
+  }
+  .lux-feat-item svg {
+    width: 18px;
+    height: 18px;
+  }
+  .lux-editorial-actions {
+    gap: 6px;
+  }
+  .lux-pill-btn {
+    min-width: 0 !important;
+    height: 34px !important;
+    padding: 0 12px !important;
+    font-size: 11px !important;
+    gap: 4px;
+  }
+  .lux-pill-chevron {
+    font-size: 14px;
+  }
+  .lux-auth-mini {
+    display: none !important;
+  }
+  .lux-cream-trust-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    padding: 14px 0 !important;
+    gap: 4px;
+  }
+  .lux-cream-trust-item {
+    border-left: 1px solid rgba(145, 118, 90, 0.22) !important;
+    border-bottom: 0 !important;
+    padding: 0 6px !important;
+    gap: 6px !important;
+  }
+  .lux-cream-trust-item:last-child {
+    border-left: 0 !important;
+  }
+  .lux-cream-trust-item > svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  .lux-cream-trust-item b {
+    font-size: 11.5px !important;
+  }
+  .lux-cream-trust-item span {
+    font-size: 9.5px !important;
+  }
+}
+

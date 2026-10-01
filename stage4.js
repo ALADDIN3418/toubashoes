@@ -311,9 +311,67 @@ function home(){
   let cms=db.settings.homepage||{},products=db.products.filter(p=>p.active),featured=(cms.featuredProductIds||[]).map(product).filter(p=>p?.active),best=(cms.bestSellerProductIds||[]).map(product).filter(p=>p?.active),promo=db.banners.filter(b=>b.active),approved=db.reviews.filter(r=>r.status==='تأیید شده');
   if(!featured.length)featured=products.filter(p=>p.featured).slice(0,5);
   if(!best.length)best=products.filter(p=>p.bestSeller).slice(0,5);
-  let heroTitle=cms.heroTitle||'قدم‌هایی مطمئن با کفش طوبی',titleHtml=esc(heroTitle).replace(' با کفش ','<br>با کفش '),banner=promo[0];
+  let heroTitle=cms.heroTitle||'قدم‌هایی مطمئن با کفش طوبی',banner=promo[0];
 
-  return `${header()}<main><section class="lux-hero"><img class="lux-hero-image" src="${esc(cms.heroImage||'/hero-shoe.jpg')}" alt="کفش چرمی کالکشن طوبی" width="1800" height="950" fetchpriority="high"><div class="lux-hero-shade"></div><div class="lux-hero-glow" aria-hidden="true"></div><div class="lux-hero-watermark" aria-hidden="true">TOUBA SHOES</div><div class="container lux-hero-content"><div class="lux-hero-ring" aria-hidden="true"></div><div class="lux-hero-copy lux-hero-glass"><span class="lux-hero-glass-sheen" aria-hidden="true"></span><span class="hero-kicker"><i></i> کفش‌هایی که احساس می‌شوند</span><h1>${titleHtml}</h1><p>${esc(cms.heroText||'ترکیبی از چرم باکیفیت، راحتی ماندگار و طراحی ظریف؛ برای قدم‌هایی که به آن‌ها اعتماد دارید.')}</p><div class="hero-actions"><a class="btn hero-primary" href="${esc(cms.heroButtonUrl||'/shop')}">${esc(cms.heroButtonText||'مشاهده محصولات')} ${uiIcon('arrow')}</a><a class="hero-secondary auth-home-cta" href="/login" aria-label="ورود یا ثبت‌نام در حساب طوبی">ورود / ثبت‌نام <span>←</span></a></div><div class="hero-note"><span class="hero-note-dot"></span> کیفیتی که با هر قدم همراه شماست</div></div></div><div class="hero-side-label">TOUBA　·　MADE FOR EVERY STEP</div></section><section class="trust-section"><div class="container trust-grid"><div class="trust-item">${uiIcon('shield')}<div><b>خرید مطمئن</b><span>ضمانت اصالت و کیفیت</span></div></div><div class="trust-item">${uiIcon('truck')}<div><b>ارسال سریع</b><span>به سراسر کشور</span></div></div><div class="trust-item">${uiIcon('heart')}<div><b>راحتی در هر قدم</b><span>انتخاب باکیفیت طوبی</span></div></div><div class="trust-item">${uiIcon('support')}<div><b>پشتیبانی واقعی</b><span>همراه شما در خرید</span></div></div></div></section>
+  return `${header()}<main>
+  <section class="lux-hero" aria-label="${esc(heroTitle)}">
+    <img class="lux-hero-image" src="${esc(cms.heroImage||'/hero-shoe.jpg')}" alt="کفش و کیف کالکشن لوکس طوبی" width="1800" height="950" fetchpriority="high">
+    <div class="lux-hero-shade"></div>
+    <div class="lux-hero-glow" aria-hidden="true"></div>
+
+    <div class="container lux-hero-content">
+      <div class="lux-hero-copy lux-editorial-box">
+        <div class="lux-editorial-kicker">
+          <span class="lux-kicker-line"></span>
+          <span>استایل شما، امضای شماست</span>
+        </div>
+
+        <h1 class="lux-editorial-title">کفش طوبی</h1>
+        <p class="lux-editorial-subtitle">${esc(cms.heroText||'انتخابی خاص برای قدم‌هایی ماندگار')}</p>
+
+        <div class="lux-editorial-features">
+          <div class="lux-feat-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12a8 8 0 0 1 14.93-4M20 12a8 8 0 0 1-14.93 4"/><polyline points="19 4 19 8 15 8"/><polyline points="5 20 5 16 9 16"/></svg>
+            <span>تعویض آسان</span>
+          </div>
+          <div class="lux-feat-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="4" width="15" height="12" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            <span>ارسال سریع</span>
+          </div>
+          <div class="lux-feat-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l2.4 1.8 3-.3 1.2 2.8 2.8 1.2-.3 3L22.9 13l-1.8 2.4.3 3-2.8 1.2-1.2 2.8-3-.3L12 23.9l-2.4-1.8-3 .3-1.2-2.8-2.8-1.2.3-3L1.1 13l1.8-2.4-.3-3 2.8-1.2 1.2-2.8 3 .3L12 2z"/><polyline points="9 12 11 14 15 10"/></svg>
+            <span>ضمانت اصالت کالا</span>
+          </div>
+        </div>
+
+        <div class="hero-actions lux-editorial-actions">
+          <a class="lux-pill-btn lux-pill-outline" href="/shop?sort=newest">جدیدترین‌ها</a>
+          <a class="btn hero-primary lux-pill-btn lux-pill-gold" href="${esc(cms.heroButtonUrl||'/shop')}">
+            <span>${esc(cms.heroButtonText||'مشاهده محصولات')}</span>
+            <span class="lux-pill-chevron">‹</span>
+          </a>
+          <a class="hero-secondary auth-home-cta lux-auth-mini" href="/login" aria-label="ورود یا ثبت‌نام در حساب طوبی">ورود / ثبت‌نام <span>←</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust-section lux-cream-trust">
+    <div class="container trust-grid lux-cream-trust-grid">
+      <div class="trust-item lux-cream-trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
+        <div><b>تخفیف‌های ویژه</b><span>برای مشتریان ویژه</span></div>
+      </div>
+      <div class="trust-item lux-cream-trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+        <div><b>پرداخت امن</b><span>با درگاه‌های معتبر</span></div>
+      </div>
+      <div class="trust-item lux-cream-trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        <div><b>پشتیبانی سریع</b><span>همراه شما در هر زمان</span></div>
+      </div>
+    </div>
+  </section>
   
   <!-- Enhanced Category Cards Showcase: Styled like product cards -->
   <section class="category-section container" id="categories">
