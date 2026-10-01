@@ -314,7 +314,7 @@ function home(){
   let heroTitle=cms.heroTitle||'قدم‌هایی مطمئن با کفش طوبی',banner=promo[0];
 
   return `${header()}<main>
-  <section class="lux-hero">
+  <section class="lux-hero" aria-label="${esc(heroTitle)}">
     <img class="lux-hero-image" src="${esc(cms.heroImage||'/hero-shoe.jpg')}" alt="کفش و کیف کالکشن لوکس طوبی" width="1800" height="950" fetchpriority="high">
     <div class="lux-hero-shade"></div>
     <div class="lux-hero-glow" aria-hidden="true"></div>
@@ -326,7 +326,7 @@ function home(){
           <span>استایل شما، امضای شماست</span>
         </div>
 
-        <h1 class="lux-editorial-title">کفش طوبی<span class="lux-sr-only"> ${esc(heroTitle)}</span></h1>
+        <h1 class="lux-editorial-title">کفش طوبی</h1>
         <p class="lux-editorial-subtitle">${esc(cms.heroText||'انتخابی خاص برای قدم‌هایی ماندگار')}</p>
 
         <div class="lux-editorial-features">
