@@ -123,6 +123,43 @@ async function runTests() {
   assert.equal(genResult.aspectRatio, '1:1');
   assert(genResult.generatedUrl);
   assert(genResult.originalUrl);
+
+  // Test Cloudflare Workers AI integration when credentials are set
+  const originalFetch = global.fetch;
+  const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const originalApiToken = process.env.CLOUDFLARE_API_TOKEN;
+  try {
+    process.env.CLOUDFLARE_ACCOUNT_ID = '1234567890abcdef1234567890abcdef';
+    process.env.CLOUDFLARE_API_TOKEN = 'mock-cf-token-123';
+    
+    // Mock Cloudflare Workers AI response
+    global.fetch = async (url) => {
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map([['content-type', 'image/png']]),
+          arrayBuffer: async () => Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2d450000000049454e44ae426082', 'hex')
+        };
+      }
+      throw new Error('Connection refused');
+    };
+
+    const cfGenResult = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'cloudflare',
+      allowMock: false
+    });
+    assert.equal(cfGenResult.success, true);
+    assert(cfGenResult.provider.includes('Cloudflare Workers AI'));
+    assert(cfGenResult.generatedUrl.startsWith('data:image/png;base64,'));
+  } finally {
+    global.fetch = originalFetch;
+    process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;
+    process.env.CLOUDFLARE_API_TOKEN = originalApiToken;
+  }
+
   console.log('✓ تولید تصویر و موتور هوش مصنوعی با موفقیت تست شد.');
 
   // 3. Product Attachment to Database

@@ -269,6 +269,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const result = await generateStudioPhoto({
         image: body.image || body.images[0],
+        referenceImage: body.referenceImage,
         style: body.style,
         customPrompt: body.customPrompt,
         aspectRatio: body.aspectRatio,

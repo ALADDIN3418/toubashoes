@@ -23,15 +23,21 @@ const {
   buildPrompt,
   getNegativePrompt
 } = require('./prompt-templates.js');
+const {
+  generateProductPhoto: generateCloudflareProductPhoto,
+  formatSafetyFlaggedError,
+  isContentFlagged
+} = require('./cloudflare-image.js');
 
 const DEFAULT_BACKEND_URL = process.env.AI_STUDIO_BACKEND_URL || process.env.COMFY_API_URL || 'http://127.0.0.1:8000';
 const DEFAULT_PROVIDER = process.env.AI_STUDIO_PROVIDER || 'qwen-edit';
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 const SUPPORTED_PROVIDERS = Object.freeze([
-  { id: 'qwen-edit', name: 'Qwen-Image-Edit', badge: 'پیشنهادی (اولویت ۱)', description: 'ویرایش دستوری بر پایه عکس مرجع با حفظ ۱۰۰٪ فرم و رنگ' },
-  { id: 'flux', name: 'FLUX Kontext', badge: 'فلو مچینگ (اولویت ۲)', description: 'مدل پیشرفته فلو مچینگ مناسب صحنه‌های استودیویی با جزئیات بالا' },
-  { id: 'sdxl', name: 'SDXL Base 1.0', badge: 'استودیو کلاسیک', description: 'مدل کاتالوگ تجاری با KSampler و نورپردازی استودیو' },
+  { id: 'qwen-edit', name: 'Qwen-Image-Edit (ComfyUI)', badge: 'پیشنهادی (اولویت ۱)', description: 'ویرایش دستوری بر پایه عکس مرجع با حفظ ۱۰۰٪ فرم و رنگ' },
+  { id: 'cloudflare', name: 'Cloudflare FLUX.2 Klein 9B', badge: 'ابری هوشمند', description: 'مدل ابری ۹ میلیارد پارامتری فلو مچینگ با حفظ دقیق هویت کالا' },
+  { id: 'flux', name: 'FLUX Kontext (ComfyUI)', badge: 'فلو مچینگ (اولویت ۲)', description: 'مدل پیشرفته فلو مچینگ مناسب صحنه‌های استودیویی با جزئیات بالا' },
+  { id: 'sdxl', name: 'SDXL Base 1.0 (ComfyUI)', badge: 'استودیو کلاسیک', description: 'مدل کاتالوگ تجاری با KSampler و نورپردازی استودیو' },
   { id: 'upscale', name: 'Real-ESRGAN', badge: 'ارتقای کیفیت', description: 'افزایش وضوح و شارپنس بافت چرم و دوخت‌ها' }
 ]);
 
@@ -104,6 +110,7 @@ async function checkBackendHealth(apiUrl = DEFAULT_BACKEND_URL) {
 async function generateStudioPhoto({
   image,
   imageBytes,
+  referenceImage,
   style = DEFAULT_PRESET,
   customPrompt = '',
   aspectRatio = '1:1',
@@ -139,6 +146,15 @@ async function generateStudioPhoto({
   const validated = validateImageBytes(inputBuffer);
   mimeType = validated.mimeType;
 
+  // Resolve reference image (guaranteed <= 511px for Cloudflare FLUX.2 Klein 9B)
+  let refBuffer = inputBuffer;
+  if (typeof referenceImage === 'string') {
+    const parsedRef = parseDataUrl(referenceImage);
+    if (parsedRef?.buffer) {
+      refBuffer = parsedRef.buffer;
+    }
+  }
+
   // 2. Build centralized prompt using Template Engine
   const finalPrompt = buildPrompt({
     style,
@@ -153,86 +169,110 @@ async function generateStudioPhoto({
   const targetApi = String(apiUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
   const effectiveProvider = SUPPORTED_PROVIDERS.some(p => p.id === provider) ? provider : DEFAULT_PROVIDER;
 
-  // 3. Attempt Live Provider Request
-  let tempFilePath = null;
   let liveOutputUrl = null;
+  let activeProviderName = effectiveProvider;
 
-  try {
-    tempFilePath = path.join(os.tmpdir(), `studio-input-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`);
-    fs.writeFileSync(tempFilePath, inputBuffer);
+  // 3. Attempt ComfyUI Provider Request (if not explicitly cloudflare-only)
+  if (effectiveProvider !== 'cloudflare') {
+    let tempFilePath = null;
+    try {
+      tempFilePath = path.join(os.tmpdir(), `studio-input-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`);
+      fs.writeFileSync(tempFilePath, inputBuffer);
 
-    let endpoint = '';
-    let payload = {};
+      let endpoint = '';
+      let payload = {};
 
-    if (effectiveProvider === 'qwen-edit') {
-      endpoint = `${targetApi}/edit/qwen`;
-      payload = {
-        image_path: tempFilePath,
-        prompt: finalPrompt,
-        seed: Number(seed) || Math.floor(Math.random() * 1000000),
-        fast: fast !== false
-      };
-    } else if (effectiveProvider === 'flux') {
-      endpoint = `${targetApi}/generate/flux`;
-      payload = {
-        prompt: finalPrompt,
-        width: dimensions.width,
-        height: dimensions.height,
-        steps: quality === 'ultra' ? 28 : 20,
-        guidance: 4.0,
-        seed: Number(seed) || Math.floor(Math.random() * 1000000)
-      };
-    } else if (effectiveProvider === 'sdxl') {
-      endpoint = `${targetApi}/generate/sdxl`;
-      payload = {
-        prompt: finalPrompt,
-        negative: negativePrompt,
-        width: dimensions.width,
-        height: dimensions.height,
-        steps: quality === 'ultra' ? 35 : 28,
-        cfg: 7.0,
-        seed: Number(seed) || Math.floor(Math.random() * 1000000)
-      };
-    } else if (effectiveProvider === 'upscale') {
-      endpoint = `${targetApi}/upscale`;
-      payload = {
-        image_path: tempFilePath,
-        model: 'RealESRGAN_x4plus_anime_6B.pth'
-      };
-    }
+      if (effectiveProvider === 'qwen-edit') {
+        endpoint = `${targetApi}/edit/qwen`;
+        payload = {
+          image_path: tempFilePath,
+          prompt: finalPrompt,
+          seed: Number(seed) || Math.floor(Math.random() * 1000000),
+          fast: fast !== false
+        };
+      } else if (effectiveProvider === 'flux') {
+        endpoint = `${targetApi}/generate/flux`;
+        payload = {
+          prompt: finalPrompt,
+          width: dimensions.width,
+          height: dimensions.height,
+          steps: quality === 'ultra' ? 28 : 20,
+          guidance: 4.0,
+          seed: Number(seed) || Math.floor(Math.random() * 1000000)
+        };
+      } else if (effectiveProvider === 'sdxl') {
+        endpoint = `${targetApi}/generate/sdxl`;
+        payload = {
+          prompt: finalPrompt,
+          negative: negativePrompt,
+          width: dimensions.width,
+          height: dimensions.height,
+          steps: quality === 'ultra' ? 35 : 28,
+          cfg: 7.0,
+          seed: Number(seed) || Math.floor(Math.random() * 1000000)
+        };
+      } else if (effectiveProvider === 'upscale') {
+        endpoint = `${targetApi}/upscale`;
+        payload = {
+          image_path: tempFilePath,
+          model: 'RealESRGAN_x4plus_anime_6B.pth'
+        };
+      }
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(900000)
-    });
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(900000)
+      });
 
-    if (response.ok) {
-      const data = await response.json();
-      const images = Array.isArray(data.images) ? data.images : [];
-      if (images.length > 0) {
-        const outPath = images[0];
-        if (fs.existsSync(outPath)) {
-          const outBytes = fs.readFileSync(outPath);
-          liveOutputUrl = `data:image/png;base64,${outBytes.toString('base64')}`;
-        } else if (outPath.startsWith('data:')) {
-          liveOutputUrl = outPath;
+      if (response.ok) {
+        const data = await response.json();
+        const images = Array.isArray(data.images) ? data.images : [];
+        if (images.length > 0) {
+          const outPath = images[0];
+          if (fs.existsSync(outPath)) {
+            const outBytes = fs.readFileSync(outPath);
+            liveOutputUrl = `data:image/png;base64,${outBytes.toString('base64')}`;
+          } else if (outPath.startsWith('data:')) {
+            liveOutputUrl = outPath;
+          }
+          activeProviderName = `ComfyUI (${effectiveProvider})`;
         }
       }
-    }
-  } catch (backendErr) {
-    // If backend is unreachable or fails, we fall back to Development Mock Provider if permitted
-    if (!allowMock) {
-      throw Object.assign(new Error(`اتصال به سرور AI در ${targetApi} برقرار نشد: ${backendErr.message}`), { status: 503 });
-    }
-  } finally {
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
-      try { fs.unlinkSync(tempFilePath); } catch { /* ignore */ }
+    } catch {
+      // ComfyUI backend not running or unreachable
+    } finally {
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try { fs.unlinkSync(tempFilePath); } catch { /* ignore */ }
+      }
     }
   }
 
-  // 4. If live generation produced output, return it
+  // 4. Cloudflare Workers AI FLUX.2 Klein 9B (Production Cloud Inference)
+  const hasCloudflareCredentials = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+  if (!liveOutputUrl && (hasCloudflareCredentials || effectiveProvider === 'cloudflare')) {
+    try {
+      const cfResult = await generateCloudflareProductPhoto({
+        imageBytes: refBuffer,
+        style,
+        prompt: finalPrompt
+      });
+      if (cfResult?.dataUrl) {
+        liveOutputUrl = cfResult.dataUrl;
+        activeProviderName = 'Cloudflare Workers AI (FLUX.2 Klein 9B)';
+      }
+    } catch (cfErr) {
+      if (cfErr.safetyFlagged || isContentFlagged(cfErr.message, null)) {
+        throw cfErr; // Strictly respect Cloudflare safety filter constraint
+      }
+      if (!allowMock && (effectiveProvider === 'cloudflare' || !hasCloudflareCredentials)) {
+        throw cfErr;
+      }
+    }
+  }
+
+  // 5. If live generation produced output, return it
   if (liveOutputUrl) {
     return {
       success: true,
@@ -241,7 +281,7 @@ async function generateStudioPhoto({
       images: [liveOutputUrl],
       style,
       prompt: finalPrompt,
-      provider: effectiveProvider,
+      provider: activeProviderName,
       dimensions,
       aspectRatio,
       preservation,
@@ -250,7 +290,11 @@ async function generateStudioPhoto({
     };
   }
 
-  // 5. Development Mock Provider (high-fidelity fallback preserving 100% reference)
+  // 6. Development Mock Provider (high-fidelity fallback preserving 100% reference)
+  if (!allowMock) {
+    throw Object.assign(new Error('اتصال به موتور هوش مصنوعی برقرار نشد. لطفاً متغیرهای CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در تنظیمات Vercel وارد کنید یا سرور ComfyUI را اجرا نمایید.'), { status: 503 });
+  }
+
   const mockOutputUrl = `data:${mimeType};base64,${inputBuffer.toString('base64')}`;
 
   return {
@@ -266,8 +310,7 @@ async function generateStudioPhoto({
     preservation,
     quality,
     mode: 'development-simulation',
-    needsClientComposite: true,
-    note: 'خروجی استودیو در حالت توسعه (اتصال مستقیم به سرور AI یا GPU فعال است)'
+    note: 'حالت توسعه: برای تولید زندهٔ تصویر کاتالوگی با هوش مصنوعی، متغیرهای Cloudflare در Vercel یا سرور ComfyUI را فعال کنید.'
   };
 }
 

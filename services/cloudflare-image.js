@@ -15,9 +15,15 @@ function promptFor(style, imageRoles = REFERENCE_VIEW_IDS) {
   // but exclude freeform text from the model prompt (shoe-only ecommerce prompt).
   const roles = Array.isArray(imageRoles) ? imageRoles : (Array.isArray(arguments[2]) ? arguments[2] : (Array.isArray(arguments[1]) ? arguments[1] : []));
   const scenes = {
+    'catalog-white':'a clean, pure white seamless commercial catalog background, professional soft studio lighting, crisp natural contact shadow on white floor',
     'warm-studio':'a premium warm ivory studio with a soft beige plaster backdrop and subtle natural contact shadow',
     'dark-luxury':'a refined dark forest-green and charcoal studio, matte stone surface and restrained warm highlights',
-    'natural-stone':'a minimal natural limestone and warm sand setting with soft daylight'
+    'minimal':'a minimal bright white concrete pedestal studio with soft diffuse daylight',
+    'lifestyle':'a warm interior setting on an elegant light oak surface with soft ambient lighting',
+    'on-model':'a professional studio floor setting showcasing the shoe with dynamic perspective lighting',
+    'advertising':'a high-contrast commercial advertising campaign backdrop with vibrant studio spotlight',
+    'natural-stone':'a minimal natural limestone and warm sand setting with soft daylight',
+    'custom':'a professional commercial product studio with pristine lighting tailored to the product'
   };
   const activeRoles = roles.length ? roles : ['front'];
   if (activeRoles.length === 1) {
@@ -63,7 +69,7 @@ function buildEndpoint(accountId, model = MODEL) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
 }
 
-async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio' }) {
+async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio', prompt }) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
   const apiToken = process.env.CLOUDFLARE_API_TOKEN || '';
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_MODEL;
@@ -76,7 +82,7 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
   const roles = Array.isArray(imageRoles) ? imageRoles : (references.length === 1 ? ['front'] : REFERENCE_VIEW_IDS.slice(0, references.length));
 
   const form = new FormData();
-  form.append('prompt', promptFor(style, roles));
+  form.append('prompt', prompt || promptFor(style, roles));
   references.forEach((image, index) => {
     form.append(`input_image_${index}`, new Blob([image], { type:'image/jpeg' }), `shoe-view-${index + 1}.jpg`);
   });
