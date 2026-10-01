@@ -492,7 +492,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .lux-hero-glow {
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(34% 46% at 86% 70%, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0) 72%);
+  background: radial-gradient(30% 40% at 60% 88%, rgba(16, 185, 129, 0.10) 0%, rgba(16, 185, 129, 0) 74%);
   mix-blend-mode: screen;
 }
 .lux-hero-watermark {
@@ -528,10 +528,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   width: min(780px, 56vw);
   aspect-ratio: 1;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.015) 58%, rgba(16, 185, 129, 0.07) 100%);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.008) 62%, rgba(16, 185, 129, 0.028) 100%);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 40px 90px -45px rgba(0, 0, 0, 0.75);
   pointer-events: none;
 }
@@ -552,19 +552,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   padding: 46px 42px 40px;
   border-radius: 46px 46px 46px 150px;
   overflow: hidden;
-  background: linear-gradient(148deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.11) 42%, rgba(8, 24, 16, 0.26) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(28px) saturate(165%);
-  -webkit-backdrop-filter: blur(28px) saturate(165%);
-  box-shadow: 0 42px 92px -40px rgba(2, 10, 6, 0.88), inset 0 1px 0 rgba(255, 255, 255, 0.40);
+  /* شیشهٔ تقریباً بی‌رنگ: تینت بسیار کم + بلور بالا؛ عمق فقط از لبه‌ها و بازتاب‌ها می‌آید */
+  background: linear-gradient(152deg, rgba(255, 255, 255, 0.065) 0%, rgba(255, 255, 255, 0.024) 40%, rgba(255, 255, 255, 0.010) 68%, rgba(255, 255, 255, 0.016) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(34px) saturate(130%) brightness(1.05);
+  -webkit-backdrop-filter: blur(34px) saturate(130%) brightness(1.05);
+  box-shadow:
+    0 44px 96px -44px rgba(0, 0, 0, 0.68),
+    inset 0 1px 0 rgba(255, 255, 255, 0.60),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 72px rgba(255, 255, 255, 0.035);
 }
 .lux-hero-glass-sheen {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(120% 96% at 92% -12%, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0) 52%),
-    radial-gradient(130% 110% at -8% 108%, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0) 56%);
+    radial-gradient(112% 88% at 94% -16%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(124deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.055) 44%, rgba(255, 255, 255, 0.11) 50%, rgba(255, 255, 255, 0) 64%),
+    radial-gradient(130% 110% at -10% 110%, rgba(16, 185, 129, 0.07) 0%, rgba(16, 185, 129, 0) 52%);
 }
 .hero-kicker {
   position: relative;
@@ -573,8 +579,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 8px;
   padding: 7px 15px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   color: #a7f3d0;
   font-size: 12px;
   font-weight: 600;
@@ -644,8 +650,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 8px;
   padding: 14px 22px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
