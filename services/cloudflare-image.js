@@ -63,16 +63,33 @@ function formatSafetyFlaggedError(rawMessage, payload, headers) {
   return error;
 }
 
+function sanitizeEnv(value) {
+  return String(value || '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+function getCloudflareConfig() {
+  const accountId = sanitizeEnv(process.env.CLOUDFLARE_ACCOUNT_ID);
+  const rawToken = sanitizeEnv(process.env.CLOUDFLARE_API_TOKEN);
+  const apiToken = rawToken.replace(/^Bearer\s+/i, '').trim();
+  const model = sanitizeEnv(process.env.CLOUDFLARE_IMAGE_MODEL) || DEFAULT_MODEL;
+  return {
+    accountId,
+    apiToken,
+    model,
+    configured: Boolean(accountId && apiToken)
+  };
+}
+
 function buildEndpoint(accountId, model = MODEL) {
-  if (!/^[a-f0-9]{32}$/i.test(String(accountId || ''))) throw Object.assign(new Error('CLOUDFLARE_ACCOUNT_ID باید شناسهٔ ۳۲ کاراکتری حساب Cloudflare باشد.'), { status:503 });
-  if (!/^@cf\/[a-z0-9./-]+$/i.test(model)) throw Object.assign(new Error('مدل Cloudflare معتبر نیست.'), { status:500 });
-  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
+  const cleanAccountId = sanitizeEnv(accountId);
+  const cleanModel = sanitizeEnv(model) || MODEL;
+  if (!/^[a-f0-9]{32}$/i.test(cleanAccountId)) throw Object.assign(new Error('CLOUDFLARE_ACCOUNT_ID باید شناسهٔ ۳۲ کاراکتری حساب Cloudflare باشد.'), { status:503 });
+  if (!/^@cf\/[a-z0-9./-]+$/i.test(cleanModel)) throw Object.assign(new Error('مدل Cloudflare معتبر نیست.'), { status:500 });
+  return `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${cleanModel}`;
 }
 
 async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-studio', prompt }) {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || '';
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN || '';
-  const model = process.env.CLOUDFLARE_IMAGE_MODEL || DEFAULT_MODEL;
+  const { accountId, apiToken, model } = getCloudflareConfig();
   if (!accountId || !apiToken) throw Object.assign(new Error('برای فعال‌سازی رایگان روزانه، CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN را در فایل محلی .env تنظیم کنید.'), { status:503 });
 
   const references = Array.isArray(imageBytes) ? imageBytes : [imageBytes];
@@ -135,6 +152,7 @@ async function generateProductPhoto({ imageBytes, imageRoles, style = 'warm-stud
 
 module.exports = {
   generateProductPhoto,
+  getCloudflareConfig,
   promptFor,
   buildEndpoint,
   extractCloudflareId,

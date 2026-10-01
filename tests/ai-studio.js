@@ -154,6 +154,40 @@ async function runTests() {
     assert.equal(cfGenResult.success, true);
     assert(cfGenResult.provider.includes('Cloudflare Workers AI'));
     assert(cfGenResult.generatedUrl.startsWith('data:image/png;base64,'));
+
+    // Also test default provider ('qwen-edit') falling back to Cloudflare on Vercel with whitespace in env vars
+    process.env.CLOUDFLARE_ACCOUNT_ID = ' "1234567890abcdef1234567890abcdef" \n';
+    process.env.CLOUDFLARE_API_TOKEN = ' Bearer mock-cf-token-123 ';
+    const cfFallbackResult = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(cfFallbackResult.success, true);
+    assert(cfFallbackResult.provider.includes('Cloudflare Workers AI'));
+
+    // Ensure real Cloudflare errors are NOT swallowed when provider is 'qwen-edit' and allowMock is false
+    global.fetch = async (url) => {
+      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
+        return {
+          ok: false,
+          status: 403,
+          headers: new Map([['content-type', 'application/json']]),
+          json: async () => ({ success: false, errors: [{ message: 'Authentication error: invalid API token' }] })
+        };
+      }
+      throw new Error('Connection refused');
+    };
+    await assert.rejects(
+      () => generateStudioPhoto({
+        image: sampleDataUrl,
+        style: 'catalog-white',
+        provider: 'qwen-edit',
+        allowMock: false
+      }),
+      /Authentication error: invalid API token/
+    );
   } finally {
     global.fetch = originalFetch;
     process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;

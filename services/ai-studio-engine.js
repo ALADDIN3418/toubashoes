@@ -25,6 +25,7 @@ const {
 } = require('./prompt-templates.js');
 const {
   generateProductPhoto: generateCloudflareProductPhoto,
+  getCloudflareConfig,
   formatSafetyFlaggedError,
   isContentFlagged
 } = require('./cloudflare-image.js');
@@ -172,8 +173,9 @@ async function generateStudioPhoto({
   let liveOutputUrl = null;
   let activeProviderName = effectiveProvider;
 
-  // 3. Attempt ComfyUI Provider Request (if not explicitly cloudflare-only)
-  if (effectiveProvider !== 'cloudflare') {
+  // 3. Attempt ComfyUI Provider Request (if not explicitly cloudflare-only and not targeting localhost on Vercel)
+  const isLocalhostTarget = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(targetApi);
+  if (effectiveProvider !== 'cloudflare' && !(process.env.VERCEL && isLocalhostTarget)) {
     let tempFilePath = null;
     try {
       tempFilePath = path.join(os.tmpdir(), `studio-input-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`);
@@ -250,7 +252,8 @@ async function generateStudioPhoto({
   }
 
   // 4. Cloudflare Workers AI FLUX.2 Klein 9B (Production Cloud Inference)
-  const hasCloudflareCredentials = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+  const cfConfig = getCloudflareConfig();
+  const hasCloudflareCredentials = cfConfig.configured;
   if (!liveOutputUrl && (hasCloudflareCredentials || effectiveProvider === 'cloudflare')) {
     try {
       const cfResult = await generateCloudflareProductPhoto({
@@ -266,7 +269,7 @@ async function generateStudioPhoto({
       if (cfErr.safetyFlagged || isContentFlagged(cfErr.message, null)) {
         throw cfErr; // Strictly respect Cloudflare safety filter constraint
       }
-      if (!allowMock && (effectiveProvider === 'cloudflare' || !hasCloudflareCredentials)) {
+      if (!allowMock) {
         throw cfErr;
       }
     }

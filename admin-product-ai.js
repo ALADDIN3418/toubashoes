@@ -279,6 +279,7 @@
         <label for="ai-product-pipeline">پایپ‌لاین و مدل ComfyUI</label>
         <select id="ai-product-pipeline" class="ai-studio-select">
           <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - ویرایش دستوری با حفظ ۱۰۰٪ فرم کفش مرجع)</option>
+          <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (موتور ابری هوشمند)</option>
           <option value="flux">FLUX.2-klein (تولید تصویر با فلو مچینگ و وضوح بالا)</option>
           <option value="sdxl">SDXL Base 1.0 (عکاسی کاتالوگی استودیو)</option>
           <option value="upscale">Real-ESRGAN Upscale (افزایش کیفیت و شفافیت تصویر)</option>
@@ -543,6 +544,7 @@
                   <label for="ai-studio-provider-select">موتور هوش مصنوعی:</label>
                   <select id="ai-studio-provider-select" class="select full">
                     <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - ویرایش دستوری با قفل عکس مرجع)</option>
+                    <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (موتور ابری هوشمند)</option>
                     <option value="flux">FLUX Kontext (فلو مچینگ کیفیت بالا)</option>
                     <option value="sdxl">SDXL Studio Base 1.0 (عکاسی کاتالوگ کلاسیک)</option>
                     <option value="upscale">Real-ESRGAN Upscale (ارتقای شارپنس و بافت)</option>
