@@ -92,6 +92,46 @@ async function describeShoeWithGemini(input = {}) {
   } catch (error) {
     console.warn('Gemini description generation fallback:', error.message);
   }
+
+  // Fallback to FreeLLMAPI Multi-Provider Router (Groq / OpenRouter :free / Pollinations Keyless / FreeLLMAPI Gateway)
+  try {
+    const { runFreeLlmChatCompletion } = require('../../../services/freellmapi-router.js');
+    const prompt = `شما نویسندهٔ توضیحات محصول فروشگاه کفش طوبی هستید. یک پیش‌نویس دقیق و خوش‌خوان فارسی تولید کنید.
+فقط اطلاعات موجود در ورودی را به‌عنوان واقعیت بیان کنید. دربارهٔ جنس چرم، زیره، کفی طبی، راحتی، دوام، سلامت پا، کشور سازنده یا مزایای فنی چیزی را حدس نزنید.
+نام: ${input.name || ''}
+دسته‌بندی: ${input.category || ''}
+برند: ${input.brand || ''}
+رنگ‌ها: ${input.colors || ''}
+سایزها: ${input.sizes || ''}
+ویژگی‌های ثبت‌شده: ${input.features || ''}
+مشخصات فنی ثبت‌شده: ${input.specifications || ''}
+
+فقط یک JSON معتبر با این ساختار برگردان:
+{"shortDesc":"...","longDesc":"...","features":["..."],"specifications":"..."}`;
+    const freeRes = await runFreeLlmChatCompletion({
+      messages: [{ role: 'user', content: prompt }],
+      jsonMode: true
+    });
+    if (freeRes?.text) {
+      const jsonMatch = freeRes.text.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : freeRes.text);
+      if (parsed.shortDesc && parsed.longDesc) {
+        const parsedFeatures = Array.isArray(parsed.features) ? parsed.features : [parsed.features].filter(Boolean);
+        return {
+          shortDesc: compactText(parsed.shortDesc, 120),
+          longDesc: compactText(parsed.longDesc, 480),
+          features: parsedFeatures.slice(0, 4).map(feature => compactText(feature, 100)),
+          specifications: typeof parsed.specifications === 'string'
+            ? parsed.specifications
+            : Object.entries(parsed.specifications || {}).map(([key, value]) => `${key}: ${value}`).join('\n'),
+          model: freeRes.routedVia || 'freellmapi-auto'
+        };
+      }
+    }
+  } catch {
+    // Proceed to deterministic local draft
+  }
+
   return generateLocalShoeDescription(input);
 }
 

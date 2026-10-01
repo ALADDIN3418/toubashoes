@@ -30,6 +30,10 @@ const {
   isQuotaOrRateLimitError,
   LIGHT_MODEL
 } = require('./cloudflare-image.js');
+const {
+  generateWithFreeLlmApiRouter,
+  getFreeLlmApiConfig
+} = require('./freellmapi-router.js');
 
 const DEFAULT_BACKEND_URL = process.env.AI_STUDIO_BACKEND_URL || process.env.COMFY_API_URL || 'http://127.0.0.1:8000';
 const DEFAULT_PROVIDER = process.env.AI_STUDIO_PROVIDER || 'qwen-edit';
@@ -41,7 +45,8 @@ const GEMINI_FALLBACK_MODELS = Object.freeze([
 ]);
 
 const SUPPORTED_PROVIDERS = Object.freeze([
-  { id: 'qwen-edit', name: 'هوشمند خودکار (Qwen / FLUX.2 + سوییچ خودکار مدل جایگزین)', badge: 'پیشنهادی (ضد محدودیت)', description: 'سوییچ خودکار بین مدل‌های اصلی و جایگزین در زمان رسیدن به محدودیت روزانه' },
+  { id: 'qwen-edit', name: 'هوشمند خودکار (FreeLLMAPI + Qwen / FLUX.2 + سوییچ خودکار مدل جایگزین)', badge: 'پیشنهادی (ضد محدودیت)', description: 'سوییچ خودکار بین ۳۴ سرویس رایگان FreeLLMAPI، کلودفلر، جمینای و مدل‌های جایگزین بدون محدودیت روزانه' },
+  { id: 'freellmapi', name: 'FreeLLMAPI Smart Router (۶۳۵ مدل رایگان · بدون محدودیت)', badge: '۷.۴ میلیارد توکن رایگان', description: 'روتر یکپارچه FreeLLMAPI با چرخش خودکار بین Pollinations، NVIDIA، SiliconFlow، HuggingFace، Cloudflare و Gemini' },
   { id: 'cloudflare-4b', name: 'Cloudflare FLUX.2 Klein 4B (کم‌مصرف)', badge: 'صرفه‌جویی ۲.۵ برابری', description: 'مدل ۴ میلیارد پارامتری سبک با مصرف کمتر از نصف سهمیه روزانه و حفظ دقیق کالا' },
   { id: 'cloudflare', name: 'Cloudflare FLUX.2 Klein 9B', badge: 'ابری هوشمند', description: 'مدل ابری ۹ میلیارد پارامتری فلو مچینگ با جایگزینی خودکار مدل در زمان محدودیت' },
   { id: 'gemini', name: 'Google Gemini Image Studio', badge: 'موتور جایگزین گوگل', description: 'تولید و ویرایش تصویر استودیویی با سهمیه مجزای Google Gemini API' },
@@ -189,6 +194,8 @@ async function generateStudioPhoto({
   quality = 'high',
   provider = DEFAULT_PROVIDER,
   apiUrl = DEFAULT_BACKEND_URL,
+  freellmapiUrl,
+  freellmapiKey,
   productType = 'shoe_or_bag',
   fast = true,
   seed,
@@ -247,8 +254,34 @@ async function generateStudioPhoto({
   let activeModel = effectiveProvider;
   let lastCloudError = null;
 
-  const isCloudOnlyProvider = ['cloudflare', 'cloudflare-4b', 'gemini'].includes(effectiveProvider);
+  const isCloudOnlyProvider = ['cloudflare', 'cloudflare-4b', 'gemini', 'freellmapi'].includes(effectiveProvider);
   const isLocalhostTarget = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(targetApi);
+
+  // Detect if apiUrl is actually a FreeLLMAPI /v1 gateway URL (e.g. :3001 or ends with /v1)
+  const resolvedFreeLlmUrl = freellmapiUrl || (/:3001(\/|$)|\/v1$/i.test(targetApi) ? targetApi : undefined);
+
+  // 3a. If provider is explicitly 'freellmapi' and a FreeLLMAPI Gateway URL is configured, try it first
+  if (effectiveProvider === 'freellmapi' && (resolvedFreeLlmUrl || process.env.FREELLMAPI_URL || process.env.FREELLMAPI_BASE_URL)) {
+    try {
+      const freeRouterRes = await generateWithFreeLlmApiRouter({
+        prompt: finalPrompt,
+        imageBytes: refBuffer,
+        mimeType,
+        width: dimensions.width,
+        height: dimensions.height,
+        seed,
+        gatewayUrl: resolvedFreeLlmUrl,
+        gatewayKey: freellmapiKey
+      });
+      if (freeRouterRes?.dataUrl) {
+        liveOutputUrl = freeRouterRes.dataUrl;
+        activeModel = freeRouterRes.model;
+        activeProviderName = freeRouterRes.provider;
+      }
+    } catch {
+      // Proceed to cascade
+    }
+  }
 
   // 3. Attempt ComfyUI Provider Request (if not explicitly cloud-only and not targeting localhost on Vercel)
   if (!isCloudOnlyProvider && !(process.env.VERCEL && isLocalhostTarget)) {
@@ -382,6 +415,39 @@ async function generateStudioPhoto({
         }
       } catch (gemErr) {
         if (!lastCloudError) lastCloudError = gemErr;
+      }
+    }
+  }
+
+  // 4c. FreeLLMAPI Multi-Provider Router Pool (tashfeenahmed/freellmapi: Gateway + NVIDIA NIM + SiliconFlow + HuggingFace + Keyless Pollinations FLUX/Kontext)
+  // Triggered when 'freellmapi' is selected OR when primary cloud providers are unconfigured or hit daily quota/rate limits
+  if (!liveOutputUrl) {
+    const shouldTryFreeLlmPool =
+      effectiveProvider === 'freellmapi' ||
+      (!lastCloudError && !hasCloudflareCredentials && !hasGeminiCredentials && !allowMock) ||
+      (lastCloudError && isQuotaOrRateLimitError(lastCloudError));
+
+    if (shouldTryFreeLlmPool) {
+      try {
+        const freePoolResult = await generateWithFreeLlmApiRouter({
+          prompt: finalPrompt,
+          imageBytes: refBuffer,
+          mimeType,
+          width: dimensions.width,
+          height: dimensions.height,
+          seed,
+          gatewayUrl: resolvedFreeLlmUrl,
+          gatewayKey: freellmapiKey
+        });
+        if (freePoolResult?.dataUrl) {
+          liveOutputUrl = freePoolResult.dataUrl;
+          fallbackUsed = effectiveProvider !== 'freellmapi';
+          activeModel = freePoolResult.model;
+          activeProviderName = freePoolResult.provider;
+          lastCloudError = null;
+        }
+      } catch (freeErr) {
+        if (!lastCloudError) lastCloudError = freeErr;
       }
     }
   }
@@ -537,6 +603,7 @@ module.exports = {
   checkBackendHealth,
   checkComfyHealth,
   generateStudioPhoto,
-   generateGeminiStudioPhoto,
+  generateGeminiStudioPhoto,
+  getFreeLlmApiConfig,
   attachImageToProduct
 };

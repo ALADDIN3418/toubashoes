@@ -265,6 +265,65 @@ async function runTests() {
       assert.equal(geminiFallbackRes.fallbackUsed, true);
       assert(geminiFallbackRes.provider.includes('Google Gemini AI'));
 
+      // Test automatic failover to FreeLLMAPI Multi-Provider Pool (e.g. Pollinations Keyless FLUX) when Cloudflare & Gemini hit 429
+      global.fetch = async (url) => {
+        const target = String(url);
+        if (target.includes('image.pollinations.ai/prompt/')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: (k) => k.toLowerCase() === 'content-type' ? 'image/jpeg' : null },
+            arrayBuffer: async () => Buffer.from('fake-pollinations-flux-bytes').buffer
+          };
+        }
+        return {
+          ok: false,
+          status: 429,
+          headers: new Map([['content-type', 'application/json']]),
+          text: async () => 'Quota exceeded',
+          json: async () => ({ success: false, errors: [{ message: 'Daily quota exceeded' }] })
+        };
+      };
+      const freeLlmFailoverRes = await generateStudioPhoto({
+        image: sampleDataUrl,
+        style: 'catalog-white',
+        provider: 'qwen-edit',
+        allowMock: false
+      });
+      assert.equal(freeLlmFailoverRes.success, true);
+      assert.equal(freeLlmFailoverRes.fallbackUsed, true);
+      assert(freeLlmFailoverRes.provider.includes('FreeLLMAPI'));
+      assert.equal(freeLlmFailoverRes.mode, 'live-inference');
+
+      // Test direct FreeLLMAPI Gateway (/v1/images/generations)
+      global.fetch = async (url) => {
+        const target = String(url);
+        if (target.includes('localhost:3001/v1/images/generations')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: {
+              get: (k) => k.toLowerCase() === 'x-routed-via' ? 'nvidia/black-forest-labs/flux.2-klein-4b' : 'application/json'
+            },
+            text: async () => JSON.stringify({
+              data: [{ b64_json: Buffer.from('fake-freellmapi-gateway-img').toString('base64') }]
+            })
+          };
+        }
+        throw new Error('Unexpected fetch');
+      };
+      const directGatewayRes = await generateStudioPhoto({
+        image: sampleDataUrl,
+        style: 'luxury-showcase',
+        provider: 'freellmapi',
+        freellmapiUrl: 'http://localhost:3001/v1',
+        freellmapiKey: 'freellmapi-test-key',
+        allowMock: false
+      });
+      assert.equal(directGatewayRes.success, true);
+      assert(directGatewayRes.provider.includes('FreeLLMAPI'));
+      assert.equal(directGatewayRes.model, 'nvidia/black-forest-labs/flux.2-klein-4b');
+
       // Test built-in studio fallback when ALL cloud providers hit 429 daily quota
       global.fetch = async () => ({
         ok: false,

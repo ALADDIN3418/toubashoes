@@ -36,6 +36,7 @@
   ];
 
   const COMFY_STORAGE_URL_KEY = 'touba_ai_studio_api_url';
+  const FREELLMAPI_KEY_STORAGE = 'touba_freellmapi_key';
   function getStudioBackendUrl() {
     try {
       return localStorage.getItem(COMFY_STORAGE_URL_KEY) || 'http://localhost:8000';
@@ -46,6 +47,18 @@
   function setStudioBackendUrl(url) {
     try {
       localStorage.setItem(COMFY_STORAGE_URL_KEY, String(url || '').trim());
+    } catch { /* ignore */ }
+  }
+  function getFreeLlmApiKey() {
+    try {
+      return localStorage.getItem(FREELLMAPI_KEY_STORAGE) || '';
+    } catch {
+      return '';
+    }
+  }
+  function setFreeLlmApiKey(key) {
+    try {
+      localStorage.setItem(FREELLMAPI_KEY_STORAGE, String(key || '').trim());
     } catch { /* ignore */ }
   }
 
@@ -366,9 +379,10 @@
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
         
-        <label for="ai-product-pipeline">پایپ‌لاین و مدل ComfyUI</label>
+        <label for="ai-product-pipeline">پایپ‌لاین و مدل ComfyUI / FreeLLMAPI</label>
         <select id="ai-product-pipeline" class="ai-studio-select">
-          <option value="qwen-edit" selected>Qwen-Image-Edit (پیشنهادی - سوییچ خودکار مدل جایگزین در زمان محدودیت)</option>
+          <option value="qwen-edit" selected>Qwen-Image-Edit + FreeLLMAPI (پیشنهادی - چرخش خودکار بدون محدودیت)</option>
+          <option value="freellmapi">FreeLLMAPI Smart Router (۶۳۵ مدل رایگان · بدون محدودیت روزانه)</option>
           <option value="cloudflare-4b">Cloudflare FLUX.2 Klein 4B (کم‌مصرف - ۲.۵ برابر سهمیه روزانه بیشتر)</option>
           <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (موتور ابری هوشمند)</option>
           <option value="gemini">Google Gemini Image Studio (موتور جایگزین گوگل)</option>
@@ -550,12 +564,13 @@
               <strong id="ai-backend-status-text">بررسی سرور هوش مصنوعی…</strong>
             </div>
             <div class="ai-backend-meta">
-              <span id="ai-backend-name">موتور: Qwen-Image-Edit (اولویت ۱)</span>
-              <button type="button" class="btn-text-link" id="ai-toggle-backend-settings">⚙️ تنظیمات اتصال</button>
+              <span id="ai-backend-name">موتور: FreeLLMAPI + Qwen / FLUX.2 (ضد محدودیت)</span>
+              <button type="button" class="btn-text-link" id="ai-toggle-backend-settings">⚙️ تنظیمات FreeLLMAPI / سرور</button>
             </div>
-            <div class="ai-backend-settings-panel" id="ai-backend-settings-panel" style="display:none;">
-              <input type="text" id="ai-studio-backend-url-input" value="${esc(getStudioBackendUrl())}" placeholder="http://localhost:8000" dir="ltr" />
-              <button type="button" class="btn small" id="ai-studio-save-backend-url">ذخیره و تست</button>
+            <div class="ai-backend-settings-panel" id="ai-backend-settings-panel" style="display:none; flex-direction:column; gap:6px;">
+              <input type="text" id="ai-studio-backend-url-input" value="${esc(getStudioBackendUrl())}" placeholder="http://localhost:3001/v1 (آدرس FreeLLMAPI یا ComfyUI)" dir="ltr" />
+              <input type="password" id="ai-studio-freellmapi-key-input" value="${esc(getFreeLlmApiKey())}" placeholder="freellmapi-... (کلید یکپارچه اختیاری)" dir="ltr" />
+              <button type="button" class="btn small" id="ai-studio-save-backend-url">ذخیره و تست اتصال</button>
             </div>
           </div>
         </header>
@@ -650,7 +665,8 @@
                 <div class="ai-setting-group flex-1">
                   <label for="ai-studio-provider-select">موتور هوش مصنوعی:</label>
                   <select id="ai-studio-provider-select" class="select full">
-                    <option value="qwen-edit" selected>هوشمند خودکار (Qwen / FLUX.2 + سوییچ خودکار مدل جایگزین)</option>
+                    <option value="qwen-edit" selected>هوشمند خودکار (FreeLLMAPI + Qwen / FLUX.2 · بدون محدودیت روزانه)</option>
+                    <option value="freellmapi">FreeLLMAPI Smart Router (۶۳۵ مدل رایگان · چرخش خودکار ۳۴ سرویس)</option>
                     <option value="cloudflare-4b">Cloudflare FLUX.2 Klein 4B (کم‌مصرف - ۲.۵ برابر سهمیه بیشتر)</option>
                     <option value="cloudflare">Cloudflare FLUX.2 Klein 9B (حداکثر جزئیات + مدل جایگزین)</option>
                     <option value="gemini">Google Gemini Image Studio (موتور جایگزین گوگل)</option>
@@ -788,6 +804,7 @@
     const toggleBackendBtn = target.querySelector('#ai-toggle-backend-settings');
     const backendPanel = target.querySelector('#ai-backend-settings-panel');
     const backendUrlInput = target.querySelector('#ai-studio-backend-url-input');
+    const freellmKeyInput = target.querySelector('#ai-studio-freellmapi-key-input');
     const saveBackendBtn = target.querySelector('#ai-studio-save-backend-url');
 
     // Check backend health
@@ -801,7 +818,7 @@
           if (data.success && data.configured) {
             backendStatusDot.classList.remove('offline');
             backendStatusDot.classList.add('online');
-            backendStatusText.textContent = `سرور آماده است (${data.provider})`;
+            backendStatusText.textContent = `مجهز به FreeLLMAPI · آماده (${data.provider})`;
             return;
           }
         }
@@ -810,7 +827,7 @@
         backendStatusDot.classList.remove('online');
         backendStatusDot.classList.add('pulse');
       }
-      if (backendStatusText) backendStatusText.textContent = 'حالت شبیه‌سازی محلی و آماده اتصال به GPU';
+      if (backendStatusText) backendStatusText.textContent = 'مجهز به روتر FreeLLMAPI (بدون محدودیت روزانه)';
     }
     checkBackend();
 
@@ -820,9 +837,10 @@
     saveBackendBtn?.addEventListener('click', () => {
       const val = (backendUrlInput.value || '').trim();
       setStudioBackendUrl(val);
+      if (freellmKeyInput) setFreeLlmApiKey(freellmKeyInput.value || '');
       backendPanel.style.display = 'none';
       checkBackend();
-      if (typeof g.toast === 'function') g.toast('آدرس سرور ذخیره شد.');
+      if (typeof g.toast === 'function') g.toast('تنظیمات روتر FreeLLMAPI و سرور ذخیره شد.');
     });
 
     // Dropzone interaction
@@ -934,7 +952,8 @@
           preservation: selectedPreservation,
           quality: selectedQuality,
           provider: selectedProvider,
-          apiUrl: getStudioBackendUrl()
+          apiUrl: getStudioBackendUrl(),
+          freellmapiKey: getFreeLlmApiKey()
         };
 
         const steps = [
