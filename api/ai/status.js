@@ -4,8 +4,10 @@ const {
   DEFAULT_COMFY_API_URL,
   SUPPORTED_PIPELINES,
   DEFAULT_PIPELINE,
+  SUPPORTED_PROVIDERS,
   checkComfyHealth
-} = require('../../services/comfy-image.js');
+} = require('../../services/ai-studio-engine.js');
+const { PRESETS } = require('../../services/prompt-templates.js');
 
 module.exports = async function aiStatus(req, res) {
   if (req.method !== 'GET') return sendJson(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -13,6 +15,7 @@ module.exports = async function aiStatus(req, res) {
   const health = await checkComfyHealth();
 
   return sendJson(res, 200, {
+    success: true,
     configured: true,
     keyless: true,
     unlimited: true,
@@ -23,6 +26,8 @@ module.exports = async function aiStatus(req, res) {
     model: DEFAULT_PIPELINE,
     supportedModels: SUPPORTED_PIPELINES,
     supportedPipelines: SUPPORTED_PIPELINES,
+    supportedProviders: SUPPORTED_PROVIDERS,
+    presets: PRESETS,
     comfyApiUrl: DEFAULT_COMFY_API_URL,
     comfyStatus: health,
     localDailyLimit: 'unlimited',
