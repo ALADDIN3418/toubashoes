@@ -24,11 +24,11 @@ async function main() {
   assert.match(quotaCompatibilityMigration,/successful_count \+ reserved_count < 50/);
   assert.match(quotaCompatibilityMigration,/notify pgrst, 'reload schema'/i);
   const referenceDataUrl=`data:image/jpeg;base64,${Buffer.from([0xff,0xd8,0xff,0x00]).toString('base64')}`;
-  assert.equal(parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl]}).length,3);
-  assert.equal(parseProductReferenceImages({images:[referenceDataUrl]}).length,1,'one optional reference is supported');
-  assert.deepEqual(parseProductReferenceRoles({imageRoles:['heel']},1),['heel']);
-  assert.throws(()=>parseProductReferenceImages({images:[]}),/دست‌کم یک/);
-  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl,referenceDataUrl]}),/دست‌کم یک/);
+  assert.equal(parseProductReferenceImages({image:referenceDataUrl}).length,1,'one clear image is supported');
+  assert.equal(parseProductReferenceImages({images:[referenceDataUrl]}).length,1,'array format with one image is supported');
+  assert.deepEqual(parseProductReferenceRoles({imageRoles:['front']},1),['front']);
+  assert.throws(()=>parseProductReferenceImages({images:[]}),/یک تصویر واضح/);
+  assert.throws(()=>parseProductReferenceImages({images:[referenceDataUrl,referenceDataUrl,referenceDataUrl,referenceDataUrl]}),/یک تصویر واضح/);
   assert.throws(()=>parseProductReferenceRoles({imageRoles:['side','side']},2),/زاویهٔ یکتا/);
   const draft = generateLocalShoeDescription({ name:'کفش نمونه', category:'formal' });
   assert.equal(draft.model,'local-draft');
@@ -70,28 +70,27 @@ async function main() {
   delete process.env.VERCEL;
   try {
     let res = response();
-    aiStatus({ method:'GET' }, res);
+    await aiStatus({ method:'GET' }, res);
     assert.equal(res.statusCode, 200);
-    assert.equal(payload(res).configured, false);
-    assert.equal(payload(res).provider, 'Cloudflare Workers AI');
-    assert.equal(payload(res).model, '@cf/black-forest-labs/flux-2-klein-9b');
-    assert.equal(payload(res).localDailyLimit, 50);
-    assert.equal(payload(res).quotaMode, 'process-memory');
+    assert.equal(payload(res).configured, true);
+    assert.equal(payload(res).keyless, true);
+    assert.equal(payload(res).unlimited, true);
+    assert.equal(payload(res).free, true);
+    assert.equal(payload(res).provider, 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)');
+    assert.equal(payload(res).model, 'qwen-edit');
+    assert(Array.isArray(payload(res).supportedModels));
+    assert(payload(res).supportedModels.includes('qwen-edit'));
 
-    process.env.CLOUDFLARE_ACCOUNT_ID='0123456789abcdef0123456789abcdef';
-    process.env.CLOUDFLARE_API_TOKEN='test-only-token';
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
     process.env.VERCEL='1';
     res = response();
-    await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{ images:[referenceDataUrl,referenceDataUrl,referenceDataUrl] } }, res);
+    await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{ images:[referenceDataUrl] } }, res);
     assert.equal(res.statusCode, 401);
     assert.match(payload(res).error, /وارد شوید/);
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_PUBLISHABLE_KEY;
     delete process.env.VERCEL;
-    delete process.env.CLOUDFLARE_ACCOUNT_ID;
-    delete process.env.CLOUDFLARE_API_TOKEN;
 
     res = response();
     await productPhoto({ method:'GET', headers:{} }, res);
@@ -101,9 +100,28 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
+    // Verify productPhoto generates photo using ComfyUI Automation API
     res = response();
-    await productPhoto({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{} }, res);
-    assert.equal(res.statusCode, 503);
+    await productPhoto({
+      method: 'POST',
+      headers: { origin: 'https://touba.test', host: 'touba.test' },
+      body: { image: referenceDataUrl, style: 'warm-studio', pipeline: 'qwen-edit' }
+    }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(payload(res).success, true);
+    assert.equal(payload(res).pipeline, 'qwen-edit');
+    assert.equal(payload(res).style, 'warm-studio');
+    assert.equal(payload(res).provider, 'ComfyUI Automation API (Qwen / FLUX / SDXL)');
+
+    // Verify productPhoto handles invalid input gracefully
+    res = response();
+    await productPhoto({
+      method: 'POST',
+      headers: { origin: 'https://touba.test', host: 'touba.test' },
+      body: { image: '' }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert(payload(res).error);
 
     const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
     const dataUrl = `data:image/jpeg;base64,${tinyJpeg}`;
@@ -134,5 +152,6 @@ async function main() {
     if (oldPublicKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = oldPublicKey;
   }
   console.log('PASS: Vercel function endpoints, same-origin checks and ephemeral upload behavior');
+  process.exit(0);
 }
 main().catch(error => { console.error(error); process.exit(1); });

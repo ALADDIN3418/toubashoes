@@ -3,7 +3,22 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { generateProductPhoto, MODEL } = require('./services/cloudflare-image.js');
+const {
+  generateStudioPhoto,
+  attachImageToProduct,
+  DEFAULT_PROVIDER,
+  DEFAULT_PIPELINE,
+  SUPPORTED_PROVIDERS,
+  SUPPORTED_PIPELINES,
+  DEFAULT_BACKEND_URL,
+  DEFAULT_COMFY_API_URL,
+  checkBackendHealth,
+  checkComfyHealth
+} = require('./services/ai-studio-engine.js');
+const { PRESETS } = require('./services/prompt-templates.js');
+const MODEL = DEFAULT_PIPELINE;
+const DEFAULT_MODEL = DEFAULT_PIPELINE;
+const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
@@ -184,10 +199,37 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (pathname === '/api/ai/status' && req.method === 'GET') {
-    const cloudflareConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+  if ((pathname === '/api/ai/status' || pathname === '/api/ai/studio/status') && req.method === 'GET') {
     const persistentQuotaConfigured = Boolean(persistentAiQuotaConfig());
-    return json(res, 200, { configured:cloudflareConfigured, cloudflareConfigured, persistentQuotaConfigured, quotaMode:persistentQuotaConfigured ? 'persistent-utc' : 'process-memory', provider:'Cloudflare Workers AI', model:process.env.CLOUDFLARE_IMAGE_MODEL || MODEL, freeDailyNeurons:10000, localDailyLimit:50, referenceMaxSide:511, note:persistentQuotaConfigured ? 'Supabase public configuration is present; RPC migration readiness is checked during the reservation request.' : 'Local development uses process-memory quota; production requires the durable Supabase migration.' });
+    const comfyHealth = await checkComfyHealth();
+    return json(res, 200, {
+      success: true,
+      configured: true,
+      keyless: true,
+      unlimited: true,
+      free: true,
+      persistentQuotaConfigured,
+      quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
+      provider: 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)',
+      model: DEFAULT_MODEL || MODEL,
+      defaultProvider: DEFAULT_PROVIDER,
+      supportedModels: SUPPORTED_MODELS,
+      supportedPipelines: SUPPORTED_PIPELINES,
+      supportedProviders: SUPPORTED_PROVIDERS,
+      presets: PRESETS,
+      comfyApiUrl: DEFAULT_COMFY_API_URL,
+      backendUrl: DEFAULT_BACKEND_URL,
+      comfyStatus: comfyHealth,
+      backendHealth: comfyHealth,
+      localDailyLimit: 'unlimited',
+      referenceMaxSide: 1280,
+      note: 'استودیو هوش مصنوعی محصول طوبی: ویرایش بر پایه عکس مرجع با Qwen-Image-Edit، FLUX و SDXL بدون وابستگی به کلیدهای شخص ثالث.'
+    });
+  }
+  if (pathname === '/api/ai/comfy-health' && req.method === 'GET') {
+    const apiUrl = req.url ? new URL(req.url, 'http://localhost').searchParams.get('url') : null;
+    const result = await checkComfyHealth(apiUrl || DEFAULT_COMFY_API_URL);
+    return json(res, 200, result);
   }
   if (pathname === '/api/ai/describe') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -205,21 +247,87 @@ const server = http.createServer(async (req, res) => {
       return json(res, 500, { error:error.message || 'خطا در تولید هوشمند توضیحات محصول' });
     }
   }
+  if (pathname === '/api/ai/studio/generate') {
+    if (req.method !== 'POST') return json(res, 405, { error: 'روش درخواست مجاز نیست.' });
+    if (!requireSameOrigin(req, res)) return;
+    let authContext;
+    try { authContext = await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error: error.message }); }
+    let body;
+    try {
+      body = await readBody(req, 15 * 1024 * 1024);
+      if (!body?.image && (!Array.isArray(body?.images) || body.images.length === 0)) {
+        throw Object.assign(new Error('برای تولید تصویر، آپلود یک عکس واضح از محصول الزامی است.'), { status: 400 });
+      }
+    } catch (error) { return json(res, Number(error.status) || 400, { error: error.message }); }
+    const persistentQuota = persistentAiQuotaConfig();
+    let reservationId = null, persistentReservation = false;
+    try {
+      if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = true; }
+      else reservationId = reserveWindowQuota('local-ai-studio', 50, 24 * 60 * 60 * 1000);
+      if (!reservationId) return json(res, 429, { error: 'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
+    } catch (error) { return json(res, Number(error.status) || 503, { error: error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
+    try {
+      const result = await generateStudioPhoto({
+        image: body.image || body.images[0],
+        referenceImage: body.referenceImage,
+        style: body.style,
+        customPrompt: body.customPrompt,
+        aspectRatio: body.aspectRatio,
+        preservation: body.preservation,
+        quality: body.quality,
+        provider: body.provider || body.pipeline,
+        apiUrl: body.apiUrl,
+        fast: body.fast !== false,
+        seed: body.seed
+      });
+      const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai-studio', reservationId, true);
+      if (!finalized) return json(res, 503, { error: 'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
+      return json(res, 200, result);
+    } catch (error) {
+      if (reservationId) {
+        try { if (persistentReservation) await finalizePersistentAiQuota(reservationId, false, authContext); else finishWindowQuota('local-ai-studio', reservationId, false); } catch { /* ignore */ }
+      }
+      const status = Number(error.status) || 502;
+      return json(res, status, {
+        error: error.message || 'ساخت تصویر با مدل هوش مصنوعی انجام نشد.',
+        code: error.code || undefined
+      });
+    }
+  }
+  if (pathname === '/api/ai/studio/attach') {
+    if (req.method !== 'POST') return json(res, 405, { error: 'روش درخواست مجاز نیست.' });
+    if (!requireSameOrigin(req, res)) return;
+    try { await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error: error.message }); }
+    let body;
+    try {
+      body = await readBody(req, 15 * 1024 * 1024);
+    } catch (error) { return json(res, 400, { error: error.message }); }
+    try {
+      const result = await attachImageToProduct({
+        productId: body.productId,
+        imageUrl: body.imageUrl,
+        asMainImage: Boolean(body.asMainImage),
+        addToGallery: body.addToGallery !== false,
+        serverDb
+      });
+      return json(res, 200, result);
+    } catch (error) {
+      return json(res, Number(error.status) || 400, { error: error.message });
+    }
+  }
   if (pathname === '/api/ai/product-photo') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
     if (!requireSameOrigin(req, res)) return;
     let authContext;
     try { authContext = await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
-    if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) {
-      return json(res, 503, { error:'سرویس هنوز تنظیم نشده است. Account ID و API Token را فقط در فایل محلی .env وارد کنید؛ این اطلاعات را در گفتگو نفرستید.' });
-    }
     let body, sourceBytes, imageRoles;
     try {
       body = await readBody(req, 4 * 1024 * 1024);
-      if (!Array.isArray(body.images) || body.images.length < 1 || body.images.length > 3) {
-        throw Object.assign(new Error('دست‌کم یک و حداکثر سه عکس مرجع لازم است.'), { status:400 });
+      const list = body?.image ? [body.image] : (Array.isArray(body?.images) ? body.images : []);
+      if (list.length < 1 || list.length > 3) {
+        throw Object.assign(new Error('برای ساخت تصویر، یک تصویر واضح از محصول لازم است.'), { status:400 });
       }
-      sourceBytes = body.images.map(image => parseJpegDataUrl(image, 768 * 1024));
+      sourceBytes = list.map(image => parseJpegDataUrl(image, 768 * 1024));
       imageRoles = parseProductReferenceRoles(body, sourceBytes.length);
     } catch (error) { return json(res, Number(error.status) || 400, { error:error.message }); }
     const persistentQuota = persistentAiQuotaConfig();
@@ -227,19 +335,41 @@ const server = http.createServer(async (req, res) => {
     try {
       if (persistentQuota) { reservationId = await reservePersistentAiQuota(50, authContext); persistentReservation = true; }
       else reservationId = reserveWindowQuota('local-ai', 50, 24 * 60 * 60 * 1000);
-      if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است؛ سهمیه و هزینهٔ Cloudflare نیز جداگانه اعمال می‌شود.' });
+      if (!reservationId) return json(res, 429, { error:'سقف ۵۰ خروجی موفق تصویر در روز UTC پر شده است.' });
     } catch (error) { return json(res, Number(error.status) || 503, { error:error.message || 'سرویس سهمیهٔ تصویر در دسترس نیست.' }); }
     try {
-      const result = await generateProductPhoto({ imageBytes:sourceBytes, imageRoles, style:body.style, productHint:body.productHint });
+      const studioResult = await generateStudioPhoto({
+        imageBytes: sourceBytes[0],
+        image: body.image,
+        customPrompt: body.prompt,
+        provider: body.pipeline || body.model || 'qwen-edit',
+        style: body.style || 'catalog-white',
+        apiUrl: body.apiUrl,
+        fast: body.fast !== false,
+        seed: body.seed
+      });
       const finalized = persistentReservation ? await finalizePersistentAiQuota(reservationId, true, authContext) : finishWindowQuota('local-ai', reservationId, true);
       if (!finalized) return json(res, 503, { error:'تصویر ساخته شد اما ثبت سهمیه تأیید نشد؛ خروجی تحویل داده نشد.' });
+      const result = {
+        success: true,
+        images: studioResult.images || [studioResult.generatedUrl],
+        image: studioResult.generatedUrl,
+        pipeline: body.pipeline || studioResult.provider,
+        style: body.style || studioResult.style,
+        provider: 'ComfyUI Automation API (Qwen / FLUX / SDXL)',
+        ...studioResult
+      };
       return json(res, 200, result);
     } catch (error) {
       if (reservationId) {
         try { if (persistentReservation) await finalizePersistentAiQuota(reservationId, false, authContext); else finishWindowQuota('local-ai', reservationId, false); } catch { /* expired reservations are reclaimed automatically */ }
       }
       const status = Number(error.status) || 502;
-      return json(res, status, { error:error.message || 'ساخت تصویر با Cloudflare انجام نشد.' });
+      return json(res, status, {
+        error: error.message || 'ساخت تصویر با مدل هوش مصنوعی انجام نشد.',
+        code: error.code || undefined,
+        quotaConsumed: false
+      });
     }
   }
   if (pathname === '/api/uploads/product-image') {
