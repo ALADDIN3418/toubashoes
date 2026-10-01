@@ -138,6 +138,183 @@
     return data;
   }
 
+  function extractProductForeground(img) {
+    if (typeof document === 'undefined') return null;
+    const nw = img.naturalWidth || img.width || 800;
+    const nh = img.naturalHeight || img.height || 800;
+    const scale = Math.min(1, 800 / Math.max(nw, nh));
+    const pw = Math.max(10, Math.round(nw * scale));
+    const ph = Math.max(10, Math.round(nh * scale));
+
+    const pCanvas = document.createElement('canvas');
+    pCanvas.width = pw;
+    pCanvas.height = ph;
+    const pCtx = pCanvas.getContext('2d');
+    if (!pCtx) return null;
+
+    pCtx.drawImage(img, 0, 0, pw, ph);
+    let imgData;
+    try {
+      imgData = pCtx.getImageData(0, 0, pw, ph);
+    } catch {
+      return null;
+    }
+
+    const data = imgData.data;
+    const binShift = 4;
+    const bgHist = new Int32Array(4096);
+    const fgHist = new Int32Array(4096);
+
+    const marginX = Math.max(2, Math.floor(pw * 0.12));
+    const marginY = Math.max(2, Math.floor(ph * 0.12));
+    const innerX0 = Math.floor(pw * 0.25), innerX1 = Math.floor(pw * 0.75);
+    const innerY0 = Math.floor(ph * 0.25), innerY1 = Math.floor(ph * 0.75);
+
+    let totalBg = 0, totalFg = 0;
+
+    // Sample background from outer perimeter
+    for (let y = 0; y < ph; y += 2) {
+      for (let x = 0; x < pw; x += 2) {
+        if (x < marginX || x >= pw - marginX || y < marginY || y >= ph - marginY) {
+          const idx = (y * pw + x) * 4;
+          const bIdx = ((data[idx] >> binShift) << 8) | ((data[idx + 1] >> binShift) << 4) | (data[idx + 2] >> binShift);
+          bgHist[bIdx]++;
+          totalBg++;
+        }
+      }
+    }
+
+    // Sample foreground from inner central box
+    for (let y = innerY0; y < innerY1; y += 2) {
+      for (let x = innerX0; x < innerX1; x += 2) {
+        const idx = (y * pw + x) * 4;
+        const bIdx = ((data[idx] >> binShift) << 8) | ((data[idx + 1] >> binShift) << 4) | (data[idx + 2] >> binShift);
+        fgHist[bIdx]++;
+        totalFg++;
+      }
+    }
+
+    const invBg = 1 / Math.max(1, totalBg);
+    const invFg = 1 / Math.max(1, totalFg);
+    const bgProb = new Float32Array(4096);
+    const fgProb = new Float32Array(4096);
+    for (let i = 0; i < 4096; i++) {
+      bgProb[i] = bgHist[i] * invBg;
+      fgProb[i] = fgHist[i] * invFg;
+    }
+
+    const mask = new Uint8Array(pw * ph);
+    const borderDistThreshold = Math.floor(pw * 0.14);
+
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        if (x < 3 || x >= pw - 3 || y < 3 || y >= ph - 3) {
+          mask[y * pw + x] = 0;
+          continue;
+        }
+        const idx = (y * pw + x) * 4;
+        const bIdx = ((data[idx] >> binShift) << 8) | ((data[idx + 1] >> binShift) << 4) | (data[idx + 2] >> binShift);
+        const pBg = bgProb[bIdx];
+        const pFg = fgProb[bIdx];
+
+        const distToBorder = Math.min(x, pw - 1 - x, y, ph - 1 - y);
+        const borderWeight = Math.max(0, Math.min(1, distToBorder / borderDistThreshold));
+
+        let alpha = 0;
+        if (pBg === 0 && pFg > 0) {
+          alpha = borderWeight > 0.35 ? 255 : 0;
+        } else if (pBg > 0 || pFg > 0) {
+          const likelihood = (pFg * borderWeight) / (pFg * borderWeight + pBg * (1.18 - borderWeight * 0.35) + 1e-6);
+          if (likelihood > 0.44) {
+            alpha = Math.min(255, Math.round(((likelihood - 0.44) / 0.26) * 255));
+          }
+        }
+        mask[y * pw + x] = alpha;
+      }
+    }
+
+    // Hole-filling: Find all background connected to outer perimeter
+    const visited = new Uint8Array(pw * ph);
+    const queue = new Int32Array(pw * ph);
+    let head = 0, tail = 0;
+
+    for (let x = 0; x < pw; x++) {
+      if (mask[x] < 128) { visited[x] = 1; queue[tail++] = x; }
+      const b = (ph - 1) * pw + x;
+      if (mask[b] < 128 && !visited[b]) { visited[b] = 1; queue[tail++] = b; }
+    }
+    for (let y = 0; y < ph; y++) {
+      const l = y * pw;
+      if (mask[l] < 128 && !visited[l]) { visited[l] = 1; queue[tail++] = l; }
+      const r = y * pw + (pw - 1);
+      if (mask[r] < 128 && !visited[r]) { visited[r] = 1; queue[tail++] = r; }
+    }
+
+    while (head < tail) {
+      const curr = queue[head++];
+      const cx = curr % pw;
+      const cy = Math.floor(curr / pw);
+      if (cx > 0) {
+        const n = curr - 1;
+        if (!visited[n] && mask[n] < 128) { visited[n] = 1; queue[tail++] = n; }
+      }
+      if (cx < pw - 1) {
+        const n = curr + 1;
+        if (!visited[n] && mask[n] < 128) { visited[n] = 1; queue[tail++] = n; }
+      }
+      if (cy > 0) {
+        const n = curr - pw;
+        if (!visited[n] && mask[n] < 128) { visited[n] = 1; queue[tail++] = n; }
+      }
+      if (cy < ph - 1) {
+        const n = curr + pw;
+        if (!visited[n] && mask[n] < 128) { visited[n] = 1; queue[tail++] = n; }
+      }
+    }
+
+    // Fill disconnected holes inside the product body (keeps laces, eyelets, logos solid)
+    for (let i = 0; i < pw * ph; i++) {
+      if (mask[i] < 128 && !visited[i]) {
+        mask[i] = 255;
+      }
+    }
+
+    // Find bounding box of foreground
+    let minX = pw, minY = ph, maxX = 0, maxY = 0;
+    let fgCount = 0;
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        const idx = (y * pw + x) * 4;
+        const a = mask[y * pw + x];
+        data[idx + 3] = a;
+        if (a > 40) {
+          fgCount++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    const totalPixels = pw * ph;
+    if (fgCount < totalPixels * 0.03 || (maxX - minX) < 15 || (maxY - minY) < 15) {
+      return null;
+    }
+
+    pCtx.putImageData(imgData, 0, 0);
+
+    return {
+      canvas: pCanvas,
+      bounds: {
+        x: Math.max(0, minX - 2),
+        y: Math.max(0, minY - 2),
+        width: Math.min(pw, (maxX - minX) + 4),
+        height: Math.min(ph, (maxY - minY) + 4)
+      }
+    };
+  }
+
   function createClientStudioPreview(inputDataUrl, styleId = 'catalog-white', ratioId = '1:1') {
     return new Promise((resolve) => {
       if (typeof Image === 'undefined' || typeof document === 'undefined') {
@@ -158,63 +335,115 @@
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(inputDataUrl);
 
-        // Studio backdrop by style
+        // 1. Studio backdrop by style
         if (styleId === 'dark-luxury') {
-          const grad = ctx.createRadialGradient(dim.w / 2, dim.h / 2, 80, dim.w / 2, dim.h / 2, dim.w * 0.7);
-          grad.addColorStop(0, '#2b302c');
-          grad.addColorStop(1, '#0e120f');
+          const grad = ctx.createRadialGradient(dim.w / 2, dim.h / 2, 60, dim.w / 2, dim.h / 2, dim.w * 0.75);
+          grad.addColorStop(0, '#24272c');
+          grad.addColorStop(0.65, '#131518');
+          grad.addColorStop(1, '#090a0c');
           ctx.fillStyle = grad;
           ctx.fillRect(0, 0, dim.w, dim.h);
         } else if (styleId === 'minimal') {
           const grad = ctx.createLinearGradient(0, 0, 0, dim.h);
-          grad.addColorStop(0, '#f7f6f2');
-          grad.addColorStop(1, '#e6e3da');
+          grad.addColorStop(0, '#fbf9f6');
+          grad.addColorStop(0.7, '#eeebe4');
+          grad.addColorStop(1, '#dedad0');
           ctx.fillStyle = grad;
           ctx.fillRect(0, 0, dim.w, dim.h);
         } else if (styleId === 'lifestyle') {
-          const grad = ctx.createLinearGradient(0, 0, dim.w, dim.h);
-          grad.addColorStop(0, '#fcf9f5');
-          grad.addColorStop(1, '#eee6da');
+          const horizon = Math.round(dim.h * 0.64);
+          const wallGrad = ctx.createLinearGradient(0, 0, 0, horizon);
+          wallGrad.addColorStop(0, '#fdfbf7');
+          wallGrad.addColorStop(1, '#ece7de');
+          ctx.fillStyle = wallGrad;
+          ctx.fillRect(0, 0, dim.w, horizon);
+          const floorGrad = ctx.createLinearGradient(0, horizon, 0, dim.h);
+          floorGrad.addColorStop(0, '#d8cfc4');
+          floorGrad.addColorStop(0.3, '#cbbfae');
+          floorGrad.addColorStop(1, '#ab9b88');
+          ctx.fillStyle = floorGrad;
+          ctx.fillRect(0, horizon, dim.w, dim.h - horizon);
+          ctx.fillStyle = 'rgba(255,255,255,0.22)';
+          ctx.fillRect(0, horizon, dim.w, 3);
+        } else if (styleId === 'advertising') {
+          const grad = ctx.createRadialGradient(dim.w / 2, dim.h / 2, 80, dim.w / 2, dim.h / 2, dim.w * 0.82);
+          grad.addColorStop(0, '#f3fbf2');
+          grad.addColorStop(0.55, '#cce3ca');
+          grad.addColorStop(1, '#98b894');
           ctx.fillStyle = grad;
           ctx.fillRect(0, 0, dim.w, dim.h);
-        } else if (styleId === 'advertising') {
-          const grad = ctx.createRadialGradient(dim.w / 2, dim.h / 2, 100, dim.w / 2, dim.h / 2, dim.w * 0.8);
-          grad.addColorStop(0, '#ebf5ea');
-          grad.addColorStop(1, '#bcd1ba');
+        } else if (styleId === 'on-model') {
+          const grad = ctx.createLinearGradient(0, 0, dim.w, dim.h);
+          grad.addColorStop(0, '#f4f6f9');
+          grad.addColorStop(0.5, '#e4e8ef');
+          grad.addColorStop(1, '#cad2de');
           ctx.fillStyle = grad;
           ctx.fillRect(0, 0, dim.w, dim.h);
         } else {
-          // catalog-white
-          ctx.fillStyle = '#ffffff';
+          // catalog-white: pure crisp white with subtle high-key radial studio light
+          const grad = ctx.createRadialGradient(dim.w / 2, dim.h * 0.45, 100, dim.w / 2, dim.h / 2, dim.w * 0.85);
+          grad.addColorStop(0, '#ffffff');
+          grad.addColorStop(0.8, '#ffffff');
+          grad.addColorStop(1, '#f6f7f9');
+          ctx.fillStyle = grad;
           ctx.fillRect(0, 0, dim.w, dim.h);
         }
 
-        // Draw soft natural contact shadow
-        const padding = Math.round(dim.w * 0.12);
-        const availW = dim.w - padding * 2;
-        const availH = dim.h - padding * 2;
-        const scale = Math.min(availW / (img.naturalWidth || 800), availH / (img.naturalHeight || 800));
-        const drawW = Math.round((img.naturalWidth || 800) * scale);
-        const drawH = Math.round((img.naturalHeight || 800) * scale);
-        const drawX = Math.round((dim.w - drawW) / 2);
-        const drawY = Math.round((dim.h - drawH) / 2);
+        // 2. Extract Product Foreground (removes carpet/floor/background)
+        const extracted = extractProductForeground(img);
+        let sourceToDraw = img;
+        let sx = 0, sy = 0, sw = img.naturalWidth || 800, sh = img.naturalHeight || 800;
 
+        if (extracted && extracted.bounds && extracted.bounds.width > 20 && extracted.bounds.height > 20) {
+          sourceToDraw = extracted.canvas;
+          sx = extracted.bounds.x;
+          sy = extracted.bounds.y;
+          sw = extracted.bounds.width;
+          sh = extracted.bounds.height;
+        }
+
+        // 3. Scale and Center the Product
+        const maxAvailW = Math.round(dim.w * 0.78);
+        const maxAvailH = Math.round(dim.h * 0.64);
+        const scale = Math.min(maxAvailW / sw, maxAvailH / sh);
+        const drawW = Math.round(sw * scale);
+        const drawH = Math.round(sh * scale);
+        const drawX = Math.round((dim.w - drawW) / 2);
+        const drawY = Math.round((dim.h - drawH) * 0.46);
+
+        // 4. Multi-Layer Contact Shadow
         ctx.save();
+        const isDark = styleId === 'dark-luxury';
+        const shadowY = drawY + drawH - Math.round(drawH * 0.035);
+
+        // Ambient shadow spread
         ctx.beginPath();
-        const shadowY = drawY + drawH - Math.round(drawH * 0.03);
-        const shadowRadiusX = Math.round(drawW * 0.38);
-        const shadowRadiusY = Math.round(drawH * 0.05);
-        ctx.ellipse(dim.w / 2, shadowY, shadowRadiusX, shadowRadiusY, 0, 0, Math.PI * 2);
-        ctx.fillStyle = styleId === 'dark-luxury' ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.12)';
-        ctx.filter = 'blur(10px)';
+        ctx.ellipse(dim.w / 2, shadowY + 6, Math.round(drawW * 0.44), Math.round(drawH * 0.09), 0, 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 0.45)' : 'rgba(25, 30, 35, 0.16)';
+        ctx.filter = 'blur(16px)';
+        ctx.fill();
+
+        // Core contact shadow
+        ctx.beginPath();
+        ctx.ellipse(dim.w / 2, shadowY + 2, Math.round(drawW * 0.36), Math.round(drawH * 0.045), 0, 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 0.65)' : 'rgba(15, 20, 25, 0.32)';
+        ctx.filter = 'blur(8px)';
+        ctx.fill();
+
+        // Tight occlusion line under soles/base
+        ctx.beginPath();
+        ctx.ellipse(dim.w / 2, shadowY, Math.round(drawW * 0.28), Math.round(drawH * 0.02), 0, 0, Math.PI * 2);
+        ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 0.85)' : 'rgba(10, 12, 16, 0.55)';
+        ctx.filter = 'blur(3px)';
         ctx.fill();
         ctx.restore();
 
-        // Draw product preserving 100% details
-        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        // 5. Draw Product (100% preservation, zero alteration)
+        ctx.filter = 'none';
+        ctx.drawImage(sourceToDraw, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
 
         try {
-          resolve(canvas.toDataURL('image/png'));
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
         } catch {
           resolve(inputDataUrl);
         }
@@ -456,6 +685,17 @@
             success: true,
             generatedUrl: clientPreviewUrl,
             mode: 'client-preview'
+          };
+        }
+
+        if (!data || data.mode === 'development-simulation' || data.generatedUrl === sourceDataUrl || data.needsClientComposite) {
+          const clientPreviewUrl = await createClientStudioPreview(sourceDataUrl, styleSelect?.value || 'catalog-white', '1:1');
+          data = {
+            ...(data || {}),
+            success: true,
+            generatedUrl: clientPreviewUrl,
+            images: [clientPreviewUrl],
+            mode: 'studio-composite'
           };
         }
 
@@ -940,6 +1180,18 @@
         }
 
         clearInterval(interval);
+
+        // If backend returned development simulation or unedited image, run studio compositor
+        if (!data || data.mode === 'development-simulation' || data.generatedUrl === currentInputDataUrl || data.needsClientComposite) {
+          const clientPreviewUrl = await createClientStudioPreview(currentInputDataUrl, selectedStyle, selectedRatio);
+          data = {
+            ...(data || {}),
+            success: true,
+            generatedUrl: clientPreviewUrl,
+            images: [clientPreviewUrl],
+            mode: 'studio-composite'
+          };
+        }
 
         currentOutputDataUrl = data.generatedUrl || data.image || (data.images && data.images[0]);
         if (!currentOutputDataUrl) throw new Error('خروجی معتبری از موتور هوش مصنوعی دریافت نشد.');

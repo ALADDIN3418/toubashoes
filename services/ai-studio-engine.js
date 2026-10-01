@@ -266,6 +266,7 @@ async function generateStudioPhoto({
     preservation,
     quality,
     mode: 'development-simulation',
+    needsClientComposite: true,
     note: 'خروجی استودیو در حالت توسعه (اتصال مستقیم به سرور AI یا GPU فعال است)'
   };
 }
