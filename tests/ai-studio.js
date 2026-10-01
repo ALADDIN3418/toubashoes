@@ -103,10 +103,9 @@ async function runTests() {
   assert.equal(parsed.mimeType, 'image/jpeg');
   assert.deepEqual(parsed.buffer, validJpeg);
 
-  // Providers list
+  // Providers list (Single unified BiRefNet AI Studio Pro engine)
   assert(SUPPORTED_PROVIDERS.some(p => p.id === 'qwen-edit'));
-  assert(SUPPORTED_PROVIDERS.some(p => p.id === 'flux'));
-  assert(SUPPORTED_PROVIDERS.some(p => p.id === 'sdxl'));
+  assert.equal(SUPPORTED_PROVIDERS.length, 1);
   assert.equal(DEFAULT_PROVIDER, 'qwen-edit');
 
   // Generation (Development / Mock provider)
@@ -221,131 +220,70 @@ async function runTests() {
     assert.equal(auto4bResult.model, '@cf/black-forest-labs/flux-2-klein-4b');
     assert(auto4bResult.provider.includes('جایگزین خودکار'));
 
-    // Test automatic fallback to Google Gemini when all Cloudflare models hit 429
-    const oldGeminiKey = process.env.GEMINI_API_KEY;
-    process.env.GEMINI_API_KEY = 'test-gemini-key';
-    try {
-      global.fetch = async (url) => {
-        if (String(url).includes('api.cloudflare.com')) {
-          return {
-            ok: false,
-            status: 429,
-            headers: new Map([['content-type', 'application/json']]),
-            json: async () => ({ success: false, errors: [{ code: 4006, message: 'Rate limit exceeded' }] })
-          };
-        }
-        if (String(url).includes('generativelanguage.googleapis.com')) {
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({
-              candidates: [{
-                content: {
-                  parts: [{
-                    inlineData: {
-                      mimeType: 'image/png',
-                      data: Buffer.from(pngHex, 'hex').toString('base64')
-                    }
-                  }]
-                }
-              }]
-            })
-          };
-        }
-        throw new Error('Connection refused');
-      };
-
-      const geminiFallbackRes = await generateStudioPhoto({
-        image: sampleDataUrl,
-        style: 'dark-luxury',
-        provider: 'qwen-edit',
-        allowMock: false
-      });
-      assert.equal(geminiFallbackRes.success, true);
-      assert.equal(geminiFallbackRes.fallbackUsed, true);
-      assert(geminiFallbackRes.provider.includes('Google Gemini AI'));
-
-      // Test automatic failover to FreeLLMAPI Multi-Provider Pool (e.g. Pollinations Keyless FLUX) when Cloudflare & Gemini hit 429
-      global.fetch = async (url) => {
-        const target = String(url);
-        if (target.includes('image.pollinations.ai/prompt/')) {
-          return {
-            ok: true,
-            status: 200,
-            headers: { get: (k) => k.toLowerCase() === 'content-type' ? 'image/jpeg' : null },
-            arrayBuffer: async () => Buffer.from('fake-pollinations-flux-bytes').buffer
-          };
-        }
+    // Test BiRefNet AI Studio segmentation via Hugging Face ZeroGPU Gradio 5 API
+    global.fetch = async (url) => {
+      const target = String(url);
+      if (target.endsWith('/gradio_api/upload')) {
         return {
-          ok: false,
-          status: 429,
-          headers: new Map([['content-type', 'application/json']]),
-          text: async () => 'Quota exceeded',
-          json: async () => ({ success: false, errors: [{ message: 'Daily quota exceeded' }] })
+          ok: true,
+          status: 200,
+          json: async () => ['/tmp/gradio/mock/product.jpg']
         };
-      };
-      const freeLlmFailoverRes = await generateStudioPhoto({
-        image: sampleDataUrl,
-        style: 'catalog-white',
-        provider: 'qwen-edit',
-        allowMock: false
-      });
-      assert.equal(freeLlmFailoverRes.success, true);
-      assert.equal(freeLlmFailoverRes.fallbackUsed, true);
-      assert(freeLlmFailoverRes.provider.includes('FreeLLMAPI'));
-      assert.equal(freeLlmFailoverRes.mode, 'live-inference');
+      }
+      if (target.endsWith('/gradio_api/call/png')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ event_id: 'evt-birefnet-123' })
+        };
+      }
+      if (target.includes('/gradio_api/call/png/evt-birefnet-123')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => `event: complete\ndata: [{"path":"/tmp/gradio/mock/product.png","url":"https://hf-applications-background-removal.hf.space/gradio_api/file=/tmp/gradio/mock/product.png"}]\n`
+        };
+      }
+      if (target.includes('/gradio_api/file=/tmp/gradio/mock/product.png')) {
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => Buffer.from(pngHex, 'hex')
+        };
+      }
+      throw new Error('Unexpected fetch');
+    };
 
-      // Test direct FreeLLMAPI Gateway (/v1/images/generations)
-      global.fetch = async (url) => {
-        const target = String(url);
-        if (target.includes('localhost:3001/v1/images/generations')) {
-          return {
-            ok: true,
-            status: 200,
-            headers: {
-              get: (k) => k.toLowerCase() === 'x-routed-via' ? 'nvidia/black-forest-labs/flux.2-klein-4b' : 'application/json'
-            },
-            text: async () => JSON.stringify({
-              data: [{ b64_json: Buffer.from('fake-freellmapi-gateway-img').toString('base64') }]
-            })
-          };
-        }
-        throw new Error('Unexpected fetch');
-      };
-      const directGatewayRes = await generateStudioPhoto({
-        image: sampleDataUrl,
-        style: 'luxury-showcase',
-        provider: 'freellmapi',
-        freellmapiUrl: 'http://localhost:3001/v1',
-        freellmapiKey: 'freellmapi-test-key',
-        allowMock: false
-      });
-      assert.equal(directGatewayRes.success, true);
-      assert(directGatewayRes.provider.includes('FreeLLMAPI'));
-      assert.equal(directGatewayRes.model, 'nvidia/black-forest-labs/flux.2-klein-4b');
+    const birefnetRes = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(birefnetRes.success, true);
+    assert.equal(birefnetRes.backgroundRemoved, true);
+    assert.equal(birefnetRes.mode, 'birefnet-cutout');
+    assert.equal(birefnetRes.model, 'ZhengPeng7/BiRefNet');
+    assert(birefnetRes.provider.includes('BiRefNet'));
 
-      // Test built-in studio fallback when ALL cloud providers hit 429 daily quota
-      global.fetch = async () => ({
-        ok: false,
-        status: 429,
-        headers: new Map([['content-type', 'application/json']]),
-        text: async () => 'Quota exceeded',
-        json: async () => ({ success: false, errors: [{ message: 'Daily quota exceeded' }] })
-      });
-      const studioExhaustedFallback = await generateStudioPhoto({
-        image: sampleDataUrl,
-        style: 'catalog-white',
-        provider: 'qwen-edit',
-        allowMock: false
-      });
-      assert.equal(studioExhaustedFallback.success, true);
-      assert.equal(studioExhaustedFallback.fallbackUsed, true);
-      assert.equal(studioExhaustedFallback.quotaExhaustedFallback, true);
-      assert.equal(studioExhaustedFallback.mode, 'client-studio-fallback');
-    } finally {
-      if (oldGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
-      else process.env.GEMINI_API_KEY = oldGeminiKey;
-    }
+    // Test built-in studio fallback when upstream hits 429 or "not allowed to access"
+    global.fetch = async () => ({
+      ok: false,
+      status: 403,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => 'This account is not allowed to access @cf/runwayml/stable-diffusion-v1-5-img2img',
+      json: async () => ({ success: false, errors: [{ message: 'AiError: Ai: This account is not allowed to access @cf/runwayml/stable-diffusion-v1-5-img2img' }] })
+    });
+    const studioExhaustedFallback = await generateStudioPhoto({
+      image: sampleDataUrl,
+      style: 'catalog-white',
+      provider: 'qwen-edit',
+      allowMock: false
+    });
+    assert.equal(studioExhaustedFallback.success, true);
+    assert.equal(studioExhaustedFallback.fallbackUsed, true);
+    assert.equal(studioExhaustedFallback.quotaExhaustedFallback, true);
+    assert.equal(studioExhaustedFallback.mode, 'client-studio-fallback');
   } finally {
     global.fetch = originalFetch;
     process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;

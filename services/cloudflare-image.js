@@ -5,10 +5,7 @@ const LIGHT_MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
 const DEFAULT_MODEL = MODEL;
 const FALLBACK_MODELS = Object.freeze([
   '@cf/black-forest-labs/flux-2-klein-9b',
-  '@cf/black-forest-labs/flux-2-klein-4b',
-  '@cf/runwayml/stable-diffusion-v1-5-img2img',
-  '@cf/black-forest-labs/flux-1-schnell',
-  '@cf/bytedance/stable-diffusion-xl-lightning'
+  '@cf/black-forest-labs/flux-2-klein-4b'
 ]);
 
 // Keep base64 JSON responses below Vercel Functions' response-body ceiling.
@@ -100,7 +97,7 @@ function isQuotaOrRateLimitError(errorOrMessage, payload = null, status = 0) {
   if ([3036, 3040, 4006, 429].includes(Number(code))) return true;
   const rawText = typeof errorOrMessage === 'string' ? errorOrMessage : (errObj?.message || '');
   const combined = `${rawText} ${JSON.stringify(payload || '')}`;
-  return /quota|rate\s*limit|daily|neuron|allocation|exceeded|too\s*many\s*requests|capacity|overloaded|temporarily\s*unavailable|model\s*is\s*busy|out\s*of\s*capacity|سقف.*پر شده|محدودیت روزانه|سهمیه/i.test(combined);
+  return /quota|rate\s*limit|daily|neuron|allocation|exceeded|too\s*many\s*requests|capacity|overloaded|temporarily\s*unavailable|model\s*is\s*busy|out\s*of\s*capacity|not\s*allowed\s*to\s*access|agreement|سقف.*پر شده|محدودیت روزانه|سهمیه/i.test(combined);
 }
 
 function formatSafetyFlaggedError(rawMessage, payload, headers) {

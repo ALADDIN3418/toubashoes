@@ -276,9 +276,6 @@ const server = http.createServer(async (req, res) => {
         preservation: body.preservation,
         quality: body.quality,
         provider: body.provider || body.pipeline,
-        apiUrl: body.apiUrl,
-        freellmapiUrl: body.freellmapiUrl,
-        freellmapiKey: body.freellmapiKey,
         fast: body.fast !== false,
         seed: body.seed,
         preferFallbackModel: Boolean(preferFallbackModel || body.preferFallbackModel)
