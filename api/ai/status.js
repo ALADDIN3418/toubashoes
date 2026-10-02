@@ -22,7 +22,7 @@ module.exports = async function aiStatus(req, res) {
     free: true,
     persistentQuotaConfigured,
     quotaMode: persistentQuotaConfigured ? 'persistent-utc' : 'process-memory',
-    provider: 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)',
+    provider: 'Google Gemini 3.5 Flash (gemini-3.5-flash)',
     model: DEFAULT_PIPELINE,
     supportedModels: SUPPORTED_PIPELINES,
     supportedPipelines: SUPPORTED_PIPELINES,
@@ -32,6 +32,6 @@ module.exports = async function aiStatus(req, res) {
     comfyStatus: health,
     localDailyLimit: 'unlimited',
     referenceMaxSide: 1280,
-    note: 'دستیار خودکارسازی ComfyUI: ویرایش دستوری با Qwen-Image-Edit بر پایه عکس مرجع، FLUX.2 و SDXL بدون وابستگی به کلیدهای شخص ثالث.'
+    note: 'استودیو هوش مصنوعی محصول طوبی: تولید و ویرایش تصویر با مدل رایگان Google Gemini 3.5 Flash (gemini-3.5-flash).'
   });
 };

@@ -76,10 +76,10 @@ async function main() {
     assert.equal(payload(res).keyless, true);
     assert.equal(payload(res).unlimited, true);
     assert.equal(payload(res).free, true);
-    assert.equal(payload(res).provider, 'ComfyUI Automation API (Qwen-Image-Edit / FLUX.2 / SDXL)');
-    assert.equal(payload(res).model, 'qwen-edit');
+    assert.equal(payload(res).provider, 'Google Gemini 3.5 Flash (gemini-3.5-flash)');
+    assert.equal(payload(res).model, 'gemini-3.5-flash');
     assert(Array.isArray(payload(res).supportedModels));
-    assert(payload(res).supportedModels.includes('qwen-edit'));
+    assert(payload(res).supportedModels.includes('gemini-3.5-flash'));
 
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
@@ -100,18 +100,19 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates photo using ComfyUI Automation API
+    // Verify productPhoto generates photo using Google Gemini 3.5 Flash
     res = response();
     await productPhoto({
       method: 'POST',
       headers: { origin: 'https://touba.test', host: 'touba.test' },
-      body: { image: referenceDataUrl, style: 'warm-studio', pipeline: 'qwen-edit' }
+      body: { image: referenceDataUrl, style: 'warm-studio', pipeline: 'gemini-3.5-flash' }
     }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).success, true);
-    assert.equal(payload(res).pipeline, 'qwen-edit');
+    assert.equal(payload(res).pipeline, 'gemini-3.5-flash');
+    assert.equal(payload(res).model, 'gemini-3.5-flash');
     assert.equal(payload(res).style, 'warm-studio');
-    assert.equal(payload(res).provider, 'ComfyUI Automation API (Qwen / FLUX / SDXL)');
+    assert.equal(payload(res).provider, 'Google Gemini 3.5 Flash (gemini-3.5-flash)');
 
     // Verify productPhoto handles invalid input gracefully
     res = response();

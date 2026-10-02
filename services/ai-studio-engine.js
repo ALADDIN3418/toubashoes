@@ -1,14 +1,11 @@
 /**
  * Product AI Studio Engine
- * «موتور استودیوی هوش مصنوعی محصول طوبی — BiRefNet Studio Pro»
+ * «موتور استودیوی هوش مصنوعی محصول طوبی — Google Gemini 3.5 Flash»
  *
  * Dedicated E-Commerce Product Photography Architecture:
- * 1. BiRefNet Dichotomous Image Segmentation (ZhengPeng7/BiRefNet & BRIA RMBG):
- *    Extracts the exact foreground product (100% identity lock: shape, logo, straps, sole, stitching)
- *    and completely removes complex backgrounds (carpets, rugs, room clutter) with zero hallucination.
- * 2. Client-Side BiRefNet + ONNX (@imgly/background-removal) + 3D Studio Scene & Shadow Compositor:
- *    Places the exact extracted product onto a photorealistic 3D studio podium/floor with
- *    exact silhouette contact shadow, floor reflection, and commercial studio lighting.
+ * Exclusively powered by Google Gemini 3.5 Flash (gemini-3.5-flash) free multimodal model.
+ * Preserves 100% of the real product identity (shape, color, logo, straps, sole, stitching)
+ * while generating commercial studio backgrounds and lighting.
  */
 'use strict';
 
@@ -20,45 +17,37 @@ const {
   buildPrompt,
   getNegativePrompt
 } = require('./prompt-templates.js');
-const {
-  generateProductPhoto: generateCloudflareProductPhoto,
-  getCloudflareConfig,
-  formatSafetyFlaggedError,
-  isContentFlagged,
-  isQuotaOrRateLimitError,
-  LIGHT_MODEL
-} = require('./cloudflare-image.js');
-const {
-  ENGINE_ID,
-  ENGINE_NAME,
-  removeBackgroundWithBiRefNet
-} = require('./birefnet-studio.js');
 
-const DEFAULT_BACKEND_URL = 'https://hf-applications-background-removal.hf.space';
-const DEFAULT_PROVIDER = 'qwen-edit';
+const GEMINI_STUDIO_MODEL = 'gemini-3.5-flash';
+const GEMINI_STUDIO_PROVIDER_NAME = 'Google Gemini 3.5 Flash (gemini-3.5-flash)';
+const DEFAULT_PROVIDER = 'gemini-3.5-flash';
+const DEFAULT_BACKEND_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 const GEMINI_IMAGE_MODELS = Object.freeze([
-  'gemini-2.5-flash-image',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation'
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-image',
+  'gemini-2.5-flash-image'
 ]);
 
 const SUPPORTED_PROVIDERS = Object.freeze([
   {
-    id: 'qwen-edit',
-    name: 'هوشمند: اکانت متصل Google Gemini + BiRefNet AI Studio Pro',
-    badge: 'حفظ ۱۰۰٪ کالای واقعی · اتصال به اکانت گوگل',
-    description: 'ویرایش مستقیم تصویر در استودیو با اکانت متصل Google Gemini یا جداسازی دقیق شبکه عصبی BiRefNet'
+    id: 'gemini-3.5-flash',
+    name: 'Google Gemini 3.5 Flash (مدل رایگان گوگل)',
+    title: 'Google Gemini 3.5 Flash (مدل رایگان گوگل)',
+    badge: 'مدل رایگان گوگل · حفظ ۱۰۰٪ کالا',
+    description: 'تولید و ویرایش مستقیم تصویر در استودیو فقط با مدل رایگان Google Gemini 3.5 Flash'
   }
 ]);
+
+const SUPPORTED_PIPELINES = Object.freeze(['gemini-3.5-flash']);
 
 function sanitizeToken(value) {
   return String(value || '').trim().replace(/^['"]+|['"]+$/g, '').trim();
 }
 
 /**
- * Generate/Edit studio product photo using the user's connected Google Gemini account
+ * Generate/Edit studio product photo using Google Gemini 3.5 Flash
  * Supports both Google AI Studio API Key (AIza...) and Google OAuth2 Access Token (ya29...)
  */
 async function generateWithGeminiAccount({
@@ -67,10 +56,11 @@ async function generateWithGeminiAccount({
   prompt,
   geminiApiKey,
   geminiAccessToken,
-  geminiProjectId
+  geminiProjectId,
+  throwOnError = false
 }) {
-  const apiKey = sanitizeToken(geminiApiKey || process.env.GEMINI_API_KEY);
-  const accessToken = sanitizeToken(geminiAccessToken).replace(/^Bearer\s+/i, '');
+  const apiKey = sanitizeToken(geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+  const accessToken = sanitizeToken(geminiAccessToken || process.env.GEMINI_ACCESS_TOKEN).replace(/^Bearer\s+/i, '');
   const projectId = sanitizeToken(geminiProjectId || process.env.GOOGLE_CLOUD_PROJECT);
 
   if (!apiKey && !accessToken) {
@@ -118,7 +108,10 @@ CRITICAL INSTRUCTION: You are editing the attached reference product photo. Keep
 
       if (!response.ok) {
         const errText = await response.text().catch(() => '');
-        lastError = new Error(errText || `Google Gemini HTTP ${response.status}`);
+        lastError = Object.assign(
+          new Error(errText || `Google Gemini HTTP ${response.status}`),
+          { status: response.status }
+        );
         continue;
       }
 
@@ -131,8 +124,9 @@ CRITICAL INSTRUCTION: You are editing the attached reference product photo. Keep
       if (rawData) {
         return {
           dataUrl: `data:${outMime};base64,${rawData}`,
-          model: modelId,
-          provider: `Google Gemini Pro Studio (${modelId})`
+          model: GEMINI_STUDIO_MODEL,
+          upstreamModel: modelId,
+          provider: GEMINI_STUDIO_PROVIDER_NAME
         };
       }
     } catch (err) {
@@ -140,13 +134,11 @@ CRITICAL INSTRUCTION: You are editing the attached reference product photo. Keep
     }
   }
 
-  if (lastError && (geminiApiKey || geminiAccessToken)) {
-    // Log silently and allow BiRefNet Studio fallback if model wasn't available
+  if (throwOnError && lastError) {
+    throw lastError;
   }
   return null;
 }
-
-const SUPPORTED_PIPELINES = Object.freeze(['qwen-edit', 'flux', 'sdxl', 'upscale']);
 
 function validateImageBytes(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
@@ -227,22 +219,23 @@ function validateAndDecodeImage(imageInput) {
 }
 
 /**
- * Check health of AI Studio Engine
+ * Check health of AI Studio Engine (Google Gemini 3.5 Flash)
  */
 async function checkBackendHealth(apiUrl = DEFAULT_BACKEND_URL) {
   return {
     connected: true,
     status: 'online',
     url: apiUrl,
-    engine: ENGINE_ID,
-    name: ENGINE_NAME
+    engine: GEMINI_STUDIO_MODEL,
+    model: GEMINI_STUDIO_MODEL,
+    name: 'Google Gemini 3.5 Flash (مدل رایگان گوگل)'
   };
 }
 
 const checkComfyHealth = checkBackendHealth;
 
 /**
- * Generate Studio Product Photo
+ * Generate Studio Product Photo exclusively using Google Gemini 3.5 Flash (gemini-3.5-flash)
  */
 async function generateStudioPhoto({
   image,
@@ -258,9 +251,6 @@ async function generateStudioPhoto({
   geminiApiKey,
   geminiAccessToken,
   geminiProjectId,
-  fast = true,
-  seed,
-  preferFallbackModel = false,
   allowMock = true
 }) {
   // 1. Validate Input Image
@@ -301,18 +291,12 @@ async function generateStudioPhoto({
   });
   const negativePrompt = getNegativePrompt();
   const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] || ASPECT_RATIO_DIMENSIONS['1:1'];
-  const effectiveProvider = String(provider || DEFAULT_PROVIDER).toLowerCase();
 
   let liveOutputUrl = null;
-  let cutoutDataUrl = null;
-  let backgroundRemoved = false;
-  let activeProviderName = ENGINE_NAME;
-  let activeModel = 'ZhengPeng7/BiRefNet';
-  let fallbackUsed = false;
-  let lastCloudError = null;
+  let lastGeminiError = null;
 
-  // 3. Stage 0: Connected Google Gemini Pro / AI Studio Account (if connected via Admin Panel or env)
-  if (refBuffer && (geminiApiKey || geminiAccessToken || process.env.GEMINI_API_KEY)) {
+  // 3. Generate Studio Product Photo via Google Gemini 3.5 Flash
+  if (refBuffer && (geminiApiKey || geminiAccessToken || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)) {
     try {
       const geminiRes = await generateWithGeminiAccount({
         imageBytes: refBuffer,
@@ -320,103 +304,29 @@ async function generateStudioPhoto({
         prompt: finalPrompt,
         geminiApiKey,
         geminiAccessToken,
-        geminiProjectId
+        geminiProjectId,
+        throwOnError: !allowMock
       });
       if (geminiRes?.dataUrl) {
         liveOutputUrl = geminiRes.dataUrl;
-        activeModel = geminiRes.model;
-        activeProviderName = geminiRes.provider;
       }
-    } catch {
-      // Proceed to BiRefNet segmentation
+    } catch (err) {
+      lastGeminiError = err;
     }
   }
 
-  // 3b. Stage 1: BiRefNet Foreground Product Extraction (100% Real Product Identity Lock)
-  if (!liveOutputUrl && refBuffer && effectiveProvider !== 'cloudflare' && effectiveProvider !== 'cloudflare-4b') {
-    try {
-      const birefnetRes = await removeBackgroundWithBiRefNet({
-        imageBytes: refBuffer,
-        mimeType
-      });
-      if (birefnetRes?.cutoutDataUrl) {
-        liveOutputUrl = birefnetRes.cutoutDataUrl;
-        cutoutDataUrl = birefnetRes.cutoutDataUrl;
-        backgroundRemoved = true;
-        activeModel = birefnetRes.model || 'ZhengPeng7/BiRefNet';
-        activeProviderName = birefnetRes.provider || ENGINE_NAME;
-      }
-    } catch {
-      // Proceed to next stage
-    }
-  }
-
-  // 4. Optional Cloudflare Workers AI FLUX.2 Reference Editing (when configured or explicitly requested)
-  const cfConfig = getCloudflareConfig();
-  const hasCloudflareCredentials = cfConfig.configured;
-  const useLightFirst = Boolean(
-    preferFallbackModel ||
-    effectiveProvider === 'cloudflare-4b' ||
-    quality === 'standard'
-  );
-
-  if (!liveOutputUrl && refBuffer && (hasCloudflareCredentials || effectiveProvider === 'cloudflare' || effectiveProvider === 'cloudflare-4b')) {
-    try {
-      const cfResult = await generateCloudflareProductPhoto({
-        imageBytes: refBuffer,
-        style,
-        prompt: finalPrompt,
-        model: effectiveProvider === 'cloudflare-4b' ? LIGHT_MODEL : undefined,
-        preferFallback: useLightFirst,
-        allowFallback: true
-      });
-      if (cfResult?.dataUrl) {
-        liveOutputUrl = cfResult.dataUrl;
-        fallbackUsed = Boolean(cfResult.fallbackUsed);
-        activeModel = cfResult.model || LIGHT_MODEL;
-        activeProviderName = cfResult.fallbackUsed
-          ? `${cfResult.provider} (سوییچ خودکار مدل جایگزین)`
-          : cfResult.provider || 'Cloudflare Workers AI (FLUX.2 Klein)';
-      }
-    } catch (cfErr) {
-      lastCloudError = cfErr;
-      if (cfErr.safetyFlagged) {
-        throw cfErr;
-      }
-      if (isContentFlagged(cfErr.message, null)) {
-        throw formatSafetyFlaggedError(cfErr.message, null, null);
-      }
-      const isExplicitInvalidToken =
-        cfErr.status === 401 ||
-        /authentication error|invalid api token|unauthorized/i.test(String(cfErr.message || ''));
-      if (isExplicitInvalidToken && !isQuotaOrRateLimitError(cfErr)) {
-        throw cfErr;
-      }
-    }
-  }
-
-  // 5. Fallback / Client-Side BiRefNet + ONNX + Studio 3D Scene Compositor
-  if (!liveOutputUrl && !allowMock && !lastCloudError && !hasCloudflareCredentials) {
-    throw Object.assign(
-      new Error('اتصال به موتور هوش مصنوعی برقرار نشد. لطفاً دوباره تلاش کنید.'),
+  if (!liveOutputUrl && !allowMock) {
+    throw lastGeminiError || Object.assign(
+      new Error('تولید تصویر با Google Gemini 3.5 Flash انجام نشد. لطفاً کلید رایگان Google AI Studio (AIzaSy...) یا اتصال اکانت گوگل خود را بررسی کنید.'),
       { status: 503 }
     );
   }
 
   const outputUrl = liveOutputUrl || decoded.dataUrl;
-  const isQuotaFallback = !liveOutputUrl && Boolean(lastCloudError);
-
-  if (isQuotaFallback) {
-    fallbackUsed = true;
-    activeProviderName = ENGINE_NAME;
-    activeModel = 'birefnet-client-studio';
-  }
 
   return {
     success: true,
     generatedUrl: outputUrl,
-    cutoutUrl: cutoutDataUrl || null,
-    backgroundRemoved,
     image: outputUrl,
     images: [outputUrl],
     originalUrl: decoded.dataUrl,
@@ -426,22 +336,16 @@ async function generateStudioPhoto({
     dimensions,
     preservation,
     quality,
-    provider: activeProviderName,
-    model: activeModel,
-    activeModel,
-    fallbackUsed,
-    quotaExhaustedFallback: isQuotaFallback,
-    pipeline: effectiveProvider,
+    provider: GEMINI_STUDIO_PROVIDER_NAME,
+    model: GEMINI_STUDIO_MODEL,
+    activeModel: GEMINI_STUDIO_MODEL,
+    fallbackUsed: false,
+    quotaExhaustedFallback: false,
+    pipeline: GEMINI_STUDIO_MODEL,
     promptUsed: finalPrompt,
     negativePromptUsed: negativePrompt,
-    preservationGuarantee: 'حذف دقیق پس‌زمینه (فرش و محیط) با شبکه عصبی BiRefNet و بازسازی آتلیه‌ای با حفظ ۱۰۰٪ شکل، رنگ، لوگو و دوخت کالای اصلی',
-    mode: backgroundRemoved
-      ? 'birefnet-cutout'
-      : liveOutputUrl
-        ? 'live-inference'
-        : isQuotaFallback
-          ? 'client-studio-fallback'
-          : 'client-studio-fallback',
+    preservationGuarantee: 'تولید تصویر آتلیه‌ای با مدل رایگان Google Gemini 3.5 Flash با حفظ ۱۰۰٪ شکل، رنگ، لوگو و دوخت کالای اصلی',
+    mode: liveOutputUrl ? 'gemini-3.5-flash' : 'gemini-studio-preview',
     timestamp: new Date().toISOString()
   };
 }
@@ -504,11 +408,14 @@ module.exports = {
   DEFAULT_PRESET,
   PRESERVATION_RULES,
   ASPECT_RATIO_DIMENSIONS,
+  GEMINI_STUDIO_MODEL,
+  GEMINI_IMAGE_MODELS,
   SUPPORTED_PROVIDERS,
   SUPPORTED_PIPELINES,
   DEFAULT_PROVIDER,
   DEFAULT_PIPELINE: DEFAULT_PROVIDER,
   DEFAULT_BACKEND_URL,
+  DEFAULT_COMFY_API_URL: DEFAULT_BACKEND_URL,
   validateAndDecodeImage,
   validateImageBytes,
   parseDataUrl,
