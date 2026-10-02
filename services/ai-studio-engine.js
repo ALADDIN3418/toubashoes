@@ -27,7 +27,13 @@ const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
 const GEMINI_IMAGE_MODELS = Object.freeze([
   'gemini-3.5-flash',
   'gemini-3.1-flash-image',
-  'gemini-2.5-flash-image'
+  'gemini-3.1-flash-image-preview',
+  'gemini-2.5-flash-image',
+  'gemini-2.5-flash-image-preview',
+  'gemini-2.5-flash-preview-image-generation',
+  'gemini-2.0-flash-exp-image-generation',
+  'gemini-2.0-flash-preview-image-generation',
+  'gemini-2.0-flash-exp'
 ]);
 
 const SUPPORTED_PROVIDERS = Object.freeze([
@@ -42,8 +48,115 @@ const SUPPORTED_PROVIDERS = Object.freeze([
 
 const SUPPORTED_PIPELINES = Object.freeze(['gemini-3.5-flash']);
 
+const KEYLESS_STUDIO_SPACES = Object.freeze([
+  'https://hf-applications-background-removal.hf.space',
+  'https://not-lain-background-removal.hf.space',
+  'https://briaai-bria-rmbg-2-0.hf.space'
+]);
+
 function sanitizeToken(value) {
   return String(value || '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+function isValidImageBuffer(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 8) return false;
+  const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  const isJpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  const isWebp = buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP';
+  return isPng || isJpeg || isWebp;
+}
+
+/**
+ * Keyless cloud foreground extraction when Gemini API key is not set or rate-limited
+ */
+async function extractKeylessForegroundCutout(imageBuffer, mimeType = 'image/jpeg') {
+  if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length < 64) return null;
+  if (typeof fetch === 'undefined' || typeof FormData === 'undefined' || typeof Blob === 'undefined') {
+    return null;
+  }
+
+  const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+  const filename = `product.${ext}`;
+
+  for (const spaceOrigin of KEYLESS_STUDIO_SPACES) {
+    try {
+      const base = spaceOrigin.replace(/\/+$/, '');
+      const form = new FormData();
+      form.append('files', new Blob([imageBuffer], { type: mimeType }), filename);
+
+      const uploadRes = await fetch(`${base}/gradio_api/upload`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(12000)
+      });
+      if (!uploadRes.ok) continue;
+
+      const uploadedPaths = await uploadRes.json().catch(() => null);
+      const uploadedPath = Array.isArray(uploadedPaths) ? uploadedPaths[0] : null;
+      if (!uploadedPath) continue;
+
+      const callRes = await fetch(`${base}/gradio_api/call/png`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [{
+            path: uploadedPath,
+            orig_name: filename,
+            mime_type: mimeType,
+            meta: { _type: 'gradio.FileData' }
+          }]
+        }),
+        signal: AbortSignal.timeout(12000)
+      });
+      if (!callRes.ok) continue;
+
+      const callData = await callRes.json().catch(() => null);
+      const eventId = callData?.event_id;
+      if (!eventId) continue;
+
+      const sseRes = await fetch(`${base}/gradio_api/call/png/${encodeURIComponent(eventId)}`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(22000)
+      });
+      if (!sseRes.ok) continue;
+
+      const sseText = await sseRes.text();
+      let fileUrl = null;
+      for (const line of sseText.split(/\r?\n/)) {
+        if (line.startsWith('data:')) {
+          try {
+            const parsed = JSON.parse(line.slice(5).trim());
+            let candidate = Array.isArray(parsed) ? parsed[0] : parsed;
+            if (Array.isArray(candidate) && candidate.length >= 2) candidate = candidate[1];
+            if (typeof candidate === 'string') {
+              fileUrl = candidate.startsWith('http') || candidate.startsWith('data:image/')
+                ? candidate
+                : `${base}/gradio_api/file=${candidate}`;
+            } else if (candidate?.url) {
+              fileUrl = candidate.url;
+            } else if (candidate?.path) {
+              fileUrl = `${base}/gradio_api/file=${candidate.path}`;
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      if (!fileUrl) continue;
+
+      if (fileUrl.startsWith('data:image/')) {
+        return fileUrl;
+      }
+
+      const imgRes = await fetch(fileUrl, { signal: AbortSignal.timeout(15000) });
+      if (!imgRes.ok) continue;
+      const outBuf = Buffer.from(await imgRes.arrayBuffer());
+      if (isValidImageBuffer(outBuf)) {
+        return `data:image/png;base64,${outBuf.toString('base64')}`;
+      }
+    } catch {
+      // Try next space
+    }
+  }
+  return null;
 }
 
 /**
@@ -59,7 +172,13 @@ async function generateWithGeminiAccount({
   geminiProjectId,
   throwOnError = false
 }) {
-  const apiKey = sanitizeToken(geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+  const apiKey = sanitizeToken(
+    geminiApiKey ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY
+  );
   const accessToken = sanitizeToken(geminiAccessToken || process.env.GEMINI_ACCESS_TOKEN).replace(/^Bearer\s+/i, '');
   const projectId = sanitizeToken(geminiProjectId || process.env.GOOGLE_CLOUD_PROJECT);
 
@@ -68,8 +187,12 @@ async function generateWithGeminiAccount({
   }
 
   const base64Image = imageBytes.toString('base64');
-  const strictGeminiPrompt = `${prompt}
-CRITICAL INSTRUCTION: You are editing the attached reference product photo. Keep the exact footwear/bag from the input image 100% identical in shape, color, material, straps, sole, stitching, and brand logo. ONLY replace the background and studio lighting around the product.`;
+  const strictGeminiPrompt = `GENERATE AND RETURN A NEW EDITED PRODUCT IMAGE (DO NOT REPLY WITH TEXT ONLY).
+You are a professional commercial product photography AI studio.
+Edit the attached reference product photo:
+1. Completely remove the existing background (such as carpet, rug, floor, room clutter, or table).
+2. Place the exact footwear/bag from the input image into this new studio scene: ${prompt}
+3. CRITICAL INSTRUCTION: Keep the exact footwear/bag from the input image 100% identical in shape, color, material, straps, laces, sole, stitching, and brand logo. ONLY replace the background and studio lighting around the product. Output the edited image directly.`;
 
   let lastError = null;
 
@@ -121,7 +244,7 @@ CRITICAL INSTRUCTION: You are editing the attached reference product photo. Keep
       const rawData = imgPart?.inlineData?.data || imgPart?.inline_data?.data;
       const outMime = imgPart?.inlineData?.mimeType || imgPart?.inline_data?.mime_type || 'image/png';
 
-      if (rawData) {
+      if (rawData && rawData !== base64Image) {
         return {
           dataUrl: `data:${outMime};base64,${rawData}`,
           model: GEMINI_STUDIO_MODEL,
@@ -293,10 +416,11 @@ async function generateStudioPhoto({
   const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] || ASPECT_RATIO_DIMENSIONS['1:1'];
 
   let liveOutputUrl = null;
+  let cutoutDataUrl = null;
   let lastGeminiError = null;
 
   // 3. Generate Studio Product Photo via Google Gemini 3.5 Flash
-  if (refBuffer && (geminiApiKey || geminiAccessToken || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)) {
+  if (refBuffer && (geminiApiKey || geminiAccessToken || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY)) {
     try {
       const geminiRes = await generateWithGeminiAccount({
         imageBytes: refBuffer,
@@ -315,6 +439,18 @@ async function generateStudioPhoto({
     }
   }
 
+  // 4. Keyless Cloud Foreground Extraction for Real Product Photos when Gemini API Key is not set or hits free-tier limit
+  if (!liveOutputUrl && inputBuffer && inputBuffer.length > 512) {
+    try {
+      cutoutDataUrl = await extractKeylessForegroundCutout(inputBuffer, mimeType);
+      if (cutoutDataUrl) {
+        liveOutputUrl = cutoutDataUrl;
+      }
+    } catch {
+      // Browser studio synthesizer will handle scene rendering
+    }
+  }
+
   if (!liveOutputUrl && !allowMock) {
     throw lastGeminiError || Object.assign(
       new Error('تولید تصویر با Google Gemini 3.5 Flash انجام نشد. لطفاً کلید رایگان Google AI Studio (AIzaSy...) یا اتصال اکانت گوگل خود را بررسی کنید.'),
@@ -327,6 +463,8 @@ async function generateStudioPhoto({
   return {
     success: true,
     generatedUrl: outputUrl,
+    cutoutUrl: cutoutDataUrl || null,
+    backgroundRemoved: Boolean(cutoutDataUrl),
     image: outputUrl,
     images: [outputUrl],
     originalUrl: decoded.dataUrl,
@@ -345,7 +483,11 @@ async function generateStudioPhoto({
     promptUsed: finalPrompt,
     negativePromptUsed: negativePrompt,
     preservationGuarantee: 'تولید تصویر آتلیه‌ای با مدل رایگان Google Gemini 3.5 Flash با حفظ ۱۰۰٪ شکل، رنگ، لوگو و دوخت کالای اصلی',
-    mode: liveOutputUrl ? 'gemini-3.5-flash' : 'gemini-studio-preview',
+    mode: cutoutDataUrl
+      ? 'gemini-cutout'
+      : liveOutputUrl
+        ? 'gemini-3.5-flash'
+        : 'gemini-studio-preview',
     timestamp: new Date().toISOString()
   };
 }

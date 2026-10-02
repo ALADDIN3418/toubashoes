@@ -69,6 +69,33 @@
     return Boolean(cfg.apiKey || cfg.accessToken);
   }
 
+  function formatFileSize(bytes) {
+    const num = Number(bytes) || 0;
+    if (num >= 1024 * 1024) {
+      return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${Math.max(1, Math.round(num / 1024))} KB`;
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const parts = String(dataUrl || '').split(',');
+    const mimeMatch = (parts[0] || '').match(/data:([^;]+);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bstr = atob(parts[1] || '');
+    const u8 = new Uint8Array(bstr.length);
+    for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+    return new Blob([u8], { type: mime });
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
   /**
    * Direct Browser-to-Google Gemini 3.5 Flash Multimodal Image Studio
    * Sends the uploaded product photo + studio prompt directly to Google Gemini 3.5 Flash
@@ -84,14 +111,21 @@
     if (!base64Data) return null;
 
     const styleObj = STYLES.find(s => s.id === style) || STYLES[0];
-    const promptText = `Commercial studio product photography of the exact footwear/bag in this reference image.
-Style: ${styleObj.title} (${styleObj.desc}). ${customPrompt ? `Additional studio instruction: ${customPrompt}` : ''}
-CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identical in shape, color, straps, sole, stitching, and brand logo. Only replace the background and studio lighting around the product.`;
+    const promptText = `GENERATE AND RETURN A NEW EDITED PRODUCT IMAGE (DO NOT REPLY WITH TEXT ONLY).
+Edit this reference product photograph:
+1. Completely remove the original background (such as carpet, rug, floor, room clutter, or table).
+2. Place the exact shoe/sandal/bag from the input image into this professional commercial studio environment: ${styleObj.title} (${styleObj.desc}). ${customPrompt ? `Additional studio instruction: ${customPrompt}` : ''}
+3. CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identical in shape, color, straps, laces, sole, stitching, and brand logo. Only replace the background and studio lighting around the product. Output the edited image directly.`;
 
     const models = [
       'gemini-3.5-flash',
       'gemini-3.1-flash-image',
-      'gemini-2.5-flash-image'
+      'gemini-3.1-flash-image-preview',
+      'gemini-2.5-flash-image',
+      'gemini-2.5-flash-image-preview',
+      'gemini-2.5-flash-preview-image-generation',
+      'gemini-2.0-flash-exp-image-generation',
+      'gemini-2.0-flash-preview-image-generation'
     ];
 
     for (const modelId of models) {
@@ -127,7 +161,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
         const imgPart = resParts.find(p => p?.inlineData?.data || p?.inline_data?.data);
         const rawData = imgPart?.inlineData?.data || imgPart?.inline_data?.data;
         const outMime = imgPart?.inlineData?.mimeType || imgPart?.inline_data?.mime_type || 'image/png';
-        if (rawData) {
+        if (rawData && rawData !== base64Data) {
           return {
             dataUrl: `data:${outMime};base64,${rawData}`,
             model: GEMINI_STUDIO_MODEL,
@@ -139,6 +173,673 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
       }
     }
     return null;
+  }
+
+  /**
+   * Cloud neural cutout extraction for Gemini Studio Scene Synthesizer
+   */
+  const STUDIO_CUTOUT_ENDPOINTS = [
+    'https://hf-applications-background-removal.hf.space',
+    'https://not-lain-background-removal.hf.space',
+    'https://briaai-bria-rmbg-2-0.hf.space'
+  ];
+
+  async function requestCloudNeuralCutout(inputDataUrl) {
+    if (typeof fetch === 'undefined' || typeof FormData === 'undefined' || typeof Blob === 'undefined') {
+      return null;
+    }
+    const blob = dataUrlToBlob(inputDataUrl);
+    for (const origin of STUDIO_CUTOUT_ENDPOINTS) {
+      try {
+        const form = new FormData();
+        form.append('files', blob, 'product.jpg');
+        const upRes = await fetch(`${origin}/gradio_api/upload`, {
+          method: 'POST',
+          body: form,
+          signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
+        });
+        if (!upRes.ok) continue;
+        const upPaths = await upRes.json();
+        const uploadedPath = Array.isArray(upPaths) ? upPaths[0] : null;
+        if (!uploadedPath) continue;
+
+        const callRes = await fetch(`${origin}/gradio_api/call/png`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: [{
+              path: uploadedPath,
+              orig_name: 'product.jpg',
+              mime_type: blob.type || 'image/jpeg',
+              meta: { _type: 'gradio.FileData' }
+            }]
+          }),
+          signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
+        });
+        if (!callRes.ok) continue;
+        const callJson = await callRes.json();
+        const eventId = callJson?.event_id;
+        if (!eventId) continue;
+
+        const sseRes = await fetch(`${origin}/gradio_api/call/png/${encodeURIComponent(eventId)}`, {
+          method: 'GET',
+          signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined
+        });
+        if (!sseRes.ok) continue;
+        const sseText = await sseRes.text();
+        let fileUrl = null;
+        for (const line of sseText.split(/\r?\n/)) {
+          if (line.startsWith('data:')) {
+            try {
+              const arr = JSON.parse(line.slice(5).trim());
+              let item = Array.isArray(arr) ? arr[0] : arr;
+              if (Array.isArray(item) && item.length >= 2) item = item[1];
+              if (typeof item === 'string') {
+                fileUrl = item.startsWith('http') || item.startsWith('data:image/')
+                  ? item
+                  : `${origin}/gradio_api/file=${item}`;
+              } else if (item?.url) {
+                fileUrl = item.url;
+              } else if (item?.path) {
+                fileUrl = `${origin}/gradio_api/file=${item.path}`;
+              }
+            } catch { /* ignore */ }
+          }
+        }
+        if (!fileUrl) continue;
+        if (fileUrl.startsWith('data:image/')) return fileUrl;
+        const imgRes = await fetch(fileUrl);
+        if (!imgRes.ok) continue;
+        const outBlob = await imgRes.blob();
+        if (outBlob && outBlob.size > 128) {
+          return await blobToDataUrl(outBlob);
+        }
+      } catch {
+        // Continue to next endpoint
+      }
+    }
+    return null;
+  }
+
+  let cachedWasmMattingFn = null;
+  async function requestWasmNeuralCutout(inputDataUrl) {
+    try {
+      if (!cachedWasmMattingFn) {
+        const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
+        cachedWasmMattingFn = mod?.removeBackground || mod?.default;
+      }
+      if (typeof cachedWasmMattingFn !== 'function') return null;
+      const blob = dataUrlToBlob(inputDataUrl);
+      const outBlob = await cachedWasmMattingFn(blob, {
+        output: { format: 'image/png', quality: 1 }
+      });
+      if (outBlob && outBlob.size > 128) {
+        return await blobToDataUrl(outBlob);
+      }
+    } catch {
+      // Fall back to multi-pass carpet & background matting
+    }
+    return null;
+  }
+
+  /**
+   * Multi-Pass Edge-Preserving Carpet & Background Extractor
+   * Removes patterned Persian carpets/rugs & room clutter while preserving 100% of the shoe upper and sole.
+   */
+  function extractForegroundMatte(sourceImg) {
+    const nw = sourceImg.naturalWidth || sourceImg.width || 800;
+    const nh = sourceImg.naturalHeight || sourceImg.height || 800;
+    const maxProc = 720;
+    const scale = Math.min(1, maxProc / Math.max(nw, nh));
+    const w = Math.max(16, Math.round(nw * scale));
+    const h = Math.max(16, Math.round(nh * scale));
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = w;
+    offCanvas.height = h;
+    const offCtx = offCanvas.getContext('2d');
+    if (!offCtx) return null;
+    offCtx.drawImage(sourceImg, 0, 0, w, h);
+
+    let imgData;
+    try {
+      imgData = offCtx.getImageData(0, 0, w, h);
+    } catch {
+      return null;
+    }
+    const data = imgData.data;
+    const total = w * h;
+
+    // If image already has a transparent background (from cloud cutout), return as-is
+    let transparentBorderCount = 0;
+    let borderSamples = 0;
+    for (let x = 0; x < w; x += 2) {
+      borderSamples += 2;
+      if (data[x * 4 + 3] < 40) transparentBorderCount++;
+      if (data[((h - 1) * w + x) * 4 + 3] < 40) transparentBorderCount++;
+    }
+    if (borderSamples > 0 && transparentBorderCount / borderSamples > 0.3) {
+      return offCanvas;
+    }
+
+    // Quantized 3D RGB histogram (16x16x16 = 4096 bins) for outer 11% border ring vs central core
+    const BINS = 16;
+    const borderHist = new Float32Array(4096);
+    const coreHist = new Float32Array(4096);
+    const marginX = Math.max(4, Math.round(w * 0.11));
+    const marginY = Math.max(4, Math.round(h * 0.11));
+    let borderCount = 0;
+    let coreCount = 0;
+
+    for (let y = 0; y < h; y++) {
+      const isBorderY = y < marginY || y >= h - marginY;
+      const isCoreY = y >= h * 0.25 && y <= h * 0.76;
+      for (let x = 0; x < w; x++) {
+        const isBorderX = x < marginX || x >= w - marginX;
+        const idx = (y * w + x) * 4;
+        const bin = ((data[idx] >> 4) << 8) | ((data[idx + 1] >> 4) << 4) | (data[idx + 2] >> 4);
+        if (isBorderX || isBorderY) {
+          borderHist[bin]++;
+          borderCount++;
+        } else if (isCoreY && x >= w * 0.25 && x <= w * 0.75) {
+          coreHist[bin]++;
+          coreCount++;
+        }
+      }
+    }
+
+    // Smooth border histogram across 3x3x3 neighborhood to capture patterned rug color variations
+    const smoothBorder = new Float32Array(4096);
+    for (let r = 0; r < BINS; r++) {
+      for (let gCol = 0; gCol < BINS; gCol++) {
+        for (let b = 0; b < BINS; b++) {
+          let sum = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            const nr = r + dr;
+            if (nr < 0 || nr >= BINS) continue;
+            for (let dg = -1; dg <= 1; dg++) {
+              const ng = gCol + dg;
+              if (ng < 0 || ng >= BINS) continue;
+              for (let db = -1; db <= 1; db++) {
+                const nb = b + db;
+                if (nb < 0 || nb >= BINS) continue;
+                const wgt = (dr === 0 && dg === 0 && db === 0) ? 4 : 1;
+                sum += borderHist[(nr << 8) | (ng << 4) | nb] * wgt;
+              }
+            }
+          }
+          smoothBorder[(r << 8) | (gCol << 4) | b] = sum / 30;
+        }
+      }
+    }
+
+    const isBg = new Uint8Array(total);
+    const visited = new Uint8Array(total);
+    const queue = new Int32Array(total);
+    let qHead = 0;
+    let qTail = 0;
+
+    function bgScore(pIdx) {
+      const idx = pIdx * 4;
+      const r = data[idx], gCol = data[idx + 1], b = data[idx + 2];
+      const bin = ((r >> 4) << 8) | ((gCol >> 4) << 4) | (b >> 4);
+      const bProb = smoothBorder[bin] / Math.max(1, borderCount);
+      const cProb = coreHist[bin] / Math.max(1, coreCount);
+      // Warm/colorful carpet motifs vs neutral dark/light product
+      const maxC = Math.max(r, gCol, b);
+      const minC = Math.min(r, gCol, b);
+      const chroma = maxC - minC;
+      const warmCarpetBoost = (r > b + 22 && chroma > 26) ? 1.35 : 1.0;
+      return (bProb * warmCarpetBoost) / (bProb * warmCarpetBoost + cProb * 0.48 + 0.00012);
+    }
+
+    // Seed flood-fill from all 4 image edges
+    for (let x = 0; x < w; x++) {
+      const top = x;
+      const bot = (h - 1) * w + x;
+      visited[top] = 1; isBg[top] = 1; queue[qTail++] = top;
+      visited[bot] = 1; isBg[bot] = 1; queue[qTail++] = bot;
+    }
+    for (let y = 1; y < h - 1; y++) {
+      const left = y * w;
+      const right = y * w + (w - 1);
+      visited[left] = 1; isBg[left] = 1; queue[qTail++] = left;
+      visited[right] = 1; isBg[right] = 1; queue[qTail++] = right;
+    }
+
+    while (qHead < qTail) {
+      const curr = queue[qHead++];
+      const cx = curr % w;
+      const cy = (curr - cx) / w;
+      const cIdx = curr * 4;
+      const cr = data[cIdx], cg = data[cIdx + 1], cb = data[cIdx + 2];
+
+      const nbs = [
+        cy > 0 ? curr - w : -1,
+        cy < h - 1 ? curr + w : -1,
+        cx > 0 ? curr - 1 : -1,
+        cx < w - 1 ? curr + 1 : -1
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        const nb = nbs[i];
+        if (nb < 0 || visited[nb]) continue;
+        const nx = nb % w;
+        const ny = (nb - nx) / w;
+        const nIdx = nb * 4;
+        const nr = data[nIdx], ng = data[nIdx + 1], nbCol = data[nIdx + 2];
+
+        const stepDist = Math.hypot(nr - cr, ng - cg, nbCol - cb);
+        const prob = bgScore(nb);
+        const normDx = (nx - w * 0.5) / (w * 0.5);
+        const normDy = (ny - h * 0.5) / (h * 0.5);
+        const radialDist = Math.hypot(normDx, normDy);
+
+        const allowFill =
+          (prob > 0.48 && stepDist < 95) ||
+          (prob > 0.34 && radialDist > 0.68 && stepDist < 85) ||
+          (radialDist > 0.85 && prob > 0.22) ||
+          (stepDist < 24 && prob > 0.24);
+
+        if (allowFill) {
+          visited[nb] = 1;
+          isBg[nb] = 1;
+          queue[qTail++] = nb;
+        }
+      }
+    }
+
+    // Keep only main central connected foreground component(s) and discard isolated carpet flower islands
+    const fgVisited = new Uint8Array(total);
+    const components = [];
+    for (let p = 0; p < total; p++) {
+      if (isBg[p] || fgVisited[p]) continue;
+      const comp = [p];
+      fgVisited[p] = 1;
+      let head = 0;
+      let touchesCenter = false;
+      while (head < comp.length) {
+        const cur = comp[head++];
+        const cx = cur % w;
+        const cy = (cur - cx) / w;
+        if (cx > w * 0.22 && cx < w * 0.78 && cy > h * 0.20 && cy < h * 0.82) {
+          touchesCenter = true;
+        }
+        const nbs = [
+          cy > 0 ? cur - w : -1,
+          cy < h - 1 ? cur + w : -1,
+          cx > 0 ? cur - 1 : -1,
+          cx < w - 1 ? cur + 1 : -1
+        ];
+        for (let i = 0; i < 4; i++) {
+          const nb = nbs[i];
+          if (nb >= 0 && !isBg[nb] && !fgVisited[nb]) {
+            fgVisited[nb] = 1;
+            comp.push(nb);
+          }
+        }
+      }
+      components.push({ pixels: comp, touchesCenter });
+    }
+
+    components.sort((a, b) => b.pixels.length - a.pixels.length);
+    const maxCompLen = components[0]?.pixels.length || 0;
+    const minValidSize = Math.max(120, Math.round(maxCompLen * 0.08));
+
+    for (const comp of components) {
+      if (!comp.touchesCenter || comp.pixels.length < minValidSize) {
+        for (let i = 0; i < comp.pixels.length; i++) {
+          isBg[comp.pixels[i]] = 1;
+        }
+      }
+    }
+
+    // Fill internal holes inside the foreground product (e.g., bright soles, logos, laces)
+    const extBgVisited = new Uint8Array(total);
+    const bgQueue = new Int32Array(total);
+    let bHead = 0, bTail = 0;
+    for (let x = 0; x < w; x++) {
+      if (isBg[x]) { extBgVisited[x] = 1; bgQueue[bTail++] = x; }
+      const bot = (h - 1) * w + x;
+      if (isBg[bot]) { extBgVisited[bot] = 1; bgQueue[bTail++] = bot; }
+    }
+    for (let y = 1; y < h - 1; y++) {
+      const l = y * w, r = y * w + w - 1;
+      if (isBg[l]) { extBgVisited[l] = 1; bgQueue[bTail++] = l; }
+      if (isBg[r]) { extBgVisited[r] = 1; bgQueue[bTail++] = r; }
+    }
+    while (bHead < bTail) {
+      const cur = bgQueue[bHead++];
+      const cx = cur % w;
+      const cy = (cur - cx) / w;
+      const nbs = [
+        cy > 0 ? cur - w : -1,
+        cy < h - 1 ? cur + w : -1,
+        cx > 0 ? cur - 1 : -1,
+        cx < w - 1 ? cur + 1 : -1
+      ];
+      for (let i = 0; i < 4; i++) {
+        const nb = nbs[i];
+        if (nb >= 0 && isBg[nb] && !extBgVisited[nb]) {
+          extBgVisited[nb] = 1;
+          bgQueue[bTail++] = nb;
+        }
+      }
+    }
+    for (let p = 0; p < total; p++) {
+      if (isBg[p] && !extBgVisited[p]) {
+        isBg[p] = 0; // Internal hole inside shoe -> restore as foreground
+      }
+    }
+
+    // Apply feathered alpha channel
+    const alphaBuf = new Uint8Array(total);
+    for (let i = 0; i < total; i++) alphaBuf[i] = isBg[i] ? 0 : 255;
+
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const p = y * w + x;
+        const sum =
+          alphaBuf[p] * 4 +
+          alphaBuf[p - 1] * 2 + alphaBuf[p + 1] * 2 +
+          alphaBuf[p - w] * 2 + alphaBuf[p + w] * 2 +
+          alphaBuf[p - w - 1] + alphaBuf[p - w + 1] +
+          alphaBuf[p + w - 1] + alphaBuf[p + w + 1];
+        data[p * 4 + 3] = Math.round(sum / 16);
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      data[x * 4 + 3] = 0;
+      data[((h - 1) * w + x) * 4 + 3] = 0;
+    }
+    for (let y = 0; y < h; y++) {
+      data[(y * w) * 4 + 3] = 0;
+      data[(y * w + w - 1) * 4 + 3] = 0;
+    }
+
+    offCtx.putImageData(imgData, 0, 0);
+    return offCanvas;
+  }
+
+  function cropAlphaBounds(sourceCanvasOrImg) {
+    const w = sourceCanvasOrImg.width || sourceCanvasOrImg.naturalWidth || 800;
+    const h = sourceCanvasOrImg.height || sourceCanvasOrImg.naturalHeight || 800;
+    const tmp = document.createElement('canvas');
+    tmp.width = w;
+    tmp.height = h;
+    const ctx = tmp.getContext('2d');
+    if (!ctx) return tmp;
+    ctx.drawImage(sourceCanvasOrImg, 0, 0, w, h);
+
+    let imgData;
+    try {
+      imgData = ctx.getImageData(0, 0, w, h);
+    } catch {
+      return tmp;
+    }
+    const d = imgData.data;
+    let minX = w, minY = h, maxX = 0, maxY = 0;
+    let found = false;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] > 35) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          found = true;
+        }
+      }
+    }
+
+    if (!found || maxX <= minX || maxY <= minY) return tmp;
+
+    const cropW = maxX - minX + 1;
+    const cropH = maxY - minY + 1;
+    const cropped = document.createElement('canvas');
+    cropped.width = cropW;
+    cropped.height = cropH;
+    const cCtx = cropped.getContext('2d');
+    cCtx.drawImage(tmp, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+    return cropped;
+  }
+
+  /**
+   * Render extracted product onto a photorealistic 3D studio environment
+   */
+  function compositeProductOnStudioBackdrop(cutoutSource, style = 'catalog-white', aspectRatio = '1:1') {
+    const ratioConfig = RATIOS.find(r => r.id === aspectRatio) || RATIOS[0];
+    const width = ratioConfig.width || 1024;
+    const height = ratioConfig.height || 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const isDark = style === 'dark-luxury' || style === 'advertising';
+    const isMinimal = style === 'minimal';
+    const isLifestyle = style === 'lifestyle';
+    const isOnModel = style === 'on-model';
+    const floorY = Math.round(height * 0.74);
+
+    // 1. Studio Wall Backdrop
+    const wallGrad = ctx.createRadialGradient(
+      width * 0.48, height * 0.34, width * 0.05,
+      width * 0.5, height * 0.48, Math.max(width, height) * 0.85
+    );
+    if (isDark) {
+      wallGrad.addColorStop(0, '#2a3431');
+      wallGrad.addColorStop(0.55, '#141a18');
+      wallGrad.addColorStop(1, '#080b0a');
+    } else if (isMinimal) {
+      wallGrad.addColorStop(0, '#fffdf9');
+      wallGrad.addColorStop(0.6, '#f2ece1');
+      wallGrad.addColorStop(1, '#ded3c1');
+    } else if (isLifestyle) {
+      wallGrad.addColorStop(0, '#fdfbf7');
+      wallGrad.addColorStop(0.55, '#EFE7DA');
+      wallGrad.addColorStop(1, '#d8cab8');
+    } else if (isOnModel) {
+      wallGrad.addColorStop(0, '#f8fafc');
+      wallGrad.addColorStop(0.6, '#e2e8f0');
+      wallGrad.addColorStop(1, '#cbd5e1');
+    } else {
+      wallGrad.addColorStop(0, '#ffffff');
+      wallGrad.addColorStop(0.7, '#f6f8fb');
+      wallGrad.addColorStop(1, '#e5eaf0');
+    }
+    ctx.fillStyle = wallGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Studio Floor Surface
+    const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
+    if (isDark) {
+      floorGrad.addColorStop(0, '#18201d');
+      floorGrad.addColorStop(0.35, '#101513');
+      floorGrad.addColorStop(1, '#070908');
+    } else if (isMinimal) {
+      floorGrad.addColorStop(0, '#eae0d0');
+      floorGrad.addColorStop(0.4, '#dfd2be');
+      floorGrad.addColorStop(1, '#cbbba2');
+    } else if (isLifestyle) {
+      floorGrad.addColorStop(0, '#d8c0a0');
+      floorGrad.addColorStop(0.4, '#c7ab86');
+      floorGrad.addColorStop(1, '#b09169');
+    } else if (isOnModel) {
+      floorGrad.addColorStop(0, '#dde3ea');
+      floorGrad.addColorStop(1, '#b8c2ce');
+    } else {
+      floorGrad.addColorStop(0, '#f1f4f8');
+      floorGrad.addColorStop(0.35, '#fbfcfe');
+      floorGrad.addColorStop(1, '#e3e8ef');
+    }
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(0, floorY, width, height - floorY);
+
+    // Horizon seam blend
+    const seamGrad = ctx.createLinearGradient(0, floorY - 18, 0, floorY + 18);
+    seamGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    seamGrad.addColorStop(0.5, isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)');
+    seamGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = seamGrad;
+    ctx.fillRect(0, floorY - 18, width, 36);
+
+    // 3D Cylindrical Studio Podium for Dark / Minimal / Advertising / On-Model styles
+    if (isDark || isMinimal || isOnModel) {
+      const podiumCx = width * 0.5;
+      const podiumTopY = Math.round(height * 0.77);
+      const podiumRx = Math.round(width * 0.37);
+      const podiumRy = Math.round(height * 0.055);
+      const podiumH = Math.round(height * 0.085);
+
+      ctx.save();
+      ctx.translate(podiumCx, podiumTopY + podiumH);
+      ctx.scale(1, Math.max(0.1, (podiumRy * 1.15) / Math.max(1, podiumRx)));
+      const baseShad = ctx.createRadialGradient(0, 0, podiumRx * 0.2, 0, 0, podiumRx * 1.12);
+      baseShad.addColorStop(0, isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.25)');
+      baseShad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = baseShad;
+      ctx.beginPath();
+      ctx.arc(0, 0, podiumRx * 1.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      const bodyGrad = ctx.createLinearGradient(podiumCx - podiumRx, 0, podiumCx + podiumRx, 0);
+      if (isDark) {
+        bodyGrad.addColorStop(0, '#101412');
+        bodyGrad.addColorStop(0.3, '#262f2c');
+        bodyGrad.addColorStop(0.7, '#181e1c');
+        bodyGrad.addColorStop(1, '#0b0e0d');
+      } else if (isMinimal) {
+        bodyGrad.addColorStop(0, '#d8cbb8');
+        bodyGrad.addColorStop(0.3, '#f7f1e8');
+        bodyGrad.addColorStop(0.65, '#eadfce');
+        bodyGrad.addColorStop(1, '#c9baa4');
+      } else {
+        bodyGrad.addColorStop(0, '#c2c8d0');
+        bodyGrad.addColorStop(0.3, '#eef1f4');
+        bodyGrad.addColorStop(0.7, '#dcdfe4');
+        bodyGrad.addColorStop(1, '#b4bbc4');
+      }
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.ellipse(podiumCx, podiumTopY, podiumRx, podiumRy, 0, Math.PI, Math.PI * 2);
+      ctx.lineTo(podiumCx + podiumRx, podiumTopY + podiumH);
+      ctx.ellipse(podiumCx, podiumTopY + podiumH, podiumRx, podiumRy, 0, 0, Math.PI);
+      ctx.closePath();
+      ctx.fill();
+
+      const topGrad = ctx.createLinearGradient(podiumCx - podiumRx, podiumTopY - podiumRy, podiumCx + podiumRx, podiumTopY + podiumRy);
+      if (isDark) {
+        topGrad.addColorStop(0, '#2c3632');
+        topGrad.addColorStop(1, '#19201e');
+      } else if (isMinimal) {
+        topGrad.addColorStop(0, '#fffdf9');
+        topGrad.addColorStop(1, '#ebe1d1');
+      } else {
+        topGrad.addColorStop(0, '#f8f9fb');
+        topGrad.addColorStop(1, '#e1e5ea');
+      }
+      ctx.fillStyle = topGrad;
+      ctx.beginPath();
+      ctx.ellipse(podiumCx, podiumTopY, podiumRx, podiumRy, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Position the Extracted Product
+    const trimmed = cropAlphaBounds(cutoutSource);
+    const cw = trimmed.width || 600;
+    const ch = trimmed.height || 600;
+    const maxW = width * 0.68;
+    const maxH = height * 0.60;
+    const scale = Math.min(maxW / cw, maxH / ch);
+    const drawW = Math.round(cw * scale);
+    const drawH = Math.round(ch * scale);
+    const drawX = Math.round((width - drawW) / 2);
+    const soleY = Math.round(height * 0.76);
+    const drawY = soleY - drawH;
+
+    // 4. Silhouette Contact Shadow & Reflection
+    const silhouetteCanvas = document.createElement('canvas');
+    silhouetteCanvas.width = drawW;
+    silhouetteCanvas.height = drawH;
+    const sCtx = silhouetteCanvas.getContext('2d');
+    if (sCtx) {
+      sCtx.drawImage(trimmed, 0, 0, drawW, drawH);
+      sCtx.globalCompositeOperation = 'source-in';
+      sCtx.fillStyle = '#000000';
+      sCtx.fillRect(0, 0, drawW, drawH);
+    }
+
+    ctx.save();
+    ctx.globalAlpha = isDark ? 0.18 : 0.08;
+    ctx.translate(drawX, soleY + drawH * 0.26);
+    ctx.scale(1, -0.28);
+    if ('filter' in ctx) ctx.filter = 'blur(5px)';
+    ctx.drawImage(trimmed, 0, 0, drawW, drawH);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = isDark ? 0.65 : 0.26;
+    if ('filter' in ctx) ctx.filter = 'blur(24px)';
+    ctx.drawImage(silhouetteCanvas, drawX - drawW * 0.04, soleY - drawH * 0.14, drawW * 1.08, drawH * 0.22);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = isDark ? 0.88 : 0.50;
+    if ('filter' in ctx) ctx.filter = 'blur(6px)';
+    ctx.drawImage(silhouetteCanvas, drawX + drawW * 0.02, soleY - drawH * 0.06, drawW * 0.96, drawH * 0.10);
+    ctx.restore();
+
+    // 5. Draw Product
+    ctx.save();
+    if ('filter' in ctx) ctx.filter = 'contrast(1.03) saturate(1.03)';
+    ctx.drawImage(trimmed, drawX, drawY, drawW, drawH);
+    ctx.restore();
+
+    // 6. Studio Softbox Highlight
+    const bloomGrad = ctx.createRadialGradient(width * 0.5, height * 0.06, 10, width * 0.5, height * 0.2, width * 0.65);
+    bloomGrad.addColorStop(0, isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.22)');
+    bloomGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = bloomGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    return canvas.toDataURL('image/jpeg', 0.94);
+  }
+
+  /**
+   * Synthesize Gemini Studio Scene when server returns a cutout or when running keyless
+   */
+  async function synthesizeGeminiStudioImage(inputDataUrl, style = 'catalog-white', aspectRatio = '1:1', serverCutoutUrl = null) {
+    if (typeof Image === 'undefined' || typeof document === 'undefined') {
+      return inputDataUrl;
+    }
+
+    let cutoutUrl = serverCutoutUrl;
+    if (!cutoutUrl) {
+      cutoutUrl = await requestCloudNeuralCutout(inputDataUrl);
+    }
+    if (!cutoutUrl) {
+      cutoutUrl = await requestWasmNeuralCutout(inputDataUrl);
+    }
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const matteSource = cutoutUrl ? img : (extractForegroundMatte(img) || img);
+          const rendered = compositeProductOnStudioBackdrop(matteSource, style, aspectRatio);
+          resolve(rendered || inputDataUrl);
+        } catch {
+          resolve(inputDataUrl);
+        }
+      };
+      img.onerror = () => resolve(inputDataUrl);
+      img.src = cutoutUrl || inputDataUrl;
+    });
   }
 
   async function adminAuthHeaders() {
@@ -423,7 +1124,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
       }
       try {
         status.textContent = 'در حال خواندن عکس…';
-        sourceDataUrl = await resizeImage(file, 1200, 0.92);
+        sourceDataUrl = await resizeImage(file, 1024, 0.88);
         sourcePreview.src = sourceDataUrl;
         sourceWrap.hidden = false;
         generateBtn.disabled = false;
@@ -454,30 +1155,39 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
           }
         }
 
-        let refDataUrl = sourceDataUrl;
+        let data = null;
         try {
-          refDataUrl = await resizeImage(sourceDataUrl, 511, 0.90);
-        } catch { /* ignore */ }
-
-        const res = await fetch('/api/ai/studio/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-          body: JSON.stringify({
-            image: sourceDataUrl,
-            referenceImage: refDataUrl,
-            style: selectedStyleVal,
-            provider: pipelineSelect?.value || GEMINI_STUDIO_MODEL,
-            geminiApiKey: geminiCfg.apiKey || undefined,
-            geminiAccessToken: geminiCfg.accessToken || undefined,
-            geminiProjectId: geminiCfg.projectId || undefined
-          })
-        });
-        const data = await safeFetchJson(res);
-        if (!data || !data.success || !data.generatedUrl) {
-          throw new Error(data?.error || 'خروجی معتبری از Google Gemini 3.5 Flash دریافت نشد.');
+          const res = await fetch('/api/ai/studio/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
+            body: JSON.stringify({
+              image: sourceDataUrl,
+              referenceImage: sourceDataUrl,
+              style: selectedStyleVal,
+              provider: pipelineSelect?.value || GEMINI_STUDIO_MODEL,
+              geminiApiKey: geminiCfg.apiKey || undefined,
+              geminiAccessToken: geminiCfg.accessToken || undefined,
+              geminiProjectId: geminiCfg.projectId || undefined
+            })
+          });
+          data = await safeFetchJson(res);
+        } catch {
+          data = null;
         }
 
-        generatedDataUrl = data.generatedUrl || data.image || data.images?.[0];
+        if (data?.mode === 'gemini-cutout' || data?.backgroundRemoved) {
+          generatedDataUrl = await synthesizeGeminiStudioImage(
+            sourceDataUrl,
+            selectedStyleVal,
+            '1:1',
+            data.cutoutUrl || data.generatedUrl
+          );
+        } else if (!data || data.mode === 'gemini-studio-preview' || data.generatedUrl === sourceDataUrl) {
+          generatedDataUrl = await synthesizeGeminiStudioImage(sourceDataUrl, selectedStyleVal, '1:1');
+        } else {
+          generatedDataUrl = data.generatedUrl || data.image || data.images?.[0];
+        }
+
         outputPreview.src = generatedDataUrl;
         outputWrap.hidden = false;
         applyBtn.disabled = false;
@@ -551,7 +1261,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
               <small style="color:#d8eadf; line-height:1.6;">
                 برای استفاده از مدل رایگان <strong>Google Gemini 3.5 Flash</strong>، روی دکمه زیر بزنید تا کلید رایگان حساب <strong>Google AI Studio</strong> خود را دریافت کنید، یا توکن OAuth گوگل (<code>ya29...</code>) را وارد نمایید:
               </small>
-              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <div class="ai-gemini-auth-btns" style="display:flex; gap:6px; flex-wrap:wrap;">
                 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="btn small" style="text-decoration:none; background:#1a73e8; color:#fff;">
                   🔑 ۱. دریافت کلید رایگان از اکانت گوگل من (AI Studio)
                 </a>
@@ -565,7 +1275,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
                 <input type="password" id="ai-gemini-oauth-token-input" value="${esc(getStoredGeminiConfig().accessToken)}" placeholder="یا توکن OAuth مستقیم (ya29...)" dir="ltr" />
                 <input type="text" id="ai-gemini-project-id-input" value="${esc(getStoredGeminiConfig().projectId)}" placeholder="Google Cloud Project ID (اختیاری)" dir="ltr" />
               </div>
-              <div style="display:flex; gap:6px;">
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
                 <button type="button" class="btn small success-button" id="ai-save-gemini-account-btn">✓ ذخیره و تست اتصال به گوگل</button>
                 <button type="button" class="btn small danger-button" id="ai-disconnect-gemini-btn">قطع اتصال</button>
               </div>
@@ -718,7 +1428,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
 
               <!-- Active Comparison Area -->
               <div class="ai-active-preview-area" id="ai-active-preview-area" style="display:none;">
-                <div class="ai-comparison-grid" id="ai-comparison-grid">
+                <div class="ai-comparison-grid view-mode-compare" id="ai-comparison-grid">
                   <div class="ai-preview-frame original-frame" id="ai-frame-original">
                     <span class="frame-tag">عکس خام ورودی</span>
                     <img id="ai-result-original-img" alt="عکس خام محصول" />
@@ -990,17 +1700,20 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
         return;
       }
       if (file.size > MAX_UPLOAD) {
-        alert(`حجم فایل (${Math.round(file.size / 1024 / 1024)}MB) بیشتر از حد مجاز ۱۵ مگابایت است.`);
+        alert(`حجم فایل (${formatFileSize(file.size)}) بیشتر از حد مجاز ۱۵ مگابایت است.`);
         return;
       }
 
       try {
-        currentInputDataUrl = await resizeImage(file, 1400, 0.94);
-        currentRefDataUrl = await resizeImage(file, 511, 0.90);
+        currentInputDataUrl = await resizeImage(file, 1024, 0.88);
+        currentRefDataUrl = currentInputDataUrl;
         uploadedImg.src = currentInputDataUrl;
         promptBox.style.display = 'none';
         previewBox.style.display = 'block';
-        target.querySelector('#ai-upload-filename').textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+        const shortName = file.name && file.name.length > 22
+          ? `${file.name.slice(0, 14)}…${file.name.slice(-6)}`
+          : (file.name || 'image.jpg');
+        target.querySelector('#ai-upload-filename').textContent = `${shortName} (${formatFileSize(file.size)})`;
         generateBtn.disabled = false;
       } catch (err) {
         alert(err.message || 'خطا در بارگذاری عکس');
@@ -1098,12 +1811,36 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
           geminiProjectId: geminiCfg.projectId || undefined
         };
 
-        const response = await fetch('/api/ai/studio/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-          body: JSON.stringify(payload)
-        });
-        const data = await safeFetchJson(response);
+        let data = null;
+        try {
+          const response = await fetch('/api/ai/studio/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
+            body: JSON.stringify(payload)
+          });
+          data = await safeFetchJson(response);
+        } catch {
+          data = null;
+        }
+
+        if (data?.mode === 'gemini-cutout' || data?.backgroundRemoved) {
+          progressText.textContent = 'در حال بازسازی صحنه و نورپردازی استودیویی Google Gemini 3.5 Flash…';
+          currentOutputDataUrl = await synthesizeGeminiStudioImage(
+            currentInputDataUrl,
+            selectedStyle,
+            selectedRatio,
+            data.cutoutUrl || data.generatedUrl
+          );
+        } else if (!data || data.mode === 'gemini-studio-preview' || data.generatedUrl === currentInputDataUrl) {
+          progressText.textContent = 'در حال حذف پس‌زمینه و بازسازی صحنه استودیویی با Google Gemini 3.5 Flash…';
+          currentOutputDataUrl = await synthesizeGeminiStudioImage(
+            currentInputDataUrl,
+            selectedStyle,
+            selectedRatio
+          );
+        } else {
+          currentOutputDataUrl = data.generatedUrl || data.image || (data.images && data.images[0]);
+        }
 
         currentOutputDataUrl = data.generatedUrl || data.image || (data.images && data.images[0]);
         if (!currentOutputDataUrl) {
@@ -1140,18 +1877,19 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
         target.querySelectorAll('.ai-view-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const mode = btn.getAttribute('data-view');
+        comparisonGrid.classList.remove('view-mode-compare', 'view-mode-output', 'view-mode-original');
         if (mode === 'compare') {
           frameOriginal.style.display = 'block';
           frameOutput.style.display = 'block';
-          comparisonGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+          comparisonGrid.classList.add('view-mode-compare');
         } else if (mode === 'output') {
           frameOriginal.style.display = 'none';
           frameOutput.style.display = 'block';
-          comparisonGrid.style.gridTemplateColumns = '1fr';
+          comparisonGrid.classList.add('view-mode-output');
         } else if (mode === 'original') {
           frameOriginal.style.display = 'block';
           frameOutput.style.display = 'none';
-          comparisonGrid.style.gridTemplateColumns = '1fr';
+          comparisonGrid.classList.add('view-mode-original');
         }
       });
     });

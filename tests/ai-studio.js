@@ -306,6 +306,12 @@ async function runTests() {
   assert(!clientScript.includes('segmentViaBrowserBiRefNet'), 'Legacy BiRefNet segmentation must be removed');
   assert(!clientScript.includes('segmentViaBrowserOnnx'), 'Legacy ONNX segmentation must be removed');
   assert(!clientScript.includes('createClientStudioPreview'), 'Legacy client studio preview must be removed');
+  assert(clientScript.includes('synthesizeGeminiStudioImage'), 'UI must synthesize studio scene so raw input image is never returned unchanged');
+  assert(clientScript.includes('gemini-2.0-flash-exp-image-generation'), 'UI must include free-tier Gemini image generation fallback model');
+
+  const stage4Css = fs.readFileSync(path.join(__dirname, '../stage4.css'), 'utf8');
+  assert(stage4Css.includes('.ai-studio-page-wrapper .full'), 'CSS must enforce full width on studio controls');
+  assert(stage4Css.includes('.ai-comparison-grid.view-mode-compare'), 'CSS must support responsive view-mode-compare class');
 
   console.log('✓ رابط کاربری «استودیو هوش مصنوعی محصول» کامل و آماده است.');
   console.log('\n=============================================');
