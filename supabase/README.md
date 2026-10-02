@@ -1,6 +1,6 @@
 # Supabase setup, Auth, and migrations
 
-The project owner confirmed that the initial schema migration ran successfully via GitHub Actions. The storefront's full data provider is **not** connected yet: Auth can be enabled independently, while catalog/CMS/cart/orders/stock still use the Demo LocalStorage provider. Checkout and mock payment are deliberately blocked once Supabase Auth is configured, so a real customer cannot be led through a fake purchase.
+The project owner confirmed that the initial schema migration ran successfully via GitHub Actions. The storefront's full data provider is **not** connected yet: Auth can be enabled independently, while catalog/CMS/cart/orders/stock still use the Demo LocalStorage provider. Checkout now uses the server-side ZarinPal API v4 integration in Sandbox only; production payment requests are explicitly rejected until order, price and inventory are backed by a persistent server-side source of truth.
 
 ## Supabase Auth: email and password
 
@@ -59,7 +59,7 @@ Inspect the affected row count and `profiles.role` afterwards. Do not expose a p
 
 For every schema change, add a new timestamped `.sql` migration; never edit a migration already applied remotely. Direct edits in the SQL Editor are not synchronized to Git and can create migration-history drift.
 
-The initial migration `202609280001_initial_schema.sql` is reported by the owner as successfully applied. A follow-up migration `202609280002_active_profile_rls.sql` hardens owner RLS against deactivated accounts. Once this file is pushed to `main`, Actions applies it. Verify the workflow run is green before depending on the new policies.
+The initial migration `202609280001_initial_schema.sql` is reported by the owner as successfully applied. Follow-up migration `202609280002_active_profile_rls.sql` hardens owner RLS against deactivated accounts. Migration `202610020001_zarinpal_payment_provider.sql` removes the legacy mock provider default and adds a fail-closed check that accepts only `zarinpal`. Once these files are pushed to `main`, Actions applies them in order. Verify the workflow run is green before depending on the new policies or provider constraint.
 
 Required repository Actions **Secrets** (not Actions Variables):
 
@@ -69,11 +69,21 @@ Required repository Actions **Secrets** (not Actions Variables):
 
 Keep all three in GitHub Actions Secrets only. These are distinct from the public Vercel Auth settings above.
 
+## ZarinPal Sandbox configuration
+
+Set these only in Vercel → Settings → Environment Variables (or in an untracked local `.env` file):
+
+- `ZARINPAL_MODE=sandbox`
+- `ZARINPAL_MERCHANT_ID` — valid 36-character merchant identifier from the provider/sandbox.
+- `ZARINPAL_STATE_SECRET` — random secret of at least 32 bytes (for example, generate locally with `openssl rand -hex 32`).
+
+The Admin → Payments panel is status/read-only; secrets are never entered or stored there. The callback URL is `/api/payment/zarinpal/callback`. Production gateway endpoints are present, but the request endpoint returns 503 for production mode until the server owns persistent orders and inventory. Do not switch to production or accept real money based only on a configured merchant ID.
+
 ## Remaining production blockers
 
 - `services/data-provider.js` and all store repositories still use local Demo data; products, carts, addresses, CMS, customer lists, orders and stock do not yet persist through Supabase.
 - The frontend cannot create a secure order by inserting rows directly. Before enabling checkout, implement a server-controlled/RPC transaction that verifies current product prices/coupons, reserves stock atomically, writes order/items/payment intent idempotently, and prevents clients from choosing totals or payment state. Add tests for concurrent stock checkout and retries.
-- No real gateway is selected. The owner used the ambiguous name «بلوپال»; keep payment disabled/mock until the exact provider and its official integration documentation are identified, then verify the payment callback server-side.
+- ZarinPal API v4 is implemented server-side (`request`, `callback` verification, signed receipt) and Sandbox is available for testing. Production requests are hard-disabled in `lib/zarinpal.js` while order totals and inventory remain browser-local. Before enabling real payments, move order creation, authoritative price/coupon calculation and atomic inventory changes into a persistent server-side transaction; then run the complete official Sandbox E2E flow.
 - Configure and verify SMTP, custom-domain redirect allow-list, account recovery, privacy/terms, and a backup/restore runbook.
 - The image-generation API still lacks real admin authentication and durable global rate limiting. It is not production-safe merely because email Auth now works; admin AI access remains a separate server-side authorization task.
 

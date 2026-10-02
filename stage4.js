@@ -289,7 +289,7 @@ function cartPage(){
         </a>
         
         <div class="cart-security-badge">
-          ${uiIcon('shield')} پرداخت امن با کارت‌های شتاب و درگاه بلوپال
+          ${uiIcon('shield')} پرداخت امن از طریق درگاه رسمی زرین‌پال
         </div>
       </aside>
     </div>
@@ -807,34 +807,24 @@ function modernCheckout() {
 
         <div class="panel checkout-panel" style="margin-top:18px">
           <div class="panel-head-row">
-            <h3>درگاه پرداخت الکترونیک</h3>
-            <span class="panel-step-badge">امن و شاپرک</span>
+            <h3>درگاه پرداخت اینترنتی</h3>
+            <span class="panel-step-badge">زرین‌پال · شاپرک</span>
           </div>
           <div class="checkout-payment-methods">
             <label class="payment-method-card active-method">
               <div class="pm-head">
-                <input type="radio" name="paymentMethod" value="bluepal" checked>
+                <input type="radio" name="paymentMethod" value="zarinpal" checked required>
                 <div>
-                  <b>درگاه پرداخت هوشمند بلوپال</b>
-                  <span class="pm-badge">پیشنهادی • ۱ کلیک</span>
-                  <small>پرداخت سریع بدون رمز پویا برای کاربران بلوبانک یا کارت به کارت فوری</small>
+                  <b>درگاه پرداخت زرین‌پال</b>
+                  <small>پرداخت با کارت‌های عضو شبکهٔ شتاب؛ پس از ثبت سفارش به صفحهٔ امن زرین‌پال منتقل می‌شوید.</small>
                 </div>
               </div>
-              <span class="pm-logo">BluePal</span>
-            </label>
-            <label class="payment-method-card">
-              <div class="pm-head">
-                <input type="radio" name="paymentMethod" value="mock">
-                <div>
-                  <b>درگاه پرداخت اینترنتی شاپرک</b>
-                  <span class="pm-badge outline">کلیه کارت‌ها</span>
-                  <small>اتصال به درگاه بانکی شاپرک با کلیه کارت‌های عضو شبکه شتاب با رمز دوم پویا</small>
-                </div>
-              </div>
-              <span class="pm-logo">شاپرک</span>
+              <span class="pm-logo">ZarinPal</span>
             </label>
           </div>
+          <small class="muted">شماره کارت و رمز بانکی فقط در صفحهٔ رسمی زرین‌پال وارد می‌شود.</small>
         </div>
+
       </section>
 
       <aside class="cart-summary checkout-summary" id="checkout-summary">

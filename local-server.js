@@ -20,6 +20,7 @@ const MODEL = DEFAULT_PIPELINE;
 const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
+const zarinpal = require('./lib/zarinpal.js');
 const serverDb = require('./services/server-db.js');
 serverDb.initStore();
 
@@ -154,49 +155,22 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (pathname === '/api/payment/bluepal/status' && req.method === 'GET') {
-    const configured = Boolean(process.env.BLUEPAL_API_KEY && process.env.BLUEPAL_MERCHANT_ID);
-    return json(res, 200, {
-      success: true,
-      provider: 'BluePal',
-      blupaySupport: true,
-      sandbox: process.env.BLUEPAL_SANDBOX !== 'false',
-      configured,
-      terminal: process.env.BLUEPAL_MERCHANT_ID || 'BLUE-94021',
-      version: '2.4.0',
-      callbackUrl: process.env.BLUEPAL_CALLBACK_URL || '/payment/bluepal/callback'
-    });
+  if (pathname === '/api/payment/zarinpal/status') return zarinpal.status(req, res);
+
+  if (pathname === '/api/payment/zarinpal/request') {
+    if (req.method !== 'POST') return zarinpal.request(req, res);
+    try { req.body = await readBody(req, 32 * 1024); }
+    catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
+    return zarinpal.request(req, res);
   }
 
-  if (pathname === '/api/payment/bluepal/request' && req.method === 'POST') {
-    try {
-      const body = await readBody(req, 1024 * 1024);
-      const authority = 'BLP-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
-      return json(res, 200, {
-        success: true,
-        authority,
-        amount: body.amount,
-        paymentUrl: `/payment/bluepal/${body.intentId || authority}`
-      });
-    } catch (err) {
-      return json(res, 400, { error: err.message });
-    }
-  }
+  if (pathname === '/api/payment/zarinpal/callback') return zarinpal.callback(req, res);
 
-  if (pathname === '/api/payment/bluepal/verify' && req.method === 'POST') {
-    try {
-      const body = await readBody(req, 1024 * 1024);
-      const refId = 'BLP-REF-' + Date.now().toString(36).toUpperCase();
-      return json(res, 200, {
-        success: true,
-        status: 'PAID',
-        refId,
-        authority: body.authority,
-        verifiedAt: new Date().toISOString()
-      });
-    } catch (err) {
-      return json(res, 400, { error: err.message });
-    }
+  if (pathname === '/api/payment/zarinpal/receipt') {
+    if (req.method !== 'POST') return zarinpal.receipt(req, res);
+    try { req.body = await readBody(req, 32 * 1024); }
+    catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
+    return zarinpal.receipt(req, res);
   }
 
   if ((pathname === '/api/ai/status' || pathname === '/api/ai/studio/status') && req.method === 'GET') {

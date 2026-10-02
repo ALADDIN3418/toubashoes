@@ -160,7 +160,7 @@
     homepage: 'چیدمان صفحه اصلی',
     banners: 'بنرها و اسلایدرها',
     media: 'کتابخانه رسانه',
-    payments: 'درگاه‌های پرداخت و بلوپال',
+    payments: 'درگاه پرداخت زرین‌پال',
     settings: 'تنظیمات کلی فروشگاه',
     demo: 'پایگاه داده و همگام‌سازی'
   };
@@ -211,7 +211,7 @@
       title: 'تنظیمات و زیرساخت',
       icon: '⚙️',
       items: [
-        { key: 'payments', label: 'درگاه‌های پرداخت و بلوپال', icon: '💳' },
+        { key: 'payments', label: 'درگاه پرداخت زرین‌پال', icon: '💳' },
         { key: 'settings', label: 'تنظیمات کلی فروشگاه', icon: '⚙' },
         { key: 'demo', label: 'پایگاه داده و همگام‌سازی', icon: '🗄' }
       ]
@@ -372,34 +372,23 @@
     }
   };
 
-  g.savePaymentSettings = function () {
-    const database = getDb();
-    if (database) {
-      database.settings = database.settings || {};
-      database.settings.bluepal = {
-        enabled: document.getElementById('bp-enabled')?.value === 'true',
-        mode: document.getElementById('bp-mode')?.value || 'sandbox',
-        merchantId: document.getElementById('bp-merchant')?.value?.trim() || '',
-        apiKey: document.getElementById('bp-apikey')?.value?.trim() || '',
-        callbackUrl: document.getElementById('bp-callback')?.value || `${g.location?.origin || ''}/payment/bluepal/callback`
-      };
-      if (typeof g.save === 'function') g.save();
-      if (typeof g.toast === 'function') g.toast('تنظیمات درگاه بلوپال ذخیره شد');
-    }
-  };
-
-  g.testBluePalConnection = async function () {
-    if (typeof g.toast === 'function') g.toast('در حال بررسی و تست ارتباط با سرور بلوپال…');
+  g.checkZarinpalStatus = async function () {
+    if (typeof g.toast === 'function') g.toast('در حال بررسی تنظیمات سروری زرین‌پال…');
     try {
-      const res = await fetch('/api/payment/bluepal/status');
-      const data = await res.json();
-      if (data && data.success) {
-        if (typeof g.toast === 'function') g.toast('اتصال وب‌سرویس بلوپال موفقیت‌آمیز است (پینگ: ۳۸ میلی‌ثانیه)');
-      } else {
-        if (typeof g.toast === 'function') g.toast('ارتباط با سرور درگاه بلوپال برقرار شد');
+      const response = await fetch('/api/payment/zarinpal/status', { cache:'no-store' });
+      const data = await response.json();
+      if (data?.configured && data.paymentEnabled) {
+        const mode = data.mode === 'production' ? 'عملیاتی' : 'Sandbox';
+        if (typeof g.toast === 'function') g.toast(`درگاه زرین‌پال در حالت ${mode} آماده است.`);
+      } else if (data?.configured) {
+        if (typeof g.toast === 'function') g.toast('تنظیمات ثبت شده‌اند، اما دریافت وجه واقعی تا اتصال سفارش و موجودی به بک‌اند پایدار غیرفعال است.');
+      } else if (typeof g.toast === 'function') {
+        g.toast('شناسهٔ پذیرنده یا کلید امضای سرور تنظیم نشده است. متغیرهای محیطی Vercel را بررسی کنید.');
       }
+      return data;
     } catch {
-      if (typeof g.toast === 'function') g.toast('ارتباط تستی با درگاه بلوپال تأیید شد (حالت شبیه‌ساز آماده است)');
+      if (typeof g.toast === 'function') g.toast('وضعیت زرین‌پال دریافت نشد؛ اتصال API سایت را بررسی کنید.');
+      return null;
     }
   };
 
@@ -656,75 +645,41 @@
       }
 
       if (section === 'payments') {
-        const bp = (database && database.settings && database.settings.bluepal) || {
-          enabled: true,
-          merchantId: 'BP-MERCHANT-84920',
-          apiKey: 'bp_live_9f821a0d84e271c63b8',
-          mode: 'sandbox'
-        };
-        const paymentsList = (database && database.payments) || [];
+        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'zarinpal');
+        let paymentStatus = { configured:false, mode:'sandbox', callbackPath:'/api/payment/zarinpal/callback', liveCheckoutSafe:false };
+        try {
+          const response = await fetch('/api/payment/zarinpal/status', { cache:'no-store' });
+          if (response.ok) paymentStatus = { ...paymentStatus, ...(await response.json()) };
+        } catch { /* the server-side status can be unavailable in local/demo mode */ }
+        const callbackUrl = `${g.location?.origin || ''}${paymentStatus.callbackPath || '/api/payment/zarinpal/callback'}`;
+        const modeLabel = paymentStatus.mode === 'production' ? 'عملیاتی' : 'Sandbox';
+        const paymentEnabled = Boolean(paymentStatus.paymentEnabled);
         target.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr;gap:24px;max-width:960px">
-          <div class="panel" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;gap:10px">
-              <div style="display:flex;align-items:center;gap:12px">
-                <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#0055ff,#0099ff);color:#fff;display:grid;place-items:center;font-size:20px;font-weight:900">B</div>
-                <div>
-                  <h2 style="font-size:18px;margin:0;color:#0f172a">تنظیمات درگاه هوشمند بلوپال (BluePal / BluPay)</h2>
-                  <small style="color:#64748b">مدیریت درگاه پرداخت مستقیم بلوبانک، وب‌سرویس و درگاه کارت به کارت خودکار</small>
-                </div>
-              </div>
-              <span class="badge ${bp.enabled ? 'green' : 'red'}" style="font-size:12px;padding:4px 12px">${bp.enabled ? '● درگاه فعال و آماده تراکنش' : '○ غیرفعال'}</span>
+          <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+              <div><h2 style="font-size:18px;margin:0;color:#0f172a">درگاه پرداخت زرین‌پال</h2><small style="color:#64748b">درخواست و تأیید تراکنش فقط روی سرور انجام می‌شود.</small></div>
+              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? `● آمادهٔ آزمایش · ${modeLabel}` : paymentStatus.configured ? '● پیکربندی شده · دریافت وجه غیرفعال' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
             </div>
-
             <div class="form-grid">
-              <div class="field"><label>وضعیت درگاه بلوپال</label>
-                <select id="bp-enabled" class="select">
-                  <option value="true" ${bp.enabled ? 'selected' : ''}>فعال (نمایش در تسویه حساب)</option>
-                  <option value="false" ${!bp.enabled ? 'selected' : ''}>غیرفعال</option>
-                </select>
-              </div>
-              <div class="field"><label>محیط اتصال (Gateway Environment)</label>
-                <select id="bp-mode" class="select">
-                  <option value="sandbox" ${bp.mode === 'sandbox' ? 'selected' : ''}>تستی و شبیه‌ساز (Sandbox)</option>
-                  <option value="production" ${bp.mode === 'production' ? 'selected' : ''}>عملیاتی واقعی (Production / شاپرک و بلوبانک)</option>
-                </select>
-              </div>
-              <div class="field"><label>شناسه پذیرنده بلوپال (Merchant ID / Terminal ID)</label>
-                <input id="bp-merchant" value="${esc(bp.merchantId || '')}" placeholder="مثلاً BLUE-94021 یا BP-84920">
-              </div>
-              <div class="field"><label>کلید دسترسی وب‌سرویس (API Key / Secret Token)</label>
-                <input id="bp-apikey" type="password" value="${esc(bp.apiKey || '')}" placeholder="bp_live_...">
-              </div>
-              <div class="field full"><label>آدرس بازگشت تراکنش (Callback URL)</label>
-                <div style="display:flex;gap:8px">
-                  <input id="bp-callback" readonly value="${g.location?.origin || ''}/payment/bluepal/callback" style="direction:ltr;background:#f8fafc">
-                  <button type="button" class="btn small outline" onclick="navigator.clipboard?.writeText(document.getElementById('bp-callback').value);toast('آدرس کپی شد')">کپی</button>
-                </div>
-                <small style="color:#64748b;margin-top:4px;display:block">این آدرس را در پنل توسعه‌دهندگان بلوپال به عنوان Callback URL ثبت کنید.</small>
-              </div>
+              <div class="field"><label>محیط</label><input readonly value="${esc(modeLabel)}"></div>
+              <div class="field"><label>وضعیت</label><input readonly value="${paymentEnabled ? 'آمادهٔ پرداخت آزمایشی sandbox' : paymentStatus.configured ? 'درگاه تنظیم شده؛ دریافت وجه غیرفعال' : 'پیکربندی نشده'}"></div>
+              <div class="field full"><label>Callback URL (برای مشاهده)</label><input readonly value="${esc(callbackUrl)}" dir="ltr"></div>
             </div>
-
-            <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap">
-              <button class="btn" onclick="savePaymentSettings()">ذخیره تنظیمات بلوپال</button>
-              <button class="btn outline" onclick="testBluePalConnection()">⚡ تست آنلاین اتصال به سرور بلوپال</button>
-            </div>
+            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkZarinpalStatus()">بررسی پیکربندی</button></div>
           </div>
-
-          <div class="panel" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
-            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های اخیر درگاه‌ها (${paymentsList.length})</h3>
-            ${paymentsList.length ? adminTable(['شناسه پرداخت', 'شماره سفارش', 'مبلغ (تومان)', 'درگاه', 'وضعیت', 'کد مرجع / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge ${p.provider === 'bluepal' ? 'blue' : 'green'}">${p.provider === 'bluepal' ? 'بلوپال (BluPay)' : 'شاپرک'}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در فروشگاه ثبت نشده است.</div>'}
+          <div class="panel" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:16px;padding:22px">
+            <h3 style="margin:0 0 10px">تنظیم امن در Vercel → Settings → Environment Variables</h3>
+            <ul style="margin:0;padding-right:22px;line-height:1.9;color:#334155">
+              <li><code>ZARINPAL_MERCHANT_ID</code> — شناسهٔ ۳۶ کاراکتری پذیرندهٔ زرین‌پال.</li>
+              <li><code>ZARINPAL_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای state و رسید callback.</li>
+              <li><code>ZARINPAL_MODE</code> — ابتدا <code>sandbox</code>؛ پس از فعال‌سازی پذیرنده، <code>production</code>.</li>
+            </ul>
+            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در این پنل یا LocalStorage وارد نکنید. متغیرها را فقط در سرور Vercel تنظیم و سپس Redeploy کنید. سفارش‌های فعلی هنوز در LocalStorage/حالت Demo هستند؛ این اتصال تا پیاده‌سازی دفتر سفارش و موجودی سمت سرور برای دریافت وجه Production امن نیست.</p>
           </div>
-
-          <div class="panel" style="background:#f0f7ff;border:1.5px solid #bfdbfe;border-radius:16px;padding:24px">
-            <h3 style="font-size:16px;margin:0 0 10px;color:#1e3a8a">📌 راهنمای اتصال به درگاه واقعی بلوپال در محیط عملیاتی (Production)</h3>
-            <ol style="margin:0;padding-right:20px;line-height:1.9;color:#1e293b;font-size:13px">
-              <li><b>ثبت نام در سامانه بلوپال:</b> وارد وب‌سایت ارائه‌دهنده وب‌سرویس بلوپال شده و حساب تجاری فروشگاه کفش طوبی را ایجاد کنید.</li>
-              <li><b>تأیید هویت و کدمالیاتی:</b> مدارک هویتی یا ثبت شرکت، شماره شبا یا شماره حساب بلوبانک و اینماد/کد مالیاتی را جهت فعال‌سازی ارائه دهید.</li>
-              <li><b>دریافت Merchant ID و API Key:</b> از پنل کاربری بخش تنظیمات وب‌سرویس، کلیدهای اختصاصی را دریافت کرده و در فیلدهای بالا قرار دهید.</li>
-              <li><b>تنظیم Callback URL:</b> آدرس بازگشت بالا را در پنل درگاه ثبت نمایید تا پس از پرداخت، مشتری به همراه توکن تأیید به سایت بازگردانده شود.</li>
-              <li><b>انتقال از Sandbox به حالت اصلی:</b> وضعیت را از تستی به <b>عملیاتی واقعی</b> تغییر داده و دکمه ذخیره را بزنید.</li>
-            </ol>
+          <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
+            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های این مرورگر (${paymentsList.length})</h3>
+            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','کد مرجع / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'zarinpal' ? 'زرین‌پال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">در این مرورگر هنوز تراکنشی ثبت نشده است.</div>'}
           </div>
         </div>`;
         return;
@@ -881,6 +836,7 @@
     loadAdminSection,
     bulkApplyProducts,
     bulkApplyCategories,
+    checkZarinpalStatus:g.checkZarinpalStatus,
     selectAllCatalogRows,
     updateCatalogSelectionCount,
     switchAdminSection,

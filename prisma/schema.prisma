@@ -166,7 +166,7 @@ model Payment {
   id String @id @default(cuid())
   orderId String @unique
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  provider String @default("mock")
+  provider String
   providerRef String?
   status PaymentStatus @default(PENDING)
   amount Int
