@@ -10,6 +10,11 @@ function uiIcon(name){
     support:'<path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M4 13h3v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 1-2Zm16 0h-3v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-1-2ZM17 20c-1 2-3 2-5 2"/>',
     heart:'<path d="M20.5 8.6c0 5-8.5 10.3-8.5 10.3S3.5 13.6 3.5 8.6A4.5 4.5 0 0 1 12 6.7a4.5 4.5 0 0 1 8.5 1.9Z"/>',
     arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+    home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+    grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    sliders:'<path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M2 14h4m4-6h4m4 8h4"/>',
+    sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>',
+    moon:'<path d="M20.8 14.2A8.5 8.5 0 0 1 9.8 3.2 8.5 8.5 0 1 0 20.8 14.2Z"/>',
     trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
     check:'<path d="M20 6 9 17l-5-5"/>',
     sparkle:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>'
@@ -17,6 +22,24 @@ function uiIcon(name){
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${p[name]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
 }
 function navActive(href){let p=path();return href==='/'?p==='/':p===href||p.startsWith(href+'/')}
+function categoryNavActive(id){let p=path();if(p==='/shop')return new URLSearchParams(location.search).get('category')===id;if(p.startsWith('/category/')){let slug=decodeURIComponent(p.split('/')[2]||'');let c=db.categories.find(x=>x.id===slug||x.slug===slug||x.name===slug);return c?.id===id}return false}
+function favoritesCount(){return Array.isArray(db.settings.favorites)?db.settings.favorites.length:0}
+let activeStoreTheme='dark';
+function themeToggleMarkup(){let dark=activeStoreTheme==='dark';return `<button class="theme-toggle" type="button" onclick="toggleStoreTheme()" aria-label="تغییر پوسته به حالت ${dark?'روشن':'تیره'}" aria-pressed="${dark}" title="تغییر پوسته">${uiIcon(dark?'sun':'moon')}<span class="theme-toggle-text">${dark?'حالت روشن':'حالت تیره'}</span></button>`}
+function applyStoreTheme(theme,persist=true){
+  activeStoreTheme=theme==='light'?'light':'dark';
+  if(typeof document!=='undefined'){
+    if(document.documentElement?.dataset)document.documentElement.dataset.theme=activeStoreTheme;
+    if(document.body?.dataset)document.body.dataset.theme=activeStoreTheme;
+    let meta=document.querySelector?.('meta[name="theme-color"]');if(meta)meta.content=activeStoreTheme==='dark'?'#0d120e':'#f6f6f0';
+    let controls=document.querySelectorAll?.('.theme-toggle')||[];
+    Array.from(controls).forEach(button=>{let dark=activeStoreTheme==='dark';button.setAttribute('aria-label',`تغییر پوسته به حالت ${dark?'روشن':'تیره'}`);button.setAttribute('aria-pressed',String(dark));button.title=`تغییر به حالت ${dark?'روشن':'تیره'}`;button.innerHTML=`${uiIcon(dark?'sun':'moon')}<span class="theme-toggle-text">${dark?'حالت روشن':'حالت تیره'}</span>`});
+  }
+  if(persist){try{localStorage.setItem('touba-store-theme',activeStoreTheme)}catch(error){}}
+  return activeStoreTheme;
+}
+function toggleStoreTheme(){return applyStoreTheme(activeStoreTheme==='dark'?'light':'dark',true)}
+try{let savedStoreTheme=localStorage.getItem('touba-store-theme');applyStoreTheme(savedStoreTheme==='light'?'light':'dark',false)}catch(error){applyStoreTheme('dark',false)}
 
 /* Minimal, borderless header with clean touch targets */
 function header(){
@@ -24,8 +47,8 @@ function header(){
   let userText=db.currentUser?(db.currentUser.name||'حساب کاربری'):'ورود / ثبت‌نام';
   let userLink=(db.currentUser?.role==='admin'||db.currentUser?.role==='super_admin')?'/admin':(db.currentUser?'/account':'/login');
   let cCount=cartCount();
-  return `<div class="store-header-wrap"><header class="store-header"><div class="store-header-inner container">
-    <button class="mobile-menu-toggle minimal-toggle" aria-label="منو" aria-expanded="false" onclick="toggleMobileNav(this)">
+  return `<a class="skip-link" href="#main-content">پرش به محتوای اصلی</a><div class="store-header-wrap"><header class="store-header"><div class="store-header-inner container">
+    <button class="mobile-menu-toggle minimal-toggle" aria-label="باز کردن منو" aria-expanded="false" onclick="toggleMobileNav(this)">
       <span class="bar bar-1"></span>
       <span class="bar bar-2"></span>
       <span class="bar bar-3"></span>
@@ -36,16 +59,23 @@ function header(){
     </a>
     <nav class="store-nav" id="store-nav" aria-label="منوی اصلی">
       <a class="${navActive('/')?'active':''}" href="/" onclick="closeMobileNav()">خانه</a>
-      <a class="${navActive('/shop')?'active':''}" href="/shop" onclick="closeMobileNav()">فروشگاه</a>
+      <a class="${categoryNavActive('women')?'active':''}" href="/shop?category=women" onclick="closeMobileNav()">زنانه</a>
+      <a class="${categoryNavActive('men')?'active':''}" href="/shop?category=men" onclick="closeMobileNav()">مردانه</a>
+      <a class="${categoryNavActive('accessories')?'active':''}" href="/shop?category=accessories" onclick="closeMobileNav()">کیف و اکسسوری</a>
+      <a class="${location.search.includes('sort=newest')?'active':''}" href="/shop?sort=newest" onclick="closeMobileNav()">جدیدترین‌ها</a>
       <div class="nav-categories">
-        <a class="${path().startsWith('/category/')?'active':''}" href="/shop" onclick="toggleMobileCategories(event,this)">دسته‌بندی‌ها <span class="cat-chevron">⌄</span></a>
+        <a class="${path().startsWith('/category/')?'active':''}" href="/shop" onclick="toggleMobileCategories(event,this)">دسته‌ها <span class="cat-chevron">⌄</span></a>
         <div class="nav-dropdown">${db.categories.filter(c=>c.active).map(c=>`<a href="/category/${encodeURIComponent(c.slug||c.id)}" onclick="closeMobileNav()">${esc(c.name)}</a>`).join('')}</div>
       </div>
       <a href="/shop?category=sale" onclick="closeMobileNav()">تخفیف‌ها</a>
-      <a class="${navActive('/about')?'active':''}" href="/about" onclick="closeMobileNav()">درباره ما</a>
       <a class="${navActive('/contact')?'active':''}" href="/contact" onclick="closeMobileNav()">تماس با ما</a>
-      <a class="${navActive('/tracking')?'active':''}" href="/tracking" onclick="closeMobileNav()">پیگیری سفارش</a>
+      <a class="nav-mobile-secondary ${navActive('/shop')?'active':''}" href="/shop" onclick="closeMobileNav()">همه محصولات</a>
+      <a class="nav-mobile-secondary ${navActive('/about')?'active':''}" href="/about" onclick="closeMobileNav()">درباره ما</a>
+      <a class="nav-mobile-secondary ${navActive('/tracking')?'active':''}" href="/tracking" onclick="closeMobileNav()">پیگیری سفارش</a>
+      <a class="nav-mobile-secondary" href="/account/orders" onclick="closeMobileNav()">سفارش‌های من</a>
+      <a class="nav-mobile-secondary" href="/wishlist" onclick="closeMobileNav()">علاقه‌مندی‌ها</a>
       <div class="nav-divider-mobile"></div>
+      <div class="mobile-theme-row"><span>پوسته فروشگاه</span>${themeToggleMarkup()}</div>
       <a class="mobile-drawer-user ${navActive(userLink)?'active':''}" href="${userLink}" onclick="closeMobileNav()">
         <span class="user-icon-slot">${uiIcon('user')}</span> <span>${esc(userText)}</span>
       </a>
@@ -56,6 +86,10 @@ function header(){
         <button type="submit" class="search-submit-btn minimal-btn" aria-label="جستجو">${uiIcon('search')}</button>
         <button type="button" class="search-close-btn" aria-label="بستن جستجو" onclick="closeHeaderSearch(this)">×</button>
       </form>
+      ${themeToggleMarkup()}
+      <a class="header-action minimal-btn wishlist-action" href="/wishlist" aria-label="علاقه‌مندی‌ها (${favoritesCount()} محصول)" title="علاقه‌مندی‌ها">
+        ${uiIcon('heart')}${favoritesCount()?`<span class="count">${favoritesCount()}</span>`:''}
+      </a>
       <a class="header-action minimal-btn account-action" href="${userLink}" aria-label="${esc(userText)}" title="${esc(userText)}">
         ${uiIcon('user')}
       </a>
@@ -73,7 +107,7 @@ function submitHeaderSearch(e,form){
   e.preventDefault();
   let q=form.elements.q.value.trim();
   if(!q){
-    if(matchMedia('(max-width: 860px)').matches){
+    if(matchMedia('(max-width: 1100px)').matches){
       let open=form.classList.toggle('search-open');
       if(open)form.elements.q.focus();
     }else form.elements.q.focus();
@@ -113,7 +147,7 @@ function closeMobileNav(){
   if(backdrop)backdrop.classList.remove('show');
 }
 function toggleMobileCategories(e,link){
-  if(window.innerWidth <= 860){
+  if(window.innerWidth <= 1100){
     e.preventDefault();
     e.stopPropagation();
     let parent=link.closest('.nav-categories');
@@ -135,7 +169,7 @@ if(typeof window !== 'undefined' && typeof document !== 'undefined' && typeof do
 
 function footer(){
   let cms=db.settings.homepage||{},categories=db.categories.filter(c=>c.active&&c.id!=='sale').slice(0,5);
-  return `<footer class="store-footer"><div class="container"><div class="footer-main"><div class="footer-brand-col"><a class="store-brand footer-brand" href="/"><span class="brand-emblem">${leafMark()}</span><span>${esc(db.settings.storeName||'کفش طوبی')}</span></a><p>قدم‌هایی مطمئن، با انتخابی که هر روز همراه شماست. کیفیت، راحتی و طراحی ماندگار؛ امضای طوبی.</p><div class="social-links"><a href="/contact" aria-label="اینستاگرام">◎</a><a href="/contact" aria-label="تلگرام">➤</a><a href="/contact" aria-label="واتساپ">◉</a></div></div><div><h3>دسترسی سریع</h3><a href="/shop">فروشگاه</a><a href="/about">درباره ما</a><a href="/contact">تماس با ما</a><a href="/tracking">پیگیری سفارش</a></div><div><h3>دسته‌بندی‌ها</h3>${categories.map(c=>`<a href="/category/${encodeURIComponent(c.slug||c.id)}">${esc(c.name)}</a>`).join('')}</div><div><h3>راهنمای مشتریان</h3><a href="/terms">قوانین و شرایط</a><a href="/privacy">حریم خصوصی</a><a href="/account/orders">سفارش‌های من</a><a href="/login">ورود به حساب</a></div><div><h3>با ما در ارتباط باشید</h3><p>${esc(db.settings.phone||'')}</p><p>info@toubashoes.ir</p><p>${esc(db.settings.address||'')}</p><span class="footer-trust">${uiIcon('shield')} خرید مطمئن از طوبی</span></div></div><div class="footer-bottom"><span>${esc(cms.footerText||'تمامی حقوق برای فروشگاه کفش طوبی محفوظ است.')}</span><span>© ۱۴۰۵　·　ساخته‌شده با توجه به هر قدم</span></div></div></footer>`;
+  return `<footer class="store-footer"><div class="container"><div class="footer-main"><div class="footer-brand-col"><a class="store-brand footer-brand" href="/"><span class="brand-emblem">${leafMark()}</span><span>${esc(db.settings.storeName||'کفش طوبی')}</span></a><p>قدم‌هایی مطمئن، با انتخابی که هر روز همراه شماست. کیفیت، راحتی و طراحی ماندگار؛ امضای طوبی.</p><div class="social-links"><a href="/contact" aria-label="اینستاگرام">◎</a><a href="/contact" aria-label="تلگرام">➤</a><a href="/contact" aria-label="واتساپ">◉</a></div></div><div><h3>دسترسی سریع</h3><a href="/shop">فروشگاه</a><a href="/about">درباره ما</a><a href="/contact">تماس با ما</a><a href="/tracking">پیگیری سفارش</a></div><div><h3>دسته‌بندی‌ها</h3>${categories.map(c=>`<a href="/category/${encodeURIComponent(c.slug||c.id)}">${esc(c.name)}</a>`).join('')}</div><div><h3>راهنمای مشتریان</h3><a href="/terms">قوانین و شرایط</a><a href="/privacy">حریم خصوصی</a><a href="/account/orders">سفارش‌های من</a><a href="/login">ورود به حساب</a></div><div><h3>با ما در ارتباط باشید</h3><p>${esc(db.settings.phone||'')}</p><p>info@toubashoes.ir</p><p>${esc(db.settings.address||'')}</p><span class="footer-trust">${uiIcon('shield')} خرید مطمئن از طوبی</span></div></div><div class="footer-bottom"><span>${esc(cms.footerText||'تمامی حقوق برای فروشگاه کفش طوبی محفوظ است.')}</span><span>© ۱۴۰۵　·　ساخته‌شده با توجه به هر قدم</span></div></div></footer><nav class="mobile-bottom-nav" aria-label="میانبرهای فروشگاه"><a class="${navActive('/')?'active':''}" href="/">${uiIcon('home')}<span>خانه</span></a><a class="${navActive('/shop')||path().startsWith('/category/')?'active':''}" href="/shop">${uiIcon('grid')}<span>دسته‌ها</span></a><a class="${navActive('/wishlist')?'active':''}" href="/wishlist">${uiIcon('heart')}<span>علاقه‌مندی</span></a><a class="${navActive('/account')||navActive('/login')?'active':''}" href="${db.currentUser?'/account':'/login'}">${uiIcon('user')}<span>حساب من</span></a></nav>`;
 }
 
 /* Category cards styled with the same beauty and structure as luxury Product Cards */
@@ -145,13 +179,16 @@ const CATEGORY_STYLES = {
   sport: { bg: '/product-shoes.jpg', pos: '0 0', kicker: 'کتانی و پیاده‌روی', tag: 'سبک و تنفس‌پذیر', desc: 'کفش‌های سبک ارگونومیک با زیره نرم برای فعالیت روزمره' },
   formal: { bg: '/hero-shoe.jpg', pos: 'center', kicker: 'کلاسیک پرطرفدار', tag: 'مجلسی لوکس', desc: 'مدل‌های دست‌دوز رسمی برای جلسات، مجالس و مهمانی‌ها' },
   sandal: { bg: '/product-shoes.jpg', pos: '100% 100%', kicker: 'بهاره و تابستانه', tag: 'کفی طبی نرم', desc: 'صندل‌های سبک و خنک با کفی منعطف برای آسایش پا' },
-  accessories: { bg: '/product-shoes.jpg', pos: '100% 0', kicker: 'ملزومات چرمی', tag: 'اکسسوری', desc: 'کیف‌های دوشی مینیمال و محصولات مراقبت از چرم طوبی' },
+  accessories: { bg: '/touba-bag-editorial.jpg', pos: 'center', kicker: 'ملزومات چرمی', tag: 'اکسسوری', desc: 'کیف‌های دوشی مینیمال و محصولات مراقبت از چرم طوبی' },
   slipper: { bg: '/product-shoes.jpg', pos: '100% 100%', kicker: 'راحتی در خانه', tag: 'طبی و سبک', desc: 'دمپایی‌های روفرشی ارگونومیک با راحتی ماندگار' },
-  sale: { bg: '/hero-shoe.jpg', pos: 'center', kicker: 'پیشنهاد ویژه', tag: 'تا ۳۰٪ تخفیف', desc: 'کالکشن مدل‌های منتخب طوبی با تخفیف‌های استثنایی' }
+  sale: { bg: '/touba-hero-editorial.jpg', pos: 'center', kicker: 'پیشنهاد ویژه', tag: 'تا ۳۰٪ تخفیف', desc: 'کالکشن مدل‌های منتخب طوبی با تخفیف‌های استثنایی' }
 };
 
 function categoryCards(){
-  let cms=db.settings.homepage||{},chosen=(cms.categoryIds||db.categories.slice(0,6).map(c=>c.id)).map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active);
+  let cms=db.settings.homepage||{},categoryIds=Array.isArray(cms.categoryIds)?cms.categoryIds.slice():db.categories.slice(0,6).map(c=>c.id);
+  let legacyDefault=['men','women','sport','formal','sandal','slipper'];
+  if(categoryIds.length===legacyDefault.length&&legacyDefault.every(id=>categoryIds.includes(id)))categoryIds=['women','men','accessories','sport','formal','sandal'];
+  let chosen=categoryIds.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active);
   if(!chosen.length)chosen=db.categories.filter(c=>c.active&&c.id!=='sale').slice(0,6);
   return chosen.map(c=>{
     let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;
@@ -177,13 +214,13 @@ function categoryCards(){
 }
 
 function card(p){
-  let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||5),0)/reviews.length:5,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onerror="this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorMap[c]||'#64748b'};border:1px solid rgba(0,0,0,0.15)" title="${esc(c)}"></span>`}).join('');
+  let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||5),0)/reviews.length:5,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorMap[c]||'#64748b'};border:1px solid rgba(0,0,0,0.15)" title="${esc(c)}"></span>`}).join('');
   let stockMarkup = stock === 1
     ? `<span class="stock-indicator last-one" title="تنها ۱ عدد باقی مانده است"><i></i>تنها ۱ عدد باقی مانده</span>`
     : stock > 1
     ? `<span class="stock-indicator in-stock"><i></i>موجود</span>`
     : `<span class="stock-indicator out-stock"><i></i>ناموجود</span>`;
-  return `<article class="lux-product-card"><button class="favorite-button ${db.settings.favorites?.includes(p.id)?'is-favorite':''}" aria-label="افزودن ${esc(p.name)} به علاقه‌مندی‌ها" aria-pressed="${db.settings.favorites?.includes(p.id)||false}" onclick="toggleFav(this,'${p.id}')">${uiIcon('heart')}</button>${off?`<span class="product-discount">${off}٪ تخفیف</span>`:''}<a class="lux-product-image" href="/product/${encodeURIComponent(url)}">${visual}<span class="image-overlay">مشاهده جزئیات　←</span></a><div class="lux-product-info"><div style="display:flex;justify-content:space-between;align-items:center"><span class="product-category">${esc(category?.name||'کفش طوبی')}</span><div style="display:flex;gap:4px">${colorDots}</div></div><a href="/product/${encodeURIComponent(url)}" class="lux-product-name">${esc(p.name)}</a><div class="product-rating" aria-label="امتیاز ${rating.toFixed(1)} از ۵"><span>★★★★★</span><small>${rating.toFixed(1)}</small></div><div class="lux-price-row">${p.oldPrice>p.price?`<del>${toman(p.oldPrice)}</del>`:''}<strong>${toman(p.price)}</strong></div><div class="product-card-bottom">${stockMarkup}<a class="product-view-link" href="/product/${encodeURIComponent(url)}">مشاهده محصول</a><button class="quick-add-button" ${stock>0?'':'disabled'} onclick="quickAdd('${p.id}')" aria-label="افزودن سریع ${esc(p.name)} به سبد">+</button></div></div></article>`;
+  return `<article class="lux-product-card"><button class="favorite-button ${isFavorite?'is-favorite':''}" aria-label="${isFavorite?'حذف':'افزودن'} ${esc(p.name)} ${isFavorite?'از':'به'} علاقه‌مندی‌ها" aria-pressed="${isFavorite}" onclick="toggleFav(this,'${p.id}')">${uiIcon('heart')}</button>${off?`<span class="product-discount">${off}٪ تخفیف</span>`:''}<a class="lux-product-image" href="/product/${encodeURIComponent(url)}">${visual}<span class="image-overlay">مشاهده جزئیات　←</span></a><div class="lux-product-info"><div style="display:flex;justify-content:space-between;align-items:center"><span class="product-category">${esc(category?.name||'کفش طوبی')}</span><div style="display:flex;gap:4px">${colorDots}</div></div><a href="/product/${encodeURIComponent(url)}" class="lux-product-name">${esc(p.name)}</a><div class="product-rating" aria-label="امتیاز ${rating.toFixed(1)} از ۵"><span>★★★★★</span><small>${rating.toFixed(1)}</small></div><div class="lux-price-row">${p.oldPrice>p.price?`<del>${toman(p.oldPrice)}</del>`:''}<strong>${toman(p.price)}</strong></div><div class="product-card-bottom">${stockMarkup}<a class="product-view-link" href="/product/${encodeURIComponent(url)}">مشاهده محصول</a><button class="quick-add-button" ${stock>0?'':'disabled'} onclick="quickAdd('${p.id}')" aria-label="افزودن سریع ${esc(p.name)} به سبد">+</button></div></div></article>`;
 }
 
 /* Shopping Cart designed specifically for mobile: compact items, scroll container, sticky action bar */
@@ -209,7 +246,7 @@ function cartPage(){
 
   let rowsHtml=items.map((x,index)=>{
     let pos=x.p.image===0?'0 0':x.p.image===1?'100% 0':x.p.image===2?'0 100%':'100% 100%';
-    let thumb=x.p.images?.[0]?`<img src="${esc(x.p.images[0])}" alt="${esc(x.p.name)}" onerror="this.parentElement.innerHTML='👞'">`:`<div class="shoe-sprite-thumb" style="background-position:${pos}"></div>`;
+    let thumb=x.p.images?.[0]?`<img src="${esc(x.p.images[0])}" alt="${esc(x.p.name)}" class="image-skeleton" onload="this.classList.add('image-loaded')" onerror="this.parentElement.innerHTML='👞'">`:`<div class="shoe-sprite-thumb" style="background-position:${pos}"></div>`;
     let variantLabel=`سایز ${esc(x.size||x.p.sizes?.[0]||'')} · ${esc(x.color||x.p.colors?.[0]||'')}`;
     return `<div class="compact-cart-row">
       <a href="/product/${encodeURIComponent(x.p.slug||x.p.id)}" class="compact-cart-thumb" aria-label="${esc(x.p.name)}">
@@ -307,15 +344,23 @@ function cartPage(){
   </main>${footer()}`;
 }
 
+function wishlistPage(){
+  let ids=Array.isArray(db.settings.favorites)?db.settings.favorites:[],items=ids.map(product).filter(p=>p?.active);
+  return `${header()}<main class="page container wishlist-page"><div class="breadcrumb"><a href="/">خانه</a>　/　<span>علاقه‌مندی‌های من</span></div><div class="wishlist-heading"><div><span class="section-eyebrow">انتخاب‌های شما</span><h1 class="page-title">علاقه‌مندی‌های من</h1><p>مدل‌هایی که دوست دارید را یک‌جا نگه دارید و هر زمان برای خرید برگردید.</p></div><a class="btn outline small" href="/shop">ادامه خرید</a></div>${items.length?`<div class="lux-product-grid wishlist-grid">${items.map(card).join('')}</div>`:`<section class="panel empty wishlist-empty"><span class="wishlist-empty-icon">${uiIcon('heart')}</span><h2>هنوز محصولی ذخیره نکرده‌اید</h2><p>با زدن آیکن قلب کنار هر محصول، انتخاب‌هایتان را اینجا نگه دارید.</p><a class="btn" href="/shop">دیدن کالکشن‌ها</a></section>`}</main>${footer()}`;
+}
+
 function home(){
-  let cms=db.settings.homepage||{},products=db.products.filter(p=>p.active),featured=(cms.featuredProductIds||[]).map(product).filter(p=>p?.active),best=(cms.bestSellerProductIds||[]).map(product).filter(p=>p?.active),promo=db.banners.filter(b=>b.active),approved=db.reviews.filter(r=>r.status==='تأیید شده');
+  let cms=db.settings.homepage||{},products=db.products.filter(p=>p.active),newest=products.slice().sort((a,b)=>(Date.parse(b.createdAt||b.updatedAt||'')||0)-(Date.parse(a.createdAt||a.updatedAt||'')||0)||Number(String(b.id).match(/\d+$/)?.[0]||0)-Number(String(a.id).match(/\d+$/)?.[0]||0)).slice(0,5),featured=(cms.featuredProductIds||[]).map(product).filter(p=>p?.active),best=(cms.bestSellerProductIds||[]).map(product).filter(p=>p?.active),promo=db.banners.filter(b=>b.active),approved=db.reviews.filter(r=>r.status==='تأیید شده');
   if(!featured.length)featured=products.filter(p=>p.featured).slice(0,5);
   if(!best.length)best=products.filter(p=>p.bestSeller).slice(0,5);
-  let heroTitle=cms.heroTitle||'قدم‌هایی مطمئن با کفش طوبی',banner=promo[0];
+  let heroTitle=(!cms.heroTitle||cms.heroTitle==='قدم‌هایی مطمئن با کفش طوبی')?'راحتی، استایل و کیفیت در هر قدم':cms.heroTitle;
+  let heroTitleMarkup=heroTitle==='راحتی، استایل و کیفیت در هر قدم'?'راحتی، استایل و کیفیت<br><em>در هر قدم</em>':esc(heroTitle);
+  let heroImage=(!cms.heroImage||cms.heroImage==='/hero-shoe.jpg'||cms.heroImage==='hero-shoe.jpg'||cms.heroImage==='/touba-hero.jpg')?'/touba-hero-editorial.jpg':cms.heroImage,banner=promo[0],bannerImage=(!banner?.imageUrl||banner.imageUrl==='/hero-shoe.jpg'||banner.imageUrl==='/touba-hero.jpg')?heroImage:banner.imageUrl;
+  let freeShippingThreshold=Number(db.settings.shippingOptions?.freeFrom??db.settings.freeShipping??2000000),freeShippingActive=Number.isFinite(freeShippingThreshold)&&freeShippingThreshold>0;
 
   return `${header()}<main>
   <section class="lux-hero" aria-label="${esc(heroTitle)}">
-    <img class="lux-hero-image" src="${esc(cms.heroImage||'/hero-shoe.jpg')}" alt="کفش و کیف کالکشن لوکس طوبی" width="1800" height="950" fetchpriority="high">
+    <img class="lux-hero-image" src="${esc(heroImage)}" alt="کفش اسپرت زیتونی کالکشن طوبی روی سکوی سنگی در فضای سبز" width="1536" height="1024" fetchpriority="high">
     <div class="lux-hero-shade"></div>
     <div class="lux-hero-glow" aria-hidden="true"></div>
 
@@ -326,8 +371,8 @@ function home(){
           <span>استایل شما، امضای شماست</span>
         </div>
 
-        <h1 class="lux-editorial-title">کفش طوبی</h1>
-        <p class="lux-editorial-subtitle">${esc(cms.heroText||'انتخابی خاص برای قدم‌هایی ماندگار')}</p>
+        <h1 class="lux-editorial-title" aria-label="${esc(heroTitle)}">${heroTitleMarkup}</h1>
+        <p class="lux-editorial-subtitle">${esc(cms.heroText||'کفش‌های شیک، راحت و بادوام')}</p>
 
         <div class="lux-editorial-features">
           <div class="lux-feat-item">
@@ -356,19 +401,27 @@ function home(){
     </div>
   </section>
 
-  <section class="trust-section lux-cream-trust">
+  <section class="trust-section lux-cream-trust" aria-label="مزایای خرید از طوبی">
     <div class="container trust-grid lux-cream-trust-grid">
       <div class="trust-item lux-cream-trust-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
-        <div><b>تخفیف‌های ویژه</b><span>برای مشتریان ویژه</span></div>
-      </div>
-      <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1"/></svg>
-        <div><b>پرداخت امن</b><span>با درگاه‌های معتبر</span></div>
+        <div><b>پرداخت امن</b><span>در درگاه معتبر زرین‌پال</span></div>
       </div>
       <div class="trust-item lux-cream-trust-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-        <div><b>پشتیبانی سریع</b><span>همراه شما در هر زمان</span></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M4 13h3v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 1-2Zm16 0h-3v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-1-2Z"/></svg>
+        <div><b>پشتیبانی سریع</b><span>همراه شما در انتخاب و خرید</span></div>
+      </div>
+      <div class="trust-item lux-cream-trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 20 6v5c0 5-3 8-8 10-5-2-8-5-8-10V6z"/><path d="m8.5 12 2.3 2.3 4.7-5"/></svg>
+        <div><b>ضمانت اصالت</b><span>تضمین اصالت همهٔ محصولات</span></div>
+      </div>
+      <div class="trust-item lux-cream-trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12a8 8 0 1 1 2.5 5.8"/><path d="M4 17v-5h5"/><path d="M12 7v5l3 2"/></svg>
+        <div><b>۷ روز ضمانت بازگشت</b><span>با رعایت شرایط بازگشت کالا</span></div>
+      </div>
+      <div class="trust-item lux-cream-trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h12v11H3zM15 11h4l3 3v4h-7z"/><circle cx="7" cy="20" r="2"/><circle cx="19" cy="20" r="2"/></svg>
+        <div><b>${freeShippingActive?'ارسال رایگان':'ارسال مطمئن'}</b><span>${freeShippingActive?`برای خریدهای ${freeShippingThreshold.toLocaleString('fa-IR')} تومان به بالا`:'هزینهٔ ارسال پیش از پرداخت مشخص می‌شود'}</span></div>
       </div>
     </div>
   </section>
@@ -387,7 +440,7 @@ function home(){
       ${categoryCards()}
       <!-- Featured Sale Category Card -->
       <a href="/shop?category=sale" class="lux-category-card sale-cat-card" aria-label="مشاهده حراج و تخفیف‌های ویژه طوبی">
-        <div class="category-image-visual" style="background-image:url('/hero-shoe.jpg');background-position:center"></div>
+        <div class="category-image-visual" style="background-image:url('/touba-hero-editorial.jpg');background-position:center"></div>
         <div class="category-card-overlay"></div>
         <div class="category-card-top">
           <span class="category-tag-badge special-sale">تا ۳۰٪ تخفیف</span>
@@ -405,7 +458,8 @@ function home(){
     </div>
   </section>
 
-  <section class="products-section container"><div class="section-heading"><div><span class="section-eyebrow">منتخب برای شما</span><h2>انتخاب‌های ویژه طوبی</h2><p>مدل‌هایی که راحتی، کیفیت و سادگی را کنار هم می‌آورند.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="lux-product-grid">${featured.slice(0,5).map(card).join('')||'<div class="empty-state">به‌زودی انتخاب‌های ویژه در اینجا قرار می‌گیرند.</div>'}</div></section><section class="collection-banner container"><div class="collection-visual"><img src="${esc(banner?.imageUrl||'/hero-shoe.jpg')}" alt="کالکشن کفش‌های طوبی" loading="lazy" width="800" height="520"></div><div class="collection-content"><span class="section-eyebrow">از کالکشن تازه دیدن کنید</span><h2>قدم بعدی را<br><em>متفاوت بردار</em></h2><p>${esc(banner?.subtitle||'کفش مناسب استایل و روزهای شما؛ با کیفیتی که ارزش انتخاب دارد.')}</p><a class="btn collection-button" href="${esc(banner?.linkUrl||'/shop')}">${esc(banner?.buttonText||'مشاهده کالکشن')} ${uiIcon('arrow')}</a><span class="collection-watermark">TOUBA</span></div></section><section class="products-section container bestseller-section"><div class="section-heading"><div><span class="section-eyebrow">محبوب همراهان طوبی</span><h2>پرفروش‌های این روزها</h2></div><a href="/shop">رفتن به فروشگاه <span>←</span></a></div><div class="lux-product-grid">${best.slice(0,5).map(card).join('')}</div></section><section class="why-section"><div class="container"><div class="section-heading light-heading"><div><span class="section-eyebrow">چرا طوبی؟</span><h2>کیفیت را در هر قدم حس کنید</h2></div><p>از انتخاب مواد اولیه تا لحظه‌ای که سفارش به دست شما می‌رسد، به جزئیات اهمیت می‌دهیم.</p></div><div class="why-grid">${(cms.advantages||[]).slice(0,4).map((x,i)=>`<article class="why-card"><span class="why-number">۰${i+1}</span><span class="why-icon">${[uiIcon('shield'),uiIcon('heart'),uiIcon('support'),uiIcon('truck')][i]}</span><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p></article>`).join('')}</div></div></section><section class="about-section container"><div class="about-photo-wrap"><img src="${esc(cms.heroImage||'/hero-shoe.jpg')}" alt="جزئیات کیفیت کفش طوبی" loading="lazy" width="760" height="650"><span class="about-photo-caption">کیفیت؛ از اولین قدم</span></div><div class="about-copy"><span class="section-eyebrow">آشنایی با ما</span><h2>درباره کفش طوبی</h2><p>${esc(cms.aboutText||db.settings.about)} ما باور داریم کفش خوب باید هم زیبا باشد و هم در تمام روز، همراهی راحت و قابل اعتماد.</p><a class="btn about-button" href="/about">بیشتر درباره ما ${uiIcon('arrow')}</a><div class="about-signature">طوبی <span>· قدم‌هایی مطمئن</span></div></div></section>${approved.length?`<section class="reviews-section"><div class="container"><div class="section-heading"><div><span class="section-eyebrow">از زبان همراهان ما</span><h2>تجربه خرید مشتریان</h2></div><span class="review-summary">★★★★★ <small>${approved.length.toLocaleString('fa-IR')} دیدگاه تأییدشده</small></span></div><div class="review-grid">${approved.slice(0,3).map(r=>`<article class="customer-review"><div class="review-top"><span class="review-avatar">${esc((r.name||'م').trim().slice(0,1))}</span><div><b>${esc(r.name)}</b><span>${esc(r.product||'خریدار طوبی')}</span></div><div class="review-stars" aria-label="${r.rating||5} از ۵ ستاره">${'★'.repeat(Number(r.rating)||5)}</div></div><p>«${esc(r.text)}»</p><time>${r.createdAt?new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'long',day:'numeric'}).format(new Date(r.createdAt)):'خریدار کفش طوبی'}</time></article>`).join('')}</div></div></section>`:''}<section class="newsletter-section"><div class="container newsletter-card"><div class="newsletter-leaf">${leafMark()}</div><div class="newsletter-copy"><span class="section-eyebrow">همراه طوبی باشید</span><h2>از تخفیف‌های ویژه باخبر شوید</h2><p>خبر کالکشن‌های تازه و پیشنهادهای ویژه را زودتر دریافت کنید.</p></div><form class="newsletter-form" onsubmit="event.preventDefault();subscribeNewsletter(this)"><label class="sr-only" for="newsletter-contact">موبایل یا ایمیل</label><input id="newsletter-contact" name="contact" required placeholder="شماره موبایل یا ایمیل شما"><button type="submit">عضویت <span>←</span></button></form></div></section></main>${footer()}`;
+  <section class="products-section container latest-products-section"><div class="section-heading"><div><span class="section-eyebrow">تازه‌های طوبی</span><h2>جدیدترین محصولات</h2><p>مدل‌های تازه‌رسیده برای قدم بعدی شما.</p></div><a href="/shop?sort=newest">همهٔ تازه‌رسیده‌ها <span>←</span></a></div><div class="lux-product-grid">${newest.map(card).join('')||'<div class="empty-state">به‌زودی مدل‌های تازه در اینجا قرار می‌گیرند.</div>'}</div></section>
+  <section class="products-section container"><div class="section-heading"><div><span class="section-eyebrow">منتخب برای شما</span><h2>انتخاب‌های ویژه طوبی</h2><p>مدل‌هایی که راحتی، کیفیت و سادگی را کنار هم می‌آورند.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="lux-product-grid">${featured.slice(0,5).map(card).join('')||'<div class="empty-state">به‌زودی انتخاب‌های ویژه در اینجا قرار می‌گیرند.</div>'}</div></section><section class="collection-banner container"><div class="collection-visual"><img src="${esc(bannerImage)}" alt="کالکشن کفش‌های طوبی" loading="lazy" width="800" height="520"></div><div class="collection-content"><span class="section-eyebrow">از کالکشن تازه دیدن کنید</span><h2>قدم بعدی را<br><em>متفاوت بردار</em></h2><p>${esc(banner?.subtitle||'کفش مناسب استایل و روزهای شما؛ با کیفیتی که ارزش انتخاب دارد.')}</p><a class="btn collection-button" href="${esc(banner?.linkUrl||'/shop')}">${esc(banner?.buttonText||'مشاهده کالکشن')} ${uiIcon('arrow')}</a><span class="collection-watermark">TOUBA</span></div></section><section class="products-section container bestseller-section"><div class="section-heading"><div><span class="section-eyebrow">محبوب همراهان طوبی</span><h2>پرفروش‌های این روزها</h2></div><a href="/shop">رفتن به فروشگاه <span>←</span></a></div><div class="lux-product-grid">${best.slice(0,5).map(card).join('')}</div></section><section class="why-section"><div class="container"><div class="section-heading light-heading"><div><span class="section-eyebrow">چرا طوبی؟</span><h2>کیفیت را در هر قدم حس کنید</h2></div><p>از انتخاب مواد اولیه تا لحظه‌ای که سفارش به دست شما می‌رسد، به جزئیات اهمیت می‌دهیم.</p></div><div class="why-grid">${(cms.advantages||[]).slice(0,4).map((x,i)=>`<article class="why-card"><span class="why-number">۰${i+1}</span><span class="why-icon">${[uiIcon('shield'),uiIcon('heart'),uiIcon('support'),uiIcon('truck')][i]}</span><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p></article>`).join('')}</div></div></section><section class="about-section container"><div class="about-photo-wrap"><img src="${esc(heroImage)}" alt="جزئیات کیفیت کفش طوبی" loading="lazy" width="760" height="650"><span class="about-photo-caption">کیفیت؛ از اولین قدم</span></div><div class="about-copy"><span class="section-eyebrow">آشنایی با ما</span><h2>درباره کفش طوبی</h2><p>${esc(cms.aboutText||db.settings.about)} ما باور داریم کفش خوب باید هم زیبا باشد و هم در تمام روز، همراهی راحت و قابل اعتماد.</p><a class="btn about-button" href="/about">بیشتر درباره ما ${uiIcon('arrow')}</a><div class="about-signature">طوبی <span>· قدم‌هایی مطمئن</span></div></div></section>${approved.length?`<section class="reviews-section"><div class="container"><div class="section-heading"><div><span class="section-eyebrow">از زبان همراهان ما</span><h2>تجربه خرید مشتریان</h2></div><span class="review-summary">★★★★★ <small>${approved.length.toLocaleString('fa-IR')} دیدگاه تأییدشده</small></span></div><div class="review-grid">${approved.slice(0,3).map(r=>`<article class="customer-review"><div class="review-top"><span class="review-avatar">${esc((r.name||'م').trim().slice(0,1))}</span><div><b>${esc(r.name)}</b><span>${esc(r.product||'خریدار طوبی')}</span></div><div class="review-stars" aria-label="${r.rating||5} از ۵ ستاره">${'★'.repeat(Number(r.rating)||5)}</div></div><p>«${esc(r.text)}»</p><time>${r.createdAt?new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'long',day:'numeric'}).format(new Date(r.createdAt)):'خریدار کفش طوبی'}</time></article>`).join('')}</div></div></section>`:''}<section class="newsletter-section"><div class="container newsletter-card"><div class="newsletter-leaf">${leafMark()}</div><div class="newsletter-copy"><span class="section-eyebrow">همراه طوبی باشید</span><h2>از تخفیف‌های ویژه باخبر شوید</h2><p>خبر کالکشن‌های تازه و پیشنهادهای ویژه را زودتر دریافت کنید.</p></div><form class="newsletter-form" onsubmit="event.preventDefault();subscribeNewsletter(this)"><label class="sr-only" for="newsletter-contact">موبایل یا ایمیل</label><input id="newsletter-contact" name="contact" required placeholder="شماره موبایل یا ایمیل شما"><button type="submit">عضویت <span>←</span></button></form></div></section></main>${footer()}`;
 }
 
 function subscribeNewsletter(form){
@@ -419,30 +473,55 @@ function subscribeNewsletter(form){
 }
 
 function toggleFav(el,id){
-  db.settings.favorites=db.settings.favorites||[];
-  let i=db.settings.favorites.indexOf(id),on=i<0;
+  db.settings.favorites=Array.isArray(db.settings.favorites)?db.settings.favorites:[];
+  let p=product(id),i=db.settings.favorites.indexOf(id),on=i<0;
   if(on)db.settings.favorites.push(id);else db.settings.favorites.splice(i,1);
   save();
-  el.classList.toggle('is-favorite',on);
-  el.classList.toggle('liked',on);
-  el.textContent=on?'♥':'♡';
-  el.setAttribute('aria-pressed',String(on));
-  
-  el.classList.remove('heart-pop');
-  void el.offsetWidth;
-  el.classList.add('heart-pop');
-  
+  if(el){
+    el.classList.toggle('is-favorite',on);
+    el.classList.toggle('liked',on);
+    el.innerHTML=uiIcon('heart');
+    el.setAttribute('aria-pressed',String(on));
+    el.setAttribute('aria-label',`${on?'حذف':'افزودن'} ${p?.name||'محصول'} ${on?'از':'به'} علاقه‌مندی‌ها`);
+    el.classList.remove('heart-pop');
+    void el.offsetWidth;
+    el.classList.add('heart-pop');
+  }
+  document.querySelectorAll('.wishlist-action').forEach(link=>{link.setAttribute('aria-label',`علاقه‌مندی‌ها (${favoritesCount()} محصول)`);let badge=link.querySelector('.count');if(favoritesCount()&&!badge){badge=document.createElement('span');badge.className='count';link.appendChild(badge)}if(badge){badge.textContent=String(favoritesCount());badge.hidden=!favoritesCount()}});
   toast(on?'به علاقه‌مندی‌ها اضافه شد':'از علاقه‌مندی‌ها حذف شد');
+  if(path()==='/wishlist')render();
 }
 
-function showModal(content){
+function showModal(content,title='کفش طوبی'){
   let root=$('#modal-root');
-  root.innerHTML=`<div class="modal-back" role="presentation" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1"><div class="modal-head"><h2 id="dialog-title">کفش طوبی</h2><button class="close" aria-label="بستن پنجره" onclick="closeModal()">×</button></div>${content}</div></div>`;
+  root.innerHTML=`<div class="modal-back" role="presentation" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1"><div class="modal-head"><h2 id="dialog-title">${esc(title)}</h2><button class="close" aria-label="بستن پنجره" onclick="closeModal()">×</button></div>${content}</div></div>`;
   root.querySelector('[role="dialog"]')?.focus();
 }
 
+function showSizeGuide(){
+  showModal(`<div class="size-guide-content"><p>برای انتخاب دقیق، پاشنه را به دیوار تکیه دهید و بلندترین فاصله انگشت تا دیوار را اندازه بگیرید. اگر بین دو سایز هستید، سایز بزرگ‌تر را انتخاب کنید.</p><div class="size-guide-table-wrap"><table class="size-guide-table"><thead><tr><th>سایز</th><th>طول تقریبی پا</th><th>پیشنهاد</th></tr></thead><tbody><tr><td>۳۷–۳۸</td><td>۲۳ تا ۲۴ سانتی‌متر</td><td>زنانه</td></tr><tr><td>۳۹–۴۰</td><td>۲۴٫۵ تا ۲۵٫۵ سانتی‌متر</td><td>زنانه / مردانه</td></tr><tr><td>۴۱–۴۲</td><td>۲۶ تا ۲۷ سانتی‌متر</td><td>مردانه</td></tr><tr><td>۴۳–۴۴</td><td>۲۷٫۵ تا ۲۸٫۵ سانتی‌متر</td><td>مردانه</td></tr></tbody></table></div><small>این اندازه‌ها راهنمای تقریبی هستند؛ قالب مدل‌ها ممکن است کمی متفاوت باشد.</small></div>`,`راهنمای انتخاب سایز`);
+}
+function bindProductGallerySwipe(){
+  let gallery=document.querySelector('#product-gallery');
+  if(!gallery||gallery.dataset.swipeBound)return;
+  gallery.dataset.swipeBound='true';
+  let startX=null,suppressClickUntil=0;
+  gallery.addEventListener('touchstart',event=>{startX=event.changedTouches?.[0]?.clientX??null},{passive:true});
+  gallery.addEventListener('touchend',event=>{
+    if(startX===null)return;
+    let delta=(event.changedTouches?.[0]?.clientX??startX)-startX;startX=null;
+    if(Math.abs(delta)<42)return;
+    suppressClickUntil=Date.now()+450;
+    let thumbs=[...document.querySelectorAll('.gallery-thumb')];
+    if(thumbs.length<2)return;
+    let current=Math.max(0,thumbs.findIndex(button=>button.classList.contains('selected')));
+    thumbs[(current+(delta<0?1:-1)+thumbs.length)%thumbs.length].click();
+  },{passive:true});
+  gallery.addEventListener('click',event=>{if(Date.now()<suppressClickUntil){event.preventDefault();event.stopPropagation()}},true);
+}
 function productDetailWithSticky(id){
   let html=__stage3Detail(id);
+  html=html.replace('<div class="detail-row"><b>انتخاب سایز','<div class="size-guide-row"><span>برای اندازه دقیق پا نیاز به راهنمایی دارید؟</span><button class="size-guide-link" type="button" onclick="showSizeGuide()">راهنمای سایز</button></div><div class="detail-row"><b>انتخاب سایز');
   return html.replace('</main>',`<div class="mobile-product-bar"><div><small>قیمت</small><b>${toman(product(id)?.price)}</b></div><button class="btn" onclick="addCart('${id}',productQtyValue(),true)">افزودن به سبد</button></div></main>`);
 }
 
@@ -502,16 +581,26 @@ function animatedRender(isPageTransition=false){
   }
 
   const doRender=()=>{
-    if((location.pathname==='/admin'||location.pathname.startsWith('/admin/'))&&window.ToubaAuthUI?.adminPage){
+    const adminRoute=location.pathname==='/admin'||location.pathname.startsWith('/admin/');
+    const body=document.body;
+    if(body?.classList){if(adminRoute)body.classList.remove('storefront-mode');else body.classList.add('storefront-mode');body.classList.remove('has-commerce-sticky')}
+    if(body?.dataset)body.dataset.route=location.pathname;
+    if(adminRoute&&window.ToubaAuthUI?.adminPage){
       document.body.classList.remove('admin-body');
-      document.querySelector('#app').innerHTML=window.ToubaAuthUI.adminPage();
+      appEl.innerHTML=window.ToubaAuthUI.adminPage();
       const s=new URLSearchParams(location.search).get('section')||'dashboard';
       if(window.ToubaAuthUI?.loadAdminSection){
         window.ToubaAuthUI.loadAdminSection(s);
       }
+    }else if(location.pathname==='/wishlist'){
+      appEl.innerHTML=wishlistPage();
     }else if(typeof __stage3BaseRender==='function'){
       __stage3BaseRender();
     }
+    let mainContent=appEl?.querySelector?.('main');
+    if(mainContent&&!mainContent.id)mainContent.id='main-content';
+    if(appEl?.querySelector?.('.mobile-product-bar, .mobile-cart-sticky-bar'))body?.classList?.add('has-commerce-sticky');
+    if(!adminRoute)bindProductGallerySwipe();
     if(typeof updateSEO==='function'){
       updateSEO();
     }
@@ -603,6 +692,12 @@ window.categoryCards=categoryCards;
 window.header=header;
 window.home=home;
 window.toggleFav=toggleFav;
+window.toggleStoreTheme=toggleStoreTheme;
+window.showSizeGuide=showSizeGuide;
+window.openShopFilters=openShopFilters;
+window.closeShopFilters=closeShopFilters;
+window.openShopSortSheet=openShopSortSheet;
+window.wishlistPage=wishlistPage;
 window.go=smoothGo;
 window.shop=modernShop;
 window.checkout=modernCheckout;
@@ -618,6 +713,24 @@ animatedRender(true);
 /* ==========================================================================
    Modern Luxury Views: Shop, Checkout, Tracking, Content
    ========================================================================== */
+function openShopFilters(){
+  let panel=document.querySelector('#shop-filters'),backdrop=document.querySelector('#shop-filter-backdrop'),button=document.querySelector('.filter-open');
+  if(panel)panel.classList.add('drawer-open');
+  if(backdrop){backdrop.classList.add('show');backdrop.setAttribute('aria-hidden','false')}
+  if(button)button.setAttribute('aria-expanded','true');
+  document.body.classList.add('filter-sheet-open');
+}
+function closeShopFilters(){
+  document.querySelector('#shop-filters')?.classList.remove('drawer-open');
+  let backdrop=document.querySelector('#shop-filter-backdrop');if(backdrop){backdrop.classList.remove('show');backdrop.setAttribute('aria-hidden','true')}
+  let button=document.querySelector('.filter-open');if(button)button.setAttribute('aria-expanded','false');
+  document.body.classList.remove('filter-sheet-open');
+}
+function openShopSortSheet(){
+  const options=[['popular','محبوب‌ترین'],['newest','جدیدترین'],['cheap','ارزان‌ترین'],['expensive','گران‌ترین']];
+  showModal(`<div class="shop-sort-sheet"><p>نمایش محصولات بر اساس</p><div class="shop-sort-options">${options.map(([value,label])=>`<label><input type="radio" name="mobile-sort" value="${value}" ${shopState.sort===value?'checked':''} onchange="setShopSort(this.value);closeModal()"><span>${label}</span></label>`).join('')}</div></div>`,`مرتب‌سازی محصولات`);
+}
+
 function modernShop(forceCategory = "") {
   let params = new URLSearchParams(location.search);
   shopState = {
@@ -628,7 +741,7 @@ function modernShop(forceCategory = "") {
     max: "",
     sizes: [],
     colors: [],
-    sort: "popular",
+    sort: params.get("sort") || "popular",
     page: 1,
     pageSize: 8
   };
@@ -650,26 +763,28 @@ function modernShop(forceCategory = "") {
     </div>
 
     <div class="shop-toolbar">
-      <button type="button" class="btn outline small filter-open" onclick="document.querySelector('#shop-filters').classList.add('drawer-open')">
-        ${uiIcon("cart")} فیلترهای پیشرفته
+      <button type="button" class="btn outline small filter-open" onclick="openShopFilters()" aria-controls="shop-filters" aria-expanded="false">
+        ${uiIcon("sliders")} فیلترها
       </button>
-      <span id="shop-result-count" class="shop-result-count"></span>
+      <span id="shop-result-count" class="shop-result-count" aria-live="polite"></span>
+      <button type="button" class="btn outline small mobile-sort-trigger" onclick="openShopSortSheet()">مرتب‌سازی</button>
       <div class="shop-sort-wrap">
         <label for="shop-sort">مرتب‌سازی:</label>
         <select id="shop-sort" onchange="setShopSort(this.value)">
-          <option value="popular">محبوب‌ترین و پرفروش</option>
-          <option value="newest">جدیدترین مدل‌ها</option>
-          <option value="cheap">ارزان‌ترین قیمت</option>
-          <option value="expensive">گران‌ترین و لوکس‌ترین</option>
+          <option value="popular" ${shopState.sort==='popular'?'selected':''}>محبوب‌ترین و پرفروش</option>
+          <option value="newest" ${shopState.sort==='newest'?'selected':''}>جدیدترین مدل‌ها</option>
+          <option value="cheap" ${shopState.sort==='cheap'?'selected':''}>ارزان‌ترین قیمت</option>
+          <option value="expensive" ${shopState.sort==='expensive'?'selected':''}>گران‌ترین و لوکس‌ترین</option>
         </select>
       </div>
     </div>
 
     <div class="shop-layout">
-      <aside class="filter-panel" id="shop-filters">
+      <div id="shop-filter-backdrop" class="shop-filter-backdrop" aria-hidden="true" onclick="closeShopFilters()"></div>
+      <aside class="filter-panel" id="shop-filters" aria-label="فیلتر محصولات">
         <div class="filter-header">
           <h3>فیلتر محصولات</h3>
-          <button type="button" class="filter-close" onclick="document.querySelector('#shop-filters').classList.remove('drawer-open')">✕ بستن</button>
+          <button type="button" class="filter-close" onclick="closeShopFilters()">✕ بستن</button>
         </div>
 
         <div class="filter-group">

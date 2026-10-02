@@ -876,6 +876,8 @@
     __isAuthRendering = true;
     try {
       const pathname = g.location.pathname;
+      if (g.document.body?.classList) { if (pathname === '/admin' || pathname.startsWith('/admin/')) g.document.body.classList.remove?.('storefront-mode'); else g.document.body.classList.add?.('storefront-mode'); g.document.body.classList.remove?.('has-commerce-sticky'); }
+      if (g.document.body?.dataset) g.document.body.dataset.route = pathname;
       if (pathname === '/reset-password') {
         g.document.body.classList.remove('admin-body');
         g.document.querySelector('#app').innerHTML = passwordRecoveryPage();
@@ -908,6 +910,8 @@
         return old.render();
       }
     } finally {
+      const mainContent = g.document.querySelector?.('#app main');
+      if (mainContent && !mainContent.id) mainContent.id = 'main-content';
       __isAuthRendering = false;
     }
   };

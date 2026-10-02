@@ -5,8 +5,8 @@ const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'public');
 const files = [
   'index.html', 'app.js', 'enhancements.js', 'customer-orders.js', 'stage3.js', 'stage4.js',
-  'styles.css', 'stage2.css', 'stage3.css', 'stage4.css',
-  'hero-shoe.jpg', 'product-shoes.jpg', 'touba-hero.jpg', 'robots.txt', 'sitemap.xml', 'google1473493f12c4eaa6.html',
+  'styles.css', 'stage2.css', 'stage3.css', 'stage4.css', 'storefront-theme.css',
+  'hero-shoe.jpg', 'product-shoes.jpg', 'touba-hero.jpg', 'touba-hero-editorial.jpg', 'touba-bag-editorial.jpg', 'robots.txt', 'sitemap.xml', 'google1473493f12c4eaa6.html',
   'services/data-provider.js', 'services/application-services.js', 'services/cart-functions.js', 'services/seo.js', 'services/supabase-auth.js', 'services/auth-ui.js',
   'repositories/mock-repository.js', 'repositories/bootstrap.js', 'mock/seed-data.js', 'admin-product-ai.js'
 ];
