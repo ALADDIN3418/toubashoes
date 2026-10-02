@@ -312,6 +312,10 @@ async function runTests() {
   const stage4Css = fs.readFileSync(path.join(__dirname, '../stage4.css'), 'utf8');
   assert(stage4Css.includes('.ai-studio-page-wrapper .full'), 'CSS must enforce full width on studio controls');
   assert(stage4Css.includes('.ai-comparison-grid.view-mode-compare'), 'CSS must support responsive view-mode-compare class');
+  const cleanCss = stage4Css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const openBraces = (cleanCss.match(/\{/g) || []).length;
+  const closeBraces = (cleanCss.match(/\}/g) || []).length;
+  assert.equal(openBraces, closeBraces, 'stage4.css braces must be balanced so home page hero rules are not broken');
 
   console.log('✓ رابط کاربری «استودیو هوش مصنوعی محصول» کامل و آماده است.');
   console.log('\n=============================================');
