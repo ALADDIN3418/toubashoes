@@ -1,11 +1,10 @@
 /**
  * Product AI Studio Engine
- * «موتور استودیوی هوش مصنوعی محصول طوبی — Google Gemini 3.5 Flash»
+ * «موتور استودیوی هوش مصنوعی محصول طوبی — چرخش مدل‌های Puter.js»
  *
- * Dedicated E-Commerce Product Photography Architecture:
- * Exclusively powered by Google Gemini 3.5 Flash (gemini-3.5-flash) free multimodal model.
- * Preserves 100% of the real product identity (shape, color, logo, straps, sole, stitching)
- * while generating commercial studio backgrounds and lighting.
+ * Image generation is performed with the signed-in browser user's Puter.js session.
+ * The server exposes the supported model catalog and never substitutes the original
+ * upload when generation fails.
  */
 'use strict';
 
@@ -18,348 +17,321 @@ const {
   getNegativePrompt
 } = require('./prompt-templates.js');
 
-const GEMINI_STUDIO_MODEL = 'gemini-3.5-flash';
-const GEMINI_STUDIO_PROVIDER_NAME = 'Google Gemini 3.5 Flash (gemini-3.5-flash)';
-const DEFAULT_PROVIDER = 'gemini-3.5-flash';
-const DEFAULT_BACKEND_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB
+const DEFAULT_PROVIDER = 'puter-auto';
+const PUTER_STUDIO_PROVIDER_NAME = 'Puter.js · چرخش خودکار مدل‌ها';
+const DEFAULT_BACKEND_URL = 'https://js.puter.com/v2/';
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MODEL_COOLDOWN_MS = 5 * 60 * 1000;
+const MODEL_TIMEOUT_MS = 90 * 1000;
 
-const GEMINI_IMAGE_MODELS = Object.freeze([
-  'gemini-3.5-flash',
-  'gemini-3.1-flash-image',
-  'gemini-3.1-flash-image-preview',
-  'gemini-2.5-flash-image',
-  'gemini-2.5-flash-image-preview',
-  'gemini-2.5-flash-preview-image-generation',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation',
-  'gemini-2.0-flash-exp'
+/**
+ * Current Puter.js image catalog baseline. The browser augments this list with
+ * Puter's live `puter-image-generation` catalog so newly published models appear
+ * without a deployment. `supportsImg2Img: false` entries are shown in the UI but
+ * are not used for product-photo editing because they cannot take a reference.
+ */
+const PUTER_IMAGE_MODELS = Object.freeze([
+  { id: 'openai/gpt-image-2.5-flare', name: 'GPT Image 2.5 Flare', provider: 'OpenAI', supportsImg2Img: true },
+  { id: 'openai/gpt-image-2.5-sunburst', name: 'GPT Image 2.5 Sunburst', provider: 'OpenAI', supportsImg2Img: true },
+  { id: 'openai/gpt-image-2', name: 'GPT Image 2', provider: 'OpenAI', supportsImg2Img: true },
+  { id: 'openai/gpt-image-1.5', name: 'GPT Image 1.5', provider: 'OpenAI', supportsImg2Img: true },
+  { id: 'x-ai/grok-imagine-image-2.0', name: 'Grok Imagine Image 2.0', provider: 'xAI', supportsImg2Img: true },
+  { id: 'x-ai/grok-imagine-image-quality', name: 'Grok Imagine Image Quality', provider: 'xAI', supportsImg2Img: true },
+  { id: 'x-ai/grok-imagine-image', name: 'Grok Imagine Image', provider: 'xAI', supportsImg2Img: true },
+  { id: 'black-forest-labs/flux-2-pro', name: 'FLUX.2 Pro', provider: 'Black Forest Labs', supportsImg2Img: true },
+  { id: 'black-forest-labs/flux-2-dev', name: 'FLUX.2 Dev', provider: 'Black Forest Labs', supportsImg2Img: true },
+  { id: 'black-forest-labs/flux-2-klein-9b-base', name: 'FLUX.2 Klein 9B', provider: 'Black Forest Labs', supportsImg2Img: true },
+  { id: 'black-forest-labs/flux-2-klein-4b', name: 'FLUX.2 Klein 4B', provider: 'Black Forest Labs', supportsImg2Img: true },
+  { id: 'black-forest-labs/flux-1.1-pro', name: 'FLUX 1.1 Pro', provider: 'Black Forest Labs', supportsImg2Img: false },
+  { id: 'black-forest-labs/flux-schnell', name: 'FLUX Schnell', provider: 'Black Forest Labs', supportsImg2Img: false },
+  { id: 'dola-seedream-5-0-pro-260628', name: 'Seedream 5.0 Pro', provider: 'BytePlus', supportsImg2Img: true },
+  { id: 'seedream-5-0-lite-260128', name: 'Seedream 5.0 Lite', provider: 'BytePlus', supportsImg2Img: true },
+  { id: 'seedream-4-5-251128', name: 'Seedream 4.5', provider: 'BytePlus', supportsImg2Img: true },
+  { id: 'seedream-4-0-250828', name: 'Seedream 4.0', provider: 'BytePlus', supportsImg2Img: true },
+  { id: 'qwen/qwen-image', name: 'Qwen Image', provider: 'Qwen', supportsImg2Img: false },
+  { id: 'ideogram/ideogram-4.0', name: 'Ideogram 4.0', provider: 'Ideogram', supportsImg2Img: true },
+  { id: 'leonardoai/lucid-origin', name: 'Leonardo Lucid Origin', provider: 'Leonardo', supportsImg2Img: false },
+  { id: 'leonardoai/phoenix-1.0', name: 'Leonardo Phoenix 1.0', provider: 'Leonardo', supportsImg2Img: false },
+  { id: 'stabilityai/stable-diffusion-xl-base-1.0', name: 'Stable Diffusion XL', provider: 'Stability AI', supportsImg2Img: false },
+  { id: '@cf/black-forest-labs/flux-2-dev', name: 'Cloudflare FLUX.2 Dev', provider: 'Cloudflare', supportsImg2Img: true },
+  { id: '@cf/black-forest-labs/flux-2-klein-9b', name: 'Cloudflare FLUX.2 Klein 9B', provider: 'Cloudflare', supportsImg2Img: true },
+  { id: '@cf/black-forest-labs/flux-2-klein-4b', name: 'Cloudflare FLUX.2 Klein 4B', provider: 'Cloudflare', supportsImg2Img: true },
+  { id: '@cf/black-forest-labs/flux-1-schnell', name: 'Cloudflare FLUX.1 Schnell', provider: 'Cloudflare', supportsImg2Img: false },
+  { id: '@cf/leonardo/lucid-origin', name: 'Cloudflare Lucid Origin', provider: 'Cloudflare', supportsImg2Img: false },
+  { id: '@cf/leonardo/phoenix-1.0', name: 'Cloudflare Phoenix 1.0', provider: 'Cloudflare', supportsImg2Img: false },
+  { id: '@cf/stabilityai/stable-diffusion-xl-lightning', name: 'Cloudflare SDXL Lightning', provider: 'Cloudflare', supportsImg2Img: false },
+  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'Cloudflare SDXL Base', provider: 'Cloudflare', supportsImg2Img: false },
+  { id: '@cf/runwayml/stable-diffusion-v1-5-inpainting', name: 'Cloudflare SD 1.5 Inpainting', provider: 'Cloudflare', supportsImg2Img: false }
+].map(model => Object.freeze(model)));
+
+const SUPPORTED_PIPELINES = Object.freeze([
+  DEFAULT_PROVIDER,
+  ...PUTER_IMAGE_MODELS.map(model => model.id)
 ]);
 
 const SUPPORTED_PROVIDERS = Object.freeze([
   {
-    id: 'gemini-3.5-flash',
-    name: 'Google Gemini 3.5 Flash (مدل رایگان گوگل)',
-    title: 'Google Gemini 3.5 Flash (مدل رایگان گوگل)',
-    badge: 'مدل رایگان گوگل · حفظ ۱۰۰٪ کالا',
-    description: 'تولید و ویرایش مستقیم تصویر در استودیو فقط با مدل رایگان Google Gemini 3.5 Flash'
-  }
+    id: DEFAULT_PROVIDER,
+    name: 'Puter.js — چرخش خودکار مدل‌های سازگار با عکس مرجع',
+    title: 'چرخش خودکار Puter.js',
+    badge: 'Round-robin',
+    description: 'چرخش بین مدل‌های ویرایش تصویر Puter.js و رفتن خودکار سراغ مدل بعدی هنگام محدودیت یا خطا'
+  },
+  ...Array.from(new Set(PUTER_IMAGE_MODELS.map(model => model.provider))).map(provider => ({
+    id: provider.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    name: provider,
+    title: provider,
+    badge: 'Puter.js',
+    description: `مدل‌های ${provider} از طریق Puter.js`
+  }))
 ]);
 
-const SUPPORTED_PIPELINES = Object.freeze(['gemini-3.5-flash']);
+// In-memory fallback state for server-side adapters and deterministic tests.
+let rotationCursor = 0;
+const rateLimitedUntil = new Map();
 
-const KEYLESS_STUDIO_SPACES = Object.freeze([
-  'https://hf-applications-background-removal.hf.space',
-  'https://not-lain-background-removal.hf.space',
-  'https://briaai-bria-rmbg-2-0.hf.space'
-]);
-
-function sanitizeToken(value) {
-  return String(value || '').trim().replace(/^['"]+|['"]+$/g, '').trim();
+function resetRotationState() {
+  rotationCursor = 0;
+  rateLimitedUntil.clear();
 }
 
-function isValidImageBuffer(buf) {
-  if (!Buffer.isBuffer(buf) || buf.length < 8) return false;
-  const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
-  const isJpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
-  const isWebp = buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP';
-  return isPng || isJpeg || isWebp;
+function getRotationCursor() {
+  return rotationCursor;
 }
 
-/**
- * Keyless cloud foreground extraction when Gemini API key is not set or rate-limited
- */
-async function extractKeylessForegroundCutout(imageBuffer, mimeType = 'image/jpeg') {
-  if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length < 64) return null;
-  if (typeof fetch === 'undefined' || typeof FormData === 'undefined' || typeof Blob === 'undefined') {
-    return null;
-  }
-
-  const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
-  const filename = `product.${ext}`;
-
-  for (const spaceOrigin of KEYLESS_STUDIO_SPACES) {
-    try {
-      const base = spaceOrigin.replace(/\/+$/, '');
-      const form = new FormData();
-      form.append('files', new Blob([imageBuffer], { type: mimeType }), filename);
-
-      const uploadRes = await fetch(`${base}/gradio_api/upload`, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(12000)
-      });
-      if (!uploadRes.ok) continue;
-
-      const uploadedPaths = await uploadRes.json().catch(() => null);
-      const uploadedPath = Array.isArray(uploadedPaths) ? uploadedPaths[0] : null;
-      if (!uploadedPath) continue;
-
-      const callRes = await fetch(`${base}/gradio_api/call/png`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: [{
-            path: uploadedPath,
-            orig_name: filename,
-            mime_type: mimeType,
-            meta: { _type: 'gradio.FileData' }
-          }]
-        }),
-        signal: AbortSignal.timeout(12000)
-      });
-      if (!callRes.ok) continue;
-
-      const callData = await callRes.json().catch(() => null);
-      const eventId = callData?.event_id;
-      if (!eventId) continue;
-
-      const sseRes = await fetch(`${base}/gradio_api/call/png/${encodeURIComponent(eventId)}`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(22000)
-      });
-      if (!sseRes.ok) continue;
-
-      const sseText = await sseRes.text();
-      let fileUrl = null;
-      for (const line of sseText.split(/\r?\n/)) {
-        if (line.startsWith('data:')) {
-          try {
-            const parsed = JSON.parse(line.slice(5).trim());
-            let candidate = Array.isArray(parsed) ? parsed[0] : parsed;
-            if (Array.isArray(candidate) && candidate.length >= 2) candidate = candidate[1];
-            if (typeof candidate === 'string') {
-              fileUrl = candidate.startsWith('http') || candidate.startsWith('data:image/')
-                ? candidate
-                : `${base}/gradio_api/file=${candidate}`;
-            } else if (candidate?.url) {
-              fileUrl = candidate.url;
-            } else if (candidate?.path) {
-              fileUrl = `${base}/gradio_api/file=${candidate.path}`;
-            }
-          } catch { /* ignore */ }
-        }
-      }
-      if (!fileUrl) continue;
-
-      if (fileUrl.startsWith('data:image/')) {
-        return fileUrl;
-      }
-
-      const imgRes = await fetch(fileUrl, { signal: AbortSignal.timeout(15000) });
-      if (!imgRes.ok) continue;
-      const outBuf = Buffer.from(await imgRes.arrayBuffer());
-      if (isValidImageBuffer(outBuf)) {
-        return `data:image/png;base64,${outBuf.toString('base64')}`;
-      }
-    } catch {
-      // Try next space
-    }
-  }
-  return null;
+function markModelRateLimited(modelId, cooldownMs = MODEL_COOLDOWN_MS) {
+  if (modelId) rateLimitedUntil.set(String(modelId), Date.now() + Math.max(1000, Number(cooldownMs) || MODEL_COOLDOWN_MS));
 }
 
-/**
- * Generate/Edit studio product photo using Google Gemini 3.5 Flash
- * Supports both Google AI Studio API Key (AIza...) and Google OAuth2 Access Token (ya29...)
- */
-async function generateWithGeminiAccount({
-  imageBytes,
-  mimeType = 'image/jpeg',
-  prompt,
-  geminiApiKey,
-  geminiAccessToken,
-  geminiProjectId,
-  throwOnError = false
-}) {
-  const apiKey = sanitizeToken(
-    geminiApiKey ||
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY
-  );
-  const accessToken = sanitizeToken(geminiAccessToken || process.env.GEMINI_ACCESS_TOKEN).replace(/^Bearer\s+/i, '');
-  const projectId = sanitizeToken(geminiProjectId || process.env.GOOGLE_CLOUD_PROJECT);
+function isModelRateLimited(modelId) {
+  const until = rateLimitedUntil.get(String(modelId));
+  if (!until) return false;
+  if (Date.now() >= until) {
+    rateLimitedUntil.delete(String(modelId));
+    return false;
+  }
+  return true;
+}
 
-  if (!apiKey && !accessToken) {
-    return null;
+function isGeminiModel(model) {
+  return /gemini/i.test(`${model?.id || ''} ${model?.name || ''}`);
+}
+
+function buildRotationQueue(preferredModel = DEFAULT_PROVIDER, catalog = PUTER_IMAGE_MODELS) {
+  const editable = (Array.isArray(catalog) ? catalog : PUTER_IMAGE_MODELS)
+    .filter(model => model && model.id && model.supportsImg2Img !== false && !isGeminiModel(model));
+  if (!editable.length) return [];
+
+  const start = ((rotationCursor % editable.length) + editable.length) % editable.length;
+  rotationCursor = (start + 1) % editable.length;
+  const ordered = Array.from({ length: editable.length }, (_, index) => editable[(start + index) % editable.length]);
+
+  if (preferredModel && preferredModel !== DEFAULT_PROVIDER) {
+    const selectedIndex = ordered.findIndex(model => model.id === preferredModel);
+    if (selectedIndex > 0) ordered.unshift(...ordered.splice(selectedIndex, 1));
   }
 
-  const base64Image = imageBytes.toString('base64');
-  const strictGeminiPrompt = `GENERATE AND RETURN A NEW EDITED PRODUCT IMAGE (DO NOT REPLY WITH TEXT ONLY).
-You are a professional commercial product photography AI studio.
-Edit the attached reference product photo:
-1. Completely remove the existing background (such as carpet, rug, floor, room clutter, or table).
-2. Place the exact footwear/bag from the input image into this new studio scene: ${prompt}
-3. CRITICAL INSTRUCTION: Keep the exact footwear/bag from the input image 100% identical in shape, color, material, straps, laces, sole, stitching, and brand logo. ONLY replace the background and studio lighting around the product. Output the edited image directly.`;
+  const ready = ordered.filter(model => !isModelRateLimited(model.id));
+  const cooling = ordered.filter(model => isModelRateLimited(model.id));
+  return ready.length ? [...ready, ...cooling] : ordered;
+}
 
-  let lastError = null;
-
-  for (const modelId of GEMINI_IMAGE_MODELS) {
-    try {
-      const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
-      const url = apiKey ? `${baseUrl}?key=${encodeURIComponent(apiKey)}` : baseUrl;
-      const headers = { 'Content-Type': 'application/json' };
-      if (!apiKey && accessToken) {
-        headers.Authorization = `Bearer ${accessToken}`;
-        if (projectId) headers['x-goog-user-project'] = projectId;
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { text: strictGeminiPrompt },
-              {
-                inlineData: {
-                  mimeType: mimeType || 'image/jpeg',
-                  data: base64Image
-                }
-              }
-            ]
-          }],
-          generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE']
-          }
-        }),
-        signal: AbortSignal.timeout(60000)
-      });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        lastError = Object.assign(
-          new Error(errText || `Google Gemini HTTP ${response.status}`),
-          { status: response.status }
-        );
-        continue;
-      }
-
-      const payload = await response.json().catch(() => ({}));
-      const parts = payload?.candidates?.[0]?.content?.parts || [];
-      const imgPart = parts.find(p => p?.inlineData?.data || p?.inline_data?.data);
-      const rawData = imgPart?.inlineData?.data || imgPart?.inline_data?.data;
-      const outMime = imgPart?.inlineData?.mimeType || imgPart?.inline_data?.mime_type || 'image/png';
-
-      if (rawData && rawData !== base64Image) {
-        return {
-          dataUrl: `data:${outMime};base64,${rawData}`,
-          model: GEMINI_STUDIO_MODEL,
-          upstreamModel: modelId,
-          provider: GEMINI_STUDIO_PROVIDER_NAME
-        };
-      }
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  if (throwOnError && lastError) {
-    throw lastError;
-  }
-  return null;
+function isValidImageBuffer(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 8) return false;
+  const png = buffer[0] === 0x89 && buffer.toString('ascii', 1, 4) === 'PNG';
+  const jpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const webp = buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
+  return png || jpeg || webp;
 }
 
 function validateImageBytes(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
     throw Object.assign(new Error('تصویر ورودی معتبر نیست یا خالی است.'), { status: 400 });
   }
   if (buffer.length > MAX_IMAGE_BYTES) {
-    throw Object.assign(new Error(`حجم تصویر (${Math.round(buffer.length / 1024 / 1024)}MB) بیش از سقف مجاز ۱۵ مگابایت است.`), { status: 413 });
+    throw Object.assign(new Error('حجم تصویر بیش از حد مجاز ۱۵ مگابایت است.'), { status: 413 });
   }
 
-  const isJpeg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  const isPng = buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+  const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isPng = buffer.length >= 8 && buffer[0] === 0x89 && buffer.toString('ascii', 1, 4) === 'PNG';
   const isWebp = buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
-
   if (!isJpeg && !isPng && !isWebp) {
     throw Object.assign(new Error('فقط فرمت‌های تصویر JPG، PNG و WEBP پشتیبانی می‌شوند.'), { status: 400 });
   }
-
   return {
     isJpeg,
     isPng,
     isWebp,
-    mimeType: isPng ? 'image/png' : (isWebp ? 'image/webp' : 'image/jpeg')
+    mimeType: isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg'
   };
 }
 
 function parseDataUrl(dataUrl) {
   if (typeof dataUrl !== 'string') return null;
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([a-z0-9+/=\s]+)$/i);
   if (!match) return null;
-  return {
-    mimeType: match[1],
-    buffer: Buffer.from(match[2].replace(/\s/g, ''), 'base64')
-  };
+  const mimeType = match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase();
+  const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+  validateImageBytes(buffer);
+  return { mimeType, buffer, dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}` };
 }
 
-/**
- * Validate and decode a Data URL or Buffer image
- */
 function validateAndDecodeImage(imageInput) {
-  if (!imageInput) {
-    throw Object.assign(new Error('تصویر ورودی محصول ارسال نشده است.'), { status: 400 });
-  }
-
+  if (!imageInput) throw Object.assign(new Error('تصویر ورودی محصول ارسال نشده است.'), { status: 400 });
   if (Buffer.isBuffer(imageInput)) {
-    if (imageInput.length === 0) {
-      throw Object.assign(new Error('فایل تصویر خالی است.'), { status: 400 });
-    }
-    if (imageInput.length > MAX_IMAGE_BYTES) {
-      throw Object.assign(new Error('حجم تصویر بیش از حد مجاز (۱۵ مگابایت) است.'), { status: 413 });
-    }
-    return { buffer: imageInput, mimeType: 'image/jpeg', dataUrl: `data:image/jpeg;base64,${imageInput.toString('base64')}` };
+    const info = validateImageBytes(imageInput);
+    return { buffer: imageInput, mimeType: info.mimeType, dataUrl: `data:${info.mimeType};base64,${imageInput.toString('base64')}` };
   }
-
-  if (typeof imageInput === 'string') {
-    const trimmed = imageInput.trim();
-    const match = trimmed.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
-    if (!match) {
-      if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/')) {
-        return { buffer: null, mimeType: 'image/jpeg', dataUrl: trimmed, isUrl: true };
-      }
-      throw Object.assign(new Error('فرمت تصویر نامعتبر است. فقط JPG، PNG و WebP پشتیبانی می‌شوند.'), { status: 400 });
-    }
-    const mimeType = match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase();
-    const base64Clean = match[2].replace(/\s+/g, '');
-    const buffer = Buffer.from(base64Clean, 'base64');
-
-    if (buffer.length === 0) {
-      throw Object.assign(new Error('داده تصویر معتبر نیست.'), { status: 400 });
-    }
-    if (buffer.length > MAX_IMAGE_BYTES) {
-      throw Object.assign(new Error('حجم تصویر بیش از حد مجاز (۱۵ مگابایت) است.'), { status: 413 });
-    }
-
-    return { buffer, mimeType, dataUrl: `data:${mimeType};base64,${base64Clean}` };
+  if (typeof imageInput !== 'string') throw Object.assign(new Error('نوع ورودی تصویر پشتیبانی نمی‌شود.'), { status: 400 });
+  const decoded = parseDataUrl(imageInput.trim());
+  if (decoded) return decoded;
+  if (/^(https?:\/\/|\/)/i.test(imageInput.trim())) {
+    return { buffer: null, mimeType: 'image/jpeg', dataUrl: imageInput.trim(), isUrl: true };
   }
-
-  throw Object.assign(new Error('نوع ورودی تصویر پشتیبانی نمی‌شود.'), { status: 400 });
+  throw Object.assign(new Error('فرمت تصویر نامعتبر است. فقط JPG، PNG و WebP پشتیبانی می‌شوند.'), { status: 400 });
 }
 
-/**
- * Check health of AI Studio Engine (Google Gemini 3.5 Flash)
- */
-async function checkBackendHealth(apiUrl = DEFAULT_BACKEND_URL) {
+function makeAspectRatio(aspectRatio) {
+  const [w, h] = String(aspectRatio || '1:1').split(':').map(Number);
+  return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 ? { w, h } : { w: 1, h: 1 };
+}
+
+function shouldRetryWithNextModel(error) {
+  const code = String(error?.errorCode || error?.code || '').toLowerCase();
+  const message = String(error?.message || error || '').toLowerCase();
+  if (/moderation|content.?policy|safety.?filter|prompt_required/.test(`${code} ${message}`)) return false;
+  if (/popup_blocked|auth_window_closed|user_cancel|cancelled/.test(`${code} ${message}`)) return false;
+  return true;
+}
+
+function isRateLimitOrModelOutage(error) {
+  const status = Number(error?.status || error?.statusCode);
+  const text = `${error?.errorCode || ''} ${error?.code || ''} ${error?.message || error || ''}`.toLowerCase();
+  return status === 429 || status === 503 || status === 504 || /rate.?limit|too many|quota|temporarily unavailable|model.*unavailable|upstream_(failed|timeout)|timed? ?out/.test(text);
+}
+
+async function imageResultToDataUrl(result) {
+  const source = typeof result === 'string' ? result : (result?.src || result?.url || result?.dataUrl);
+  if (typeof source !== 'string' || !source) return null;
+  if (source.startsWith('data:image/')) return source;
+  if (typeof fetch !== 'function') return null;
+  const response = await fetch(source, { signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
+  if (!response.ok) throw Object.assign(new Error(`خواندن خروجی Puter با خطای ${response.status} مواجه شد.`), { status: response.status });
+  const blob = await response.blob();
+  if (!blob.type || !blob.type.startsWith('image/')) throw new Error('مدل Puter خروجی تصویری معتبر برنگرداند.');
+  const bytes = Buffer.from(await blob.arrayBuffer());
+  if (!isValidImageBuffer(bytes)) throw new Error('خروجی مدل Puter فرمت تصویر معتبر ندارد.');
+  return `data:${blob.type};base64,${bytes.toString('base64')}`;
+}
+
+function providerOption(model) {
+  const source = String(model?.provider || '').toLowerCase();
+  if (/openai/.test(source)) return 'openai';
+  if (/xai|x-ai/.test(source)) return 'xai';
+  if (/cloudflare/.test(source) || String(model?.id || '').startsWith('@cf/')) return 'cloudflare';
+  if (/byteplus|bytedance/.test(source) || /seedream|dola-seedream/.test(model?.id || '')) return 'byteplus';
+  if (/replicate|black forest|qwen|ideogram|leonardo|stability/.test(source)) return 'replicate';
+  return '';
+}
+
+function modelOptions(model, { imageDataUrl, aspectRatio, quality = 'high' }) {
+  const options = {
+    model: model.id,
+    input_images: [imageDataUrl],
+    ratio: makeAspectRatio(aspectRatio)
+  };
+  const provider = providerOption(model);
+  if (provider) options.provider = provider;
+
+  if (provider === 'openai') {
+    options.quality = quality === 'ultra' ? (model.id.includes('2.5') ? 'max' : 'high') : quality === 'standard' ? 'medium' : 'high';
+  } else if (provider === 'xai') {
+    options.quality = quality === 'standard' ? 'low' : 'auto';
+    options.resolution = quality === 'ultra' ? '2k' : '1k';
+  } else if (provider === 'byteplus') {
+    options.quality = quality === 'ultra' ? '4K' : quality === 'standard' ? '1K' : '2K';
+  } else if (model.id.includes('flux-2-pro') || model.id.includes('flux-2-klein') || model.id.includes('flux-schnell')) {
+    options.output_megapixels = quality === 'ultra' ? '2' : quality === 'standard' ? '0.5' : '1';
+  }
+  return options;
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error('مهلت پاسخ این مدل تمام شد.'), { code: 'upstream_timeout', status: 504 })), ms);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function generateWithPuterRotation({
+  imageDataUrl,
+  prompt,
+  aspectRatio = '1:1',
+  quality = 'high',
+  preferredModel = DEFAULT_PROVIDER,
+  puterClient = globalThis.puter,
+  catalog = PUTER_IMAGE_MODELS
+}) {
+  if (!puterClient?.ai?.txt2img) {
+    throw Object.assign(new Error('برای تولید تصویر، استودیوی Puter.js باید در مرورگر باز باشد و به حساب Puter وارد شوید.'), { status: 503, code: 'puter_client_unavailable' });
+  }
+  if (!imageDataUrl || typeof imageDataUrl !== 'string') throw Object.assign(new Error('تصویر مرجع محصول ارسال نشده است.'), { status: 400 });
+
+  const queue = buildRotationQueue(preferredModel, catalog);
+  if (!queue.length) throw Object.assign(new Error('در کاتالوگ Puter مدلی برای ویرایش عکس محصول در دسترس نیست.'), { status: 503 });
+  const triedModels = [];
+  let lastError = null;
+
+  for (const model of queue) {
+    triedModels.push(model.id);
+    try {
+      const rawResult = await withTimeout(
+        puterClient.ai.txt2img(prompt, modelOptions(model, { imageDataUrl, aspectRatio, quality })),
+        MODEL_TIMEOUT_MS
+      );
+      const dataUrl = await imageResultToDataUrl(rawResult);
+      if (!dataUrl) throw new Error('مدل تصویر قابل استفاده‌ای برنگرداند.');
+      if (dataUrl === imageDataUrl) throw Object.assign(new Error('مدل تصویر مرجع را بدون تغییر برگرداند.'), { code: 'unchanged_image' });
+      const index = queue.findIndex(item => item.id === model.id);
+      return {
+        dataUrl,
+        model: model.id,
+        provider: `${model.name || model.id} · Puter.js`,
+        fallbackUsed: index > 0,
+        rotatedModels: triedModels,
+        nextModelInRotation: queue[(index + 1) % queue.length]?.id || queue[0].id
+      };
+    } catch (error) {
+      lastError = error;
+      if (isRateLimitOrModelOutage(error)) markModelRateLimited(model.id);
+      if (!shouldRetryWithNextModel(error)) throw error;
+    }
+  }
+
+  throw Object.assign(
+    new Error(`تمام مدل‌های سازگار Puter نتوانستند تصویر را بسازند. آخرین خطا: ${lastError?.message || 'بدون جزئیات'}`),
+    { status: Number(lastError?.status) || 503, code: lastError?.code || 'puter_models_exhausted', cause: lastError, triedModels }
+  );
+}
+
+async function checkBackendHealth() {
+  const editableCount = PUTER_IMAGE_MODELS.filter(model => model.supportsImg2Img).length;
   return {
-    connected: true,
-    status: 'online',
-    url: apiUrl,
-    engine: GEMINI_STUDIO_MODEL,
-    model: GEMINI_STUDIO_MODEL,
-    name: 'Google Gemini 3.5 Flash (مدل رایگان گوگل)'
+    connected: false,
+    status: 'browser-session-required',
+    url: DEFAULT_BACKEND_URL,
+    engine: DEFAULT_PROVIDER,
+    model: DEFAULT_PROVIDER,
+    totalModels: PUTER_IMAGE_MODELS.length,
+    editableModels: editableCount,
+    name: PUTER_STUDIO_PROVIDER_NAME
   };
 }
 
 const checkComfyHealth = checkBackendHealth;
 
-/**
- * Generate Studio Product Photo exclusively using Google Gemini 3.5 Flash (gemini-3.5-flash)
- */
 async function generateStudioPhoto({
   image,
   imageBytes,
@@ -371,102 +343,32 @@ async function generateStudioPhoto({
   quality = 'high',
   provider = DEFAULT_PROVIDER,
   productType = 'shoe_or_bag',
-  geminiApiKey,
-  geminiAccessToken,
-  geminiProjectId,
-  allowMock = true
+  puterClient = globalThis.puter,
+  allowMock = false
 }) {
-  // 1. Validate Input Image
-  const rawInput = image || imageBytes;
-  const decoded = validateAndDecodeImage(rawInput);
-
-  let inputBuffer = decoded.buffer;
-  const mimeType = decoded.mimeType;
-
-  if (!inputBuffer && decoded.isUrl && /^https?:\/\//i.test(decoded.dataUrl)) {
-    try {
-      const resp = await fetch(decoded.dataUrl, { signal: AbortSignal.timeout(15000) });
-      if (resp.ok) {
-        inputBuffer = Buffer.from(await resp.arrayBuffer());
-      }
-    } catch {
-      // Fallback if URL fetch fails
-    }
-  }
-
-  let refBuffer = inputBuffer;
-  if (referenceImage && referenceImage !== rawInput) {
-    try {
-      const refDecoded = validateAndDecodeImage(referenceImage);
-      if (refDecoded.buffer) refBuffer = refDecoded.buffer;
-    } catch {
-      refBuffer = inputBuffer;
-    }
-  }
-
-  // 2. Build Studio Prompt & Metadata
-  const finalPrompt = buildPrompt({
-    style,
-    customPrompt,
-    preservation,
+  // `allowMock` is accepted for compatibility, but the original upload is never a fake output.
+  void allowMock;
+  const decoded = validateAndDecodeImage(image || imageBytes);
+  const ref = referenceImage && referenceImage !== image ? validateAndDecodeImage(referenceImage) : decoded;
+  const imageDataUrl = ref.dataUrl || decoded.dataUrl;
+  const prompt = [
+    'Edit the supplied reference image; this is image-to-image product photography, not text-only generation.',
+    buildPrompt({ style, customPrompt, preservation, aspectRatio, productType })
+  ].join(' ');
+  const result = await generateWithPuterRotation({
+    imageDataUrl,
+    prompt,
     aspectRatio,
-    productType
+    quality,
+    preferredModel: provider || DEFAULT_PROVIDER,
+    puterClient
   });
-  const negativePrompt = getNegativePrompt();
   const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] || ASPECT_RATIO_DIMENSIONS['1:1'];
-
-  let liveOutputUrl = null;
-  let cutoutDataUrl = null;
-  let lastGeminiError = null;
-
-  // 3. Generate Studio Product Photo via Google Gemini 3.5 Flash
-  if (refBuffer && (geminiApiKey || geminiAccessToken || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY)) {
-    try {
-      const geminiRes = await generateWithGeminiAccount({
-        imageBytes: refBuffer,
-        mimeType,
-        prompt: finalPrompt,
-        geminiApiKey,
-        geminiAccessToken,
-        geminiProjectId,
-        throwOnError: !allowMock
-      });
-      if (geminiRes?.dataUrl) {
-        liveOutputUrl = geminiRes.dataUrl;
-      }
-    } catch (err) {
-      lastGeminiError = err;
-    }
-  }
-
-  // 4. Keyless Cloud Foreground Extraction for Real Product Photos when Gemini API Key is not set or hits free-tier limit
-  if (!liveOutputUrl && inputBuffer && inputBuffer.length > 512) {
-    try {
-      cutoutDataUrl = await extractKeylessForegroundCutout(inputBuffer, mimeType);
-      if (cutoutDataUrl) {
-        liveOutputUrl = cutoutDataUrl;
-      }
-    } catch {
-      // Browser studio synthesizer will handle scene rendering
-    }
-  }
-
-  if (!liveOutputUrl && !allowMock) {
-    throw lastGeminiError || Object.assign(
-      new Error('تولید تصویر با Google Gemini 3.5 Flash انجام نشد. لطفاً کلید رایگان Google AI Studio (AIzaSy...) یا اتصال اکانت گوگل خود را بررسی کنید.'),
-      { status: 503 }
-    );
-  }
-
-  const outputUrl = liveOutputUrl || decoded.dataUrl;
-
   return {
     success: true,
-    generatedUrl: outputUrl,
-    cutoutUrl: cutoutDataUrl || null,
-    backgroundRemoved: Boolean(cutoutDataUrl),
-    image: outputUrl,
-    images: [outputUrl],
+    generatedUrl: result.dataUrl,
+    image: result.dataUrl,
+    images: [result.dataUrl],
     originalUrl: decoded.dataUrl,
     style,
     styleTitle: PRESETS[style]?.title || style,
@@ -474,65 +376,42 @@ async function generateStudioPhoto({
     dimensions,
     preservation,
     quality,
-    provider: GEMINI_STUDIO_PROVIDER_NAME,
-    model: GEMINI_STUDIO_MODEL,
-    activeModel: GEMINI_STUDIO_MODEL,
-    fallbackUsed: false,
-    quotaExhaustedFallback: false,
-    pipeline: GEMINI_STUDIO_MODEL,
-    promptUsed: finalPrompt,
-    negativePromptUsed: negativePrompt,
-    preservationGuarantee: 'تولید تصویر آتلیه‌ای با مدل رایگان Google Gemini 3.5 Flash با حفظ ۱۰۰٪ شکل، رنگ، لوگو و دوخت کالای اصلی',
-    mode: cutoutDataUrl
-      ? 'gemini-cutout'
-      : liveOutputUrl
-        ? 'gemini-3.5-flash'
-        : 'gemini-studio-preview',
+    provider: result.provider,
+    model: result.model,
+    activeModel: result.model,
+    rotatedModels: result.rotatedModels,
+    nextModelInRotation: result.nextModelInRotation,
+    fallbackUsed: result.fallbackUsed,
+    pipeline: provider || DEFAULT_PROVIDER,
+    promptUsed: prompt,
+    negativePromptUsed: getNegativePrompt(),
+    preservationGuarantee: 'پرامپت مدل برای حفظ شکل، رنگ، لوگو و دوخت کالای اصلی تنظیم شده است؛ نتیجه را پیش از انتشار بررسی کنید.',
+    mode: 'puter-image-edit',
     timestamp: new Date().toISOString()
   };
 }
 
-/**
- * Attach generated image to a product in the database
- */
 async function attachImageToProduct({ productId, imageUrl, asMainImage = true, addToGallery = true, db, saveDb }) {
-  if (!productId) {
-    throw Object.assign(new Error('شناسه محصول (productId) الزامی است.'), { status: 400 });
-  }
-  if (!imageUrl) {
-    throw Object.assign(new Error('آدرس یا داده تصویر (imageUrl) الزامی است.'), { status: 400 });
-  }
+  if (!productId) throw Object.assign(new Error('شناسه محصول (productId) الزامی است.'), { status: 400 });
+  if (!imageUrl) throw Object.assign(new Error('آدرس یا داده تصویر (imageUrl) الزامی است.'), { status: 400 });
+  if (!db || !Array.isArray(db.products)) throw Object.assign(new Error('پایگاه داده محصولات در دسترس نیست.'), { status: 500 });
 
-  if (!db || !Array.isArray(db.products)) {
-    throw Object.assign(new Error('پایگاه داده محصولات در دسترس نیست.'), { status: 500 });
-  }
-
-  const productIndex = db.products.findIndex(p => String(p.id) === String(productId));
-  if (productIndex === -1) {
-    throw Object.assign(new Error(`محصولی با شناسه ${productId} یافت نشد.`), { status: 404 });
-  }
-
-  const product = db.products[productIndex];
-  const existingImages = Array.isArray(product.images) ? [...product.images] : (product.image ? [product.image] : []);
+  const index = db.products.findIndex(product => String(product.id) === String(productId));
+  if (index < 0) throw Object.assign(new Error(`محصولی با شناسه ${productId} یافت نشد.`), { status: 404 });
+  const product = db.products[index];
+  const images = Array.isArray(product.images) ? [...product.images] : (product.image ? [product.image] : []);
 
   if (asMainImage) {
     product.image = imageUrl;
-    const filtered = existingImages.filter(img => img !== imageUrl);
-    product.images = [imageUrl, ...filtered];
+    product.images = [imageUrl, ...images.filter(existing => existing !== imageUrl)];
   } else if (addToGallery) {
-    if (!existingImages.includes(imageUrl)) {
-      existingImages.push(imageUrl);
-    }
-    product.images = existingImages;
+    if (!images.includes(imageUrl)) images.push(imageUrl);
+    product.images = images;
     if (!product.image) product.image = imageUrl;
   }
-
   product.updatedAt = new Date().toISOString();
-  db.products[productIndex] = product;
-
-  if (typeof saveDb === 'function') {
-    await saveDb(db);
-  }
+  db.products[index] = product;
+  if (typeof saveDb === 'function') await saveDb(db);
 
   return {
     success: true,
@@ -550,20 +429,26 @@ module.exports = {
   DEFAULT_PRESET,
   PRESERVATION_RULES,
   ASPECT_RATIO_DIMENSIONS,
-  GEMINI_STUDIO_MODEL,
-  GEMINI_IMAGE_MODELS,
+  PUTER_IMAGE_MODELS,
+  PUTER_STUDIO_PROVIDER_NAME,
   SUPPORTED_PROVIDERS,
   SUPPORTED_PIPELINES,
   DEFAULT_PROVIDER,
   DEFAULT_PIPELINE: DEFAULT_PROVIDER,
   DEFAULT_BACKEND_URL,
   DEFAULT_COMFY_API_URL: DEFAULT_BACKEND_URL,
+  MAX_IMAGE_BYTES,
   validateAndDecodeImage,
   validateImageBytes,
   parseDataUrl,
   checkBackendHealth,
   checkComfyHealth,
+  buildRotationQueue,
+  markModelRateLimited,
+  isModelRateLimited,
+  resetRotationState,
+  getRotationCursor,
   generateStudioPhoto,
-  generateWithGeminiAccount,
+  generateWithPuterRotation,
   attachImageToProduct
 };

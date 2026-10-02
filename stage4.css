@@ -5841,19 +5841,6 @@ body {
     padding: 36px 14px;
   }
 
-  .ai-gemini-auth-btns {
-    flex-direction: column;
-  }
-
-  .ai-gemini-auth-btns .btn {
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-    white-space: normal;
-    height: auto;
-    padding: 8px 10px;
-  }
-
   .ai-action-buttons-grid {
     grid-template-columns: 1fr;
     gap: 8px;

@@ -65,6 +65,7 @@ async function main() {
   const oldAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
   const oldToken = process.env.CLOUDFLARE_API_TOKEN;
   const oldVercel = process.env.VERCEL;
+  const oldPuter = globalThis.puter;
   delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.CLOUDFLARE_API_TOKEN;
   delete process.env.VERCEL;
@@ -74,12 +75,14 @@ async function main() {
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).configured, true);
     assert.equal(payload(res).keyless, true);
-    assert.equal(payload(res).unlimited, true);
-    assert.equal(payload(res).free, true);
-    assert.equal(payload(res).provider, 'Google Gemini 3.5 Flash (gemini-3.5-flash)');
-    assert.equal(payload(res).model, 'gemini-3.5-flash');
+    assert.equal(payload(res).unlimited, false);
+    assert.equal(payload(res).free, false);
+    assert.equal(payload(res).provider, 'Puter.js · چرخش خودکار مدل‌ها');
+    assert.equal(payload(res).model, 'puter-auto');
     assert(Array.isArray(payload(res).supportedModels));
-    assert(payload(res).supportedModels.includes('gemini-3.5-flash'));
+    assert(payload(res).supportedModels.includes('puter-auto'));
+    assert(payload(res).puterImageModels.some(model => model.id === 'openai/gpt-image-2.5-flare'));
+    assert(!payload(res).puterImageModels.some(model => /gemini/i.test(model.id)));
 
     process.env.SUPABASE_URL='https://quota-project.supabase.co';
     process.env.SUPABASE_PUBLISHABLE_KEY='publishable-test-key';
@@ -100,19 +103,24 @@ async function main() {
     await productPhoto({ method:'POST', headers:{}, body:{} }, res);
     assert.equal(res.statusCode, 403);
 
-    // Verify productPhoto generates photo using Google Gemini 3.5 Flash
+    // The legacy server adapter is tested with a Puter SDK stub; the studio UI calls Puter.js directly.
+    globalThis.puter = { ai: { async txt2img(_prompt, options) {
+      assert.equal(options.model, 'openai/gpt-image-2.5-flare');
+      assert.equal(options.input_images.length, 1);
+      return { src: 'data:image/png;base64,bmV3IGltYWdl' };
+    } } };
     res = response();
     await productPhoto({
       method: 'POST',
       headers: { origin: 'https://touba.test', host: 'touba.test' },
-      body: { image: referenceDataUrl, style: 'warm-studio', pipeline: 'gemini-3.5-flash' }
+      body: { image: referenceDataUrl, style: 'warm-studio', pipeline: 'puter-auto' }
     }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(payload(res).success, true);
-    assert.equal(payload(res).pipeline, 'gemini-3.5-flash');
-    assert.equal(payload(res).model, 'gemini-3.5-flash');
+    assert.equal(payload(res).pipeline, 'puter-auto');
+    assert.equal(payload(res).model, 'openai/gpt-image-2.5-flare');
     assert.equal(payload(res).style, 'warm-studio');
-    assert.equal(payload(res).provider, 'Google Gemini 3.5 Flash (gemini-3.5-flash)');
+    assert.match(payload(res).provider, /Puter\.js/);
 
     // Verify productPhoto handles invalid input gracefully
     res = response();
@@ -151,6 +159,7 @@ async function main() {
     if (oldVercel === undefined) delete process.env.VERCEL; else process.env.VERCEL = oldVercel;
     if (oldSupabaseUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldSupabaseUrl;
     if (oldPublicKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = oldPublicKey;
+    if (oldPuter === undefined) delete globalThis.puter; else globalThis.puter = oldPuter;
   }
   console.log('PASS: Vercel function endpoints, same-origin checks and ephemeral upload behavior');
   process.exit(0);
