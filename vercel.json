@@ -23,6 +23,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/22084634.txt", "destination": "/22084634.txt" },
     { "source": "/20838126.txt", "destination": "/20838126.txt" },
     { "source": "/18887070.txt", "destination": "/18887070.txt" },
     { "source": "/(.*)", "destination": "/index.html" }
