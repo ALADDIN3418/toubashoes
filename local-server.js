@@ -89,6 +89,17 @@ const server = http.createServer(async (req, res) => {
   try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }
   catch { return json(res, 400, { error:'آدرس درخواست معتبر نیست.' }); }
 
+  if (pathname.toLowerCase() === '/18887070.txt' || pathname.toLowerCase() === '/18887070.txt/') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Length': 0,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
+    });
+    return res.end('');
+  }
+
   if (pathname === '/api/supabase-config') {
     if (req.method !== 'GET') return json(res, 405, { error:'روش درخواست مجاز نیست.' }, { Allow:'GET' });
     const rawUrl = String(process.env.SUPABASE_URL || '').trim();
@@ -313,7 +324,17 @@ const server = http.createServer(async (req, res) => {
   serveFile(file, res);
 });
 function serveFile(file, res) {
-  res.writeHead(200, { 'Content-Type':types[path.extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
+  let size = 0;
+  try { size = fs.statSync(file).size; } catch { /* ignore */ }
+  res.writeHead(200, {
+    'Content-Type': types[path.extname(file)] || 'application/octet-stream',
+    'Content-Length': size,
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+  });
+  if (size === 0) return res.end('');
   fs.createReadStream(file).pipe(res);
 }
 server.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log(`طوبی storefront listening on ${server.address().port} · پایگاه داده فروشگاه کفش طوبی`));
