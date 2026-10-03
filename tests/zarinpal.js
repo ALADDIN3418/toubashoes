@@ -11,7 +11,7 @@ const fixedNow=Date.UTC(2026,9,2,10,0,0);
 const requestAuthority='A12345678901234567890123456789012';
 const req={method:'POST',headers:{origin:'https://shop.example.test',host:'shop.example.test'}};
 
-function response(payload,status=200){return{ok:status>=200&&status<300,status,json:async()=>payload}}
+function response(payload,status=200){return{ok:status>=200&&status<300,status,json:async()=>payload,text:async()=>typeof payload==='string'?payload:JSON.stringify(payload)}}
 function makeRes(){return{statusCode:200,headers:{},body:'',setHeader(key,value){this.headers[key]=value},end(body=''){this.body=body}}}
 function parseBody(res){return JSON.parse(res.body||'{}')}
 
@@ -97,29 +97,44 @@ function parseBody(res){return JSON.parse(res.body||'{}')}
   assert.equal(ZarinPal.getConfig({...env,ZARINPAL_MODE:'not-a-mode'}).configured,false);
   assert.equal(ZarinPal.getConfig({...env,ZARINPAL_MODE:'not-a-mode'}).mode,'sandbox');
 
-  const envKeys=['ZARINPAL_MODE','ZARINPAL_MERCHANT_ID','ZARINPAL_STATE_SECRET'];
+  const envKeys=['ZARINPAL_MODE','ZARINPAL_MERCHANT_ID','ZARINPAL_STATE_SECRET','SUPABASE_URL','SUPABASE_PUBLISHABLE_KEY','SUPABASE_ANON_KEY','SUPABASE_SERVICE_ROLE_KEY'];
   const savedEnv=Object.fromEntries(envKeys.map(key=>[key,process.env[key]]));
   const savedFetch=global.fetch;
+  const apiUserId='10000000-0000-4000-8000-000000000001';
+  const apiOrderId='20000000-0000-4000-8000-000000000002';
   try{
-    Object.assign(process.env,env);
-    global.fetch=async(url,options)=>{
-      assert.equal(url,'https://sandbox.zarinpal.com/pg/v4/payment/request.json');
-      assert.equal(JSON.parse(options.body).amount,100000);
-      return response({data:{code:100,authority:requestAuthority}});
+    Object.assign(process.env,{...env,SUPABASE_URL:'https://commerce-test.supabase.co',SUPABASE_PUBLISHABLE_KEY:'publishable-test-key',SUPABASE_SERVICE_ROLE_KEY:'service-role-test-key'});
+    global.fetch=async(url,options={})=>{
+      const target=String(url);
+      if(target.endsWith('/auth/v1/user'))return response({id:apiUserId});
+      if(target.includes('/rest/v1/profiles?'))return response([{id:apiUserId,role:'customer',is_active:true}]);
+      if(target.includes('/rest/v1/orders?'))return response([{id:apiOrderId,user_id:apiUserId,status:'pending_payment',total_toman:12500,number:'TB-TEST'}]);
+      if(target.includes('/rest/v1/payments?'))return response([{id:'30000000-0000-4000-8000-000000000003',order_id:apiOrderId,status:'pending',amount_toman:12500,authority:null,provider:'zarinpal'}]);
+      if(target==='https://sandbox.zarinpal.com/pg/v4/payment/request.json'){
+        const payload=JSON.parse(options.body);
+        assert.equal(payload.amount,125000,'server must use the persisted order total, not a client amount');
+        assert.equal(payload.merchant_id,merchantId);
+        return response({data:{code:100,authority:requestAuthority}});
+      }
+      if(target.endsWith('/rest/v1/rpc/attach_zarinpal_authority'))return response({success:true,authority:requestAuthority});
+      throw new Error(`Unexpected mocked fetch: ${target}`);
     };
     const statusRes=makeRes();
     ZarinPal.status({method:'GET'},statusRes);
     const status=parseBody(statusRes);
     assert.equal(status.configured,true);
     assert.equal(status.paymentEnabled,true);
+    assert.equal(status.checkoutStorage,'supabase-postgres');
     assert.equal(status.liveCheckoutSafe,false);
     assert(!JSON.stringify(status).includes(merchantId));
     const apiRes=makeRes();
-    await ZarinPal.request({method:'POST',headers:req.headers,body:{orderId:'TB-API-001',amountToman:10000}},apiRes);
+    await ZarinPal.request({method:'POST',headers:{...req.headers,authorization:'Bearer test-access-token-1234567890'},body:{orderId:apiOrderId,amountToman:1}},apiRes);
     assert.equal(apiRes.statusCode,200);
-    assert.equal(parseBody(apiRes).amountRial,100000);
+    assert.equal(parseBody(apiRes).amountRial,125000);
+    assert.equal(parseBody(apiRes).amountToman,12500);
+    assert.equal(parseBody(apiRes).paymentUrl,`https://sandbox.zarinpal.com/pg/StartPay/${requestAuthority}`);
     const rejectedRes=makeRes();
-    await ZarinPal.request({method:'POST',headers:{origin:'https://evil.test',host:'shop.example.test'},body:{orderId:'TB-API-002',amountToman:10000}},rejectedRes);
+    await ZarinPal.request({method:'POST',headers:{origin:'https://evil.test',host:'shop.example.test'},body:{orderId:apiOrderId,amountToman:10000}},rejectedRes);
     assert.equal(rejectedRes.statusCode,403);
   }finally{
     for(const key of envKeys){if(savedEnv[key]===undefined)delete process.env[key];else process.env[key]=savedEnv[key]}

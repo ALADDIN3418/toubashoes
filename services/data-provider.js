@@ -1,49 +1,98 @@
-/* Provider selection is local/demo-only. No network or Supabase SDK is loaded here. */
-(function(g){
- const publicConfig=g.TOUBA_PUBLIC_CONFIG||{};
- const config=Object.freeze({DATA_PROVIDER:'mock',SUPABASE_URL:publicConfig.url||'',SUPABASE_ANON_KEY:publicConfig.anonKey||'',AUTH_PROVIDER:publicConfig.enabled?'supabase':publicConfig.configured?'misconfigured':'demo'});
- class LocalPersistenceAdapter{
-  constructor(storage){this.storage=storage}
-  load(key,seed){try{const raw=this.storage.getItem(key);if(raw){const parsed=JSON.parse(raw);if(parsed&&typeof parsed==='object'&&Object.keys(parsed).length>0)return parsed}}catch(e){console.warn('Mock storage is corrupt; using a fresh demo seed.',e)}const fresh=structuredClone(seed);this.save(key,fresh);return fresh}
-  save(key,value){
-    try { this.storage.setItem(key,JSON.stringify(value)); } catch(e){}
-    if (typeof fetch === 'function' && typeof window !== 'undefined' && window.location?.origin) {
-      try {
-        fetch('/api/db', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: value })
-        }).catch(() => {});
-      } catch(e) {}
+/* Store data is hydrated from Supabase only. No LocalStorage, mock seed, or browser snapshot fallback. */
+(function (g) {
+  'use strict';
+
+  const config = g.TOUBA_PUBLIC_CONFIG || {};
+  const state = {
+    provider: 'supabase',
+    status: config.enabled && g.ToubaAuth?.client ? 'disconnected' : 'unconfigured',
+    schemaVersion: null,
+    error: null,
+    loadedAt: null
+  };
+
+  function emptyState() {
+    return {
+      products: [], categories: [], cart: [], orders: [], customers: [], coupons: [],
+      reviews: [], banners: [], media: [], settings: {
+        storeName: 'کفش طوبی', phone: '', address: '', shipping: 0, freeShipping: 0,
+        shippingOptions: { normal: 0, express: 0, freeFrom: 0 },
+        homepage: { categoryIds: [], featuredProductIds: [], bestSellerProductIds: [], advantages: [] },
+        favorites: []
+      },
+      users: [], profiles: [], payments: [], pageContents: [], addresses: [], productImages: [],
+      newsletterSubscribers: [], favorites: [], currentUser: null, coupon: null
+    };
+  }
+
+  async function load(store, target) {
+    if (!config.enabled || !g.ToubaAuth?.client) {
+      state.status = 'unconfigured';
+      state.error = new Error('اتصال Supabase آماده نیست؛ دادهٔ نمایشی یا محلی بارگذاری نمی‌شود.');
+      throw state.error;
     }
+    if (!g.SupabaseRepositories?.loadState) {
+      state.status = 'error';
+      state.error = new Error('آداپتور پایگاه دادهٔ Supabase بارگذاری نشده است.');
+      throw state.error;
+    }
+    state.status = 'loading';
+    state.error = null;
+    try {
+      const client = g.ToubaAuth.client;
+      const { data: health, error: healthError } = await client.rpc('commerce_health');
+      if (healthError) {
+        const missing = healthError.code === 'PGRST202' || healthError.code === '42883' || /commerce_health/i.test(healthError.message || '');
+        throw new Error(missing
+          ? 'پایگاه داده به migration عملیاتی فروشگاه نیاز دارد؛ migrationهای پوشهٔ supabase/migrations را روی پروژهٔ Supabase اعمال کنید.'
+          : `بررسی پایگاه داده ناموفق بود: ${healthError.message || healthError.code || 'خطای نامشخص'}`);
+      }
+      if (health?.schemaVersion !== '202610030001') {
+        throw new Error('نسخهٔ schema پایگاه داده با نسخهٔ برنامه مطابقت ندارد؛ migration عملیاتی فروشگاه را اعمال کنید.');
+      }
+      const data = await g.SupabaseRepositories.loadState(client, target);
+      Object.keys(target).forEach(key => { if (key !== 'currentUser') delete target[key]; });
+      Object.assign(target, data, { currentUser: g.ToubaAuth.currentUser || null });
+      state.status = 'ready';
+      state.schemaVersion = health.schemaVersion;
+      state.loadedAt = new Date().toISOString();
+      g.__TOUBA_DATABASE_READY = true;
+      g.__TOUBA_DATABASE_ERROR = null;
+      return target;
+    } catch (error) {
+      state.status = 'error';
+      state.error = error;
+      g.__TOUBA_DATABASE_READY = false;
+      g.__TOUBA_DATABASE_ERROR = error;
+      throw error;
+    }
+  }
+
+  function persist(_store, value) {
+    // Deliberately never persist a whole browser snapshot. Repository operations write
+    // individual rows using Supabase RLS, or security-definer RPCs for commerce actions.
     return value;
   }
-  clear(key){this.storage.removeItem(key)}
-  reset(key,seed){this.clear(key);return this.load(key,seed)}
-  has(key){return !!this.storage.getItem(key)}
- }
- const persistence=new LocalPersistenceAdapter(g.localStorage);
- g.APP_ENV=config;
- g.DataProvider={name:config.DATA_PROVIDER,hydrate:(key,seed)=>persistence.load(key,seed),persist:(key,value)=>persistence.save(key,value),clear:key=>persistence.clear(key),reset:(key,seed)=>persistence.reset(key,seed),has:key=>persistence.has(key),LocalPersistenceAdapter};
- if (typeof fetch === 'function' && typeof window !== 'undefined' && window.location?.origin) {
-   setTimeout(async () => {
-     try {
-       const res = await fetch('/api/db');
-       if (res.ok) {
-         const json = await res.json();
-         if (json && json.success && json.data && json.data.products && json.data.products.length > 0) {
-           if (typeof g.db !== 'undefined' && g.db) {
-             g.db.products = json.data.products;
-             g.db.categories = json.data.categories || g.db.categories;
-             g.db.orders = json.data.orders || g.db.orders;
-             g.db.coupons = json.data.coupons || g.db.coupons;
-             if (json.data.settings) g.db.settings = Object.assign({}, g.db.settings, json.data.settings);
-             try { g.localStorage.setItem('toubashop-v1', JSON.stringify(g.db)); } catch(e){}
-             if (typeof g.render === 'function') g.render();
-           }
-         }
-       }
-     } catch(e) {}
-   }, 50);
- }
+
+  function disabledLocalOperation() {
+    throw new Error('ذخیره‌سازی محلی/نمایشی غیرفعال است؛ داده‌ها باید از طریق پایگاه دادهٔ Supabase ثبت شوند.');
+  }
+
+  g.APP_ENV = Object.freeze({
+    DATA_PROVIDER: 'supabase',
+    SUPABASE_URL: config.url || '',
+    AUTH_PROVIDER: config.enabled ? 'supabase' : 'unconfigured'
+  });
+  g.DataProvider = Object.freeze({
+    name: 'supabase',
+    state,
+    createEmptyState: emptyState,
+    hydrate: () => emptyState(),
+    load,
+    refresh: (store, target) => load(store, target),
+    persist,
+    clear: disabledLocalOperation,
+    reset: disabledLocalOperation,
+    has: () => false
+  });
 })(window);

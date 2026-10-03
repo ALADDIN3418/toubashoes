@@ -1086,29 +1086,37 @@
       frameOutput.style.display = mode === 'original' ? 'none' : 'block';
     }));
 
+    async function persistGeneratedProductImage(productId, asMainImage) {
+      if (!currentOutputDataUrl) throw new Error('ابتدا تصویر را با Puter تولید کنید.');
+      const product = products.find(item => String(item.id) === String(productId));
+      if (!product) throw new Error('محصول انتخاب‌شده در پایگاه داده پیدا نشد؛ فهرست را تازه‌سازی کنید.');
+      if (!g.DataRepositories?.media?.create || !g.DataRepositories?.media?.delete || !g.StoreServices?.products?.update) {
+        throw new Error('اتصال پایگاه دادهٔ تصویر آماده نیست. صفحه را تازه‌سازی کنید.');
+      }
+
+      const media = await g.DataRepositories.media.create({ url:currentOutputDataUrl, alt:`${product.name} — تصویر استودیویی` });
+      const currentImages = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
+      const nextImages = asMainImage
+        ? [media.url, ...currentImages.filter(url => url !== media.url)]
+        : currentImages.includes(media.url) ? currentImages : [...currentImages, media.url];
+      try {
+        await g.StoreServices.products.update(productId, { images:nextImages });
+      } catch (error) {
+        try { await g.DataRepositories.media.delete(media.id); } catch (cleanupError) { console.warn('Generated image cleanup failed:', cleanupError); }
+        throw error;
+      }
+      return { product, media };
+    }
+
     btnSetMainImage?.addEventListener('click', async () => {
       const productId = targetProductSelect?.value;
       if (!productId) return alert('لطفاً ابتدا محصول مورد نظر را از منوی کشویی انتخاب کنید.');
       btnSetMainImage.disabled = true;
       try {
-        try {
-          const response = await fetch('/api/ai/studio/attach', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-            body: JSON.stringify({ productId, imageUrl: currentOutputDataUrl, asMainImage: true })
-          });
-          await safeFetchJson(response);
-        } catch (apiError) { console.warn('API attach fallback:', apiError.message); }
-        const product = products.find(item => String(item.id) === String(productId));
-        if (product) {
-          product.image = currentOutputDataUrl;
-          if (!Array.isArray(product.images)) product.images = [];
-          if (!product.images.includes(currentOutputDataUrl)) product.images.unshift(currentOutputDataUrl);
-          if (typeof g.save === 'function') g.save();
-        }
+        const { product } = await persistGeneratedProductImage(productId, true);
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback success';
-        actionFeedback.textContent = `✅ تصویر به‌عنوان تصویر اصلی «${product?.name || productId}» تنظیم شد.`;
+        actionFeedback.textContent = `✅ تصویر به‌صورت پایدار در Supabase ذخیره و تصویر اصلی «${product.name}» شد.`;
       } catch (error) {
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback error';
@@ -1121,23 +1129,10 @@
       if (!productId) return alert('لطفاً ابتدا محصول مورد نظر را از منوی کشویی انتخاب کنید.');
       btnAddToGallery.disabled = true;
       try {
-        try {
-          const response = await fetch('/api/ai/studio/attach', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-            body: JSON.stringify({ productId, imageUrl: currentOutputDataUrl, addToGallery: true })
-          });
-          await safeFetchJson(response);
-        } catch (apiError) { console.warn('API attach gallery fallback:', apiError.message); }
-        const product = products.find(item => String(item.id) === String(productId));
-        if (product) {
-          if (!Array.isArray(product.images)) product.images = product.image ? [product.image] : [];
-          if (!product.images.includes(currentOutputDataUrl)) product.images.push(currentOutputDataUrl);
-          if (typeof g.save === 'function') g.save();
-        }
+        const { product } = await persistGeneratedProductImage(productId, false);
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback success';
-        actionFeedback.textContent = `✅ تصویر به گالری «${product?.name || productId}» افزوده شد.`;
+        actionFeedback.textContent = `✅ تصویر به‌صورت پایدار در Supabase ذخیره و به گالری «${product.name}» افزوده شد.`;
       } catch (error) {
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback error';

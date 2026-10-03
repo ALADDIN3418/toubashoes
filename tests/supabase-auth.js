@@ -86,10 +86,12 @@ const path = require('path');
   const uiApp={innerHTML:'',insertAdjacentHTML(position,html){this.innerHTML=html+this.innerHTML;}};
   let uiAuthenticatedUser=null;
   let submittedCredentials=null;
-  const uiAuth={configured:true,get currentUser(){return uiAuthenticatedUser;},set currentUser(value){uiAuthenticatedUser=value;},start:async()=>null,publicError:()=> 'auth error',signIn:async credentials=>{submittedCredentials=credentials;uiAuthenticatedUser={id:'admin-1',email:credentials.email,name:'مدیر',role:'super_admin',isActive:true,authProvider:'supabase'};return uiAuthenticatedUser;},signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{uiAuthenticatedUser=null;}};
+  const uiAuth={configured:true,client:{},get currentUser(){return uiAuthenticatedUser;},set currentUser(value){uiAuthenticatedUser=value;},start:async()=>null,publicError:()=> 'auth error',signIn:async credentials=>{submittedCredentials=credentials;uiAuthenticatedUser={id:'admin-1',email:credentials.email,name:'مدیر',role:'super_admin',isActive:true,authProvider:'supabase'};return uiAuthenticatedUser;},signUp:async()=>{},sendPasswordReset:async()=>{},updatePassword:async()=>{},signOut:async()=>{uiAuthenticatedUser=null;}};
   const uiWindow={
     ToubaAuth:uiAuth,
     db:{currentUser:{id:'cached-demo-admin',role:'super_admin',authProvider:'demo'}},
+    __TOUBA_DATABASE_READY:true,
+    DataProvider:{state:{status:'ready'},load:async(_store,target)=>target,refresh:async(_store,target)=>target},
     location:{pathname:'/login',search:'?mode=signup',origin:'https://shop.example'},
     document:{body:{classList:{remove(){}}},querySelector(selector){return selector==='#app'?uiApp:null;}},
     history:null,

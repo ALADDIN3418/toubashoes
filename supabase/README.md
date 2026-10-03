@@ -1,47 +1,28 @@
-# Supabase setup, Auth, and migrations
+# Supabase: Auth، پایگاه داده و مهاجرت‌ها
 
-The project owner confirmed that the initial schema migration ran successfully via GitHub Actions. The storefront's full data provider is **not** connected yet: Auth can be enabled independently, while catalog/CMS/cart/orders/stock still use the Demo LocalStorage provider. Checkout now uses the server-side ZarinPal API v4 integration in Sandbox only; production payment requests are explicitly rejected until order, price and inventory are backed by a persistent server-side source of truth.
+## وضعیت فعلی
 
-## Supabase Auth: email and password
+کد فروشگاه دیگر provider محلی یا snapshot مرورگر برای داده‌های فروشگاهی ندارد. `services/data-provider.js` فقط پس از اتصال Auth و پاسخ موفق `commerce_health` با نسخهٔ `202610030001` دادهٔ Supabase را hydrate می‌کند؛ در نبود تنظیمات، خطای اتصال یا schema قدیمی، برنامه fail-closed است و به Demo/LocalStorage برنمی‌گردد.
 
-### 1. Configure Vercel's public Supabase settings
+Migration عملیاتی `202610030001_live_commerce.sql` در مخزن موجود است، اما اجرای آن روی پروژهٔ Supabase واقعی از این workspace انجام یا تأیید نشده است. پیش از آنکه این نسخه را روی دامنه استفاده کنید، migration history، dry-run و نتیجهٔ واقعی Workflow را بررسی کنید. هیچ مقدار credential ساختگی یا کلید پذیرنده در کد/این مستندات قرار نمی‌گیرد.
 
-In Vercel → project → **Settings → Environment Variables**, add these to **Production** (and Preview only if you intentionally test there):
+## تنظیم Auth ایمیل/رمز
 
-- `SUPABASE_URL` — Project URL from Supabase → Project Settings → API.
-- `SUPABASE_PUBLISHABLE_KEY` — the public/publishable key from the same page. If the project only exposes the legacy anon key, use `SUPABASE_ANON_KEY` instead.
+در Vercel → Project → Settings → Environment Variables برای محیط‌های موردنیاز تنظیم کنید:
 
-These are the only Supabase values used by the browser Auth client. `/api/supabase-config` returns only this URL and public key. **Never add `SUPABASE_SERVICE_ROLE_KEY`, the database password, or the GitHub PAT to Vercel for this Auth flow, browser code, or this repository.** Save the variables and redeploy Vercel. The Auth SDK uses PKCE and Supabase's own session handling.
+- `SUPABASE_URL` — Project URL.
+- `SUPABASE_PUBLISHABLE_KEY` — public/publishable key؛ اگر پروژه فقط کلید legacy را دارد از `SUPABASE_ANON_KEY` استفاده کنید.
 
-### 2. Set Supabase Auth email/redirect options
+این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token و secretهای زرین‌پال را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
 
-In Supabase → **Authentication → Providers → Email**:
+در Supabase → Authentication:
 
-- Ensure Email provider is enabled.
-- Keep email confirmation enabled for Production.
-- Set a production-grade password policy in the Auth settings (the UI requires at least 12 characters).
+1. Email provider را فعال و email confirmation را برای Production روشن کنید.
+2. حداقل طول و سیاست password را مطابق الزامات حساب تنظیم کنید (فرم سایت حداقل ۱۲ نویسه می‌خواهد).
+3. Site URL و redirectهای `https://<دامنه>/login?verified=1` و `https://<دامنه>/reset-password` را پیکربندی کنید.
+4. برای ایمیل تأیید و بازیابی، SMTP دامنهٔ تأییدشده راه‌اندازی و از چند mailbox واقعی آزمایش شود.
 
-In **Authentication → URL Configuration**:
-
-- Set **Site URL** to `https://toubashoes.vercel.app` until a custom production domain is configured.
-- Add the allowed redirect URLs `https://toubashoes.vercel.app/login?verified=1` and `https://toubashoes.vercel.app/reset-password`. Add the equivalent URLs for the chosen final domain before changing Site URL.
-
-Configure a verified sender and a custom SMTP provider for reliable production delivery of signup confirmations and password-reset emails. Test delivery to more than one mailbox, including Spam. Supabase's default mail sender is not a production email-delivery plan.
-
-### 3. Test signup and recovery
-
-1. Open `/login?mode=signup` on the deployed site.
-2. Register using an email address you control, a display name, and a password of at least 12 characters.
-3. Open the confirmation link from email; it should return to `/login?verified=1`.
-4. Sign in at `/login`, then confirm that `/account` shows the authenticated email/profile.
-5. Test **Forgot password** and the `/reset-password` flow before public launch.
-6. Confirm sign-out returns the visitor to the unauthenticated state.
-
-The database trigger creates a `profiles` row with the default `customer` role. Registration never accepts a role from the browser. The profile's role is read from the RLS-protected table; inactive accounts are denied a working app session. A client-side role check is not the security boundary—the table/function RLS policies are.
-
-### Create the first administrator
-
-After registering and confirming the intended owner account, inspect the email in Supabase Auth → Users and then run this SQL as a trusted project owner in SQL Editor, replacing the placeholder with that exact email:
+Trigger اولیه، `profiles` را با role پیش‌فرض `customer` می‌سازد. ثبت‌نام مرورگر نقشی بالاتر نمی‌پذیرد؛ role و active بودن از profile و policy/RPCهای DB خوانده می‌شود. برای ساخت اولین مدیر، پس از ثبت‌نام و تأیید حساب مالک، ایمیل دقیق Auth user را بررسی کنید و فقط از SQL Editor مورداعتماد اجرا کنید:
 
 ```sql
 update public.profiles p
@@ -51,40 +32,46 @@ where p.id = u.id
   and lower(u.email) = lower('OWNER_EMAIL_HERE');
 ```
 
-Inspect the affected row count and `profiles.role` afterwards. Do not expose a promotion endpoint or allow the frontend to write `profiles.role`. A read-only admin dashboard/list view for products, orders, and profiles is available to active admins and remains subject to RLS. CMS/Admin CRUD is **not** connected to the production database; writes and checkout stay disabled in Supabase Auth mode.
+جایگزین را در همان SQL Editor با ایمیل دقیق عوض کنید؛ آن را در کد یا endpoint عمومی قرار ندهید. تعداد ردیف‌های متأثر و `profiles.role` را بعد از اجرا بررسی کنید. هیچ مسیر promote-role در UI عمومی وجود ندارد.
 
-## Automatic database migrations
+## Migrationها
 
-`.github/workflows/supabase-db-push.yml` applies migration files on pushes to `main` that change `supabase/migrations/**`. It serializes pushes, runs a dry-run first, then applies pending migrations. Manual runs require `confirm=true`.
+فایل‌های SQL در `supabase/migrations/` ترتیب زمانی دارند. Migrationهای قبلاً اجراشده را ویرایش نکنید؛ تغییر تازه را با نام timestamp جدید اضافه کنید.
 
-For every schema change, add a new timestamped `.sql` migration; never edit a migration already applied remotely. Direct edits in the SQL Editor are not synchronized to Git and can create migration-history drift.
+`202610030001_live_commerce.sql` پس از migrationهای پایه:
 
-The initial migration `202609280001_initial_schema.sql` is reported by the owner as successfully applied. Follow-up migration `202609280002_active_profile_rls.sql` hardens owner RLS against deactivated accounts. Migration `202610020001_zarinpal_payment_provider.sql` removes the legacy mock provider default and adds a fail-closed check that accepts only `zarinpal`. Once these files are pushed to `main`, Actions applies them in order. Verify the workflow run is green before depending on the new policies or provider constraint.
+- داده‌های شناخته‌شدهٔ seed کاتالوگ/کوپن/بنر را پاک می‌کند؛ حساب واقعی، سفارش نامرتبط یا ردیف ناشناخته را حذف نمی‌کند.
+- `commerce_health()` و نسخهٔ schema را اعلام می‌کند.
+- write مستقیم مرورگر برای cart/order/payment را می‌بندد و RPCهای کنترل‌شده برای cart، کوپن، ساخت سفارش/رزرو موجودی و وضعیت سفارش فراهم می‌کند.
+- Storage bucket عمومی `product-images` و policyهای ابتدایی آن در migration پایه ساخته شده‌اند؛ upload و delete برای مدیر فعال نیازمند RLS/storage policy است.
 
-Required repository Actions **Secrets** (not Actions Variables):
+Workflow فایل `.github/workflows/supabase-db-push.yml` روی push به `main` که migrationها را تغییر دهد اجرا می‌شود. برای اجرای دستی به Actions Secrets زیر نیاز است:
 
 - `SUPABASE_ACCESS_TOKEN`
 - `SUPABASE_PROJECT_REF`
 - `SUPABASE_DB_PASSWORD`
 
-Keep all three in GitHub Actions Secrets only. These are distinct from the public Vercel Auth settings above.
+Workflow قبل از apply، `supabase db push --dry-run` اجرا می‌کند و فقط برای دستی بودن به ورودی `confirm=true` نیاز دارد. نتیجهٔ هر دو گام را در GitHub Actions بررسی کنید؛ اگر schema در پروژه قبلاً خارج از migration history ساخته شده، ابتدا history/drift را به‌طور مستقل حل کنید و migration را کورکورانه اجرا نکنید. push این شاخه به‌تنهایی Workflowای که فقط روی `main` تعریف شده را فعال نمی‌کند.
 
-## ZarinPal Sandbox configuration
+## بررسی پس از migration
 
-Set these only in Vercel → Settings → Environment Variables (or in an untracked local `.env` file):
+پس از apply موفق در پروژهٔ درست، بررسی کنید:
+
+- `commerce_health()` مقدار `schemaVersion = 202610030001` برگرداند.
+- رکوردهای demo مشخص‌شده در migration دیگر به‌عنوان محصولات/کوپن/بنر در پنل یا فروشگاه نمایش داده نشوند.
+- یک Auth user فعال با role مشتری بتواند از RLS، کاتالوگ عمومی، profile خودش، cart RPC و favorites استفاده کند.
+- یک مدیر فعال بتواند CRUD کاتالوگ/تنظیمات، رسانه، پیام‌های تماس و آمار را از DB انجام دهد.
+- ایجاد و لغو سفارش تستی موجودی را اتمیک و idempotent نگه دارد؛ دو checkout هم‌زمان موجودی منفی نسازد.
+- آپلود، دریافت public URL و حذف رسانه در bucket واقعی `product-images` کار کند.
+
+تست‌های repository در این پروژه Supabase را با stub شبیه‌سازی می‌کنند و مدرک اجرای واقعی migration نیستند.
+
+## زرین‌پال
+
+تنظیم Sandbox فقط در Environment Variables سرور یا `.env` محلیِ خارج از Git:
 
 - `ZARINPAL_MODE=sandbox`
-- `ZARINPAL_MERCHANT_ID` — valid 36-character merchant identifier from the provider/sandbox.
-- `ZARINPAL_STATE_SECRET` — random secret of at least 32 bytes (for example, generate locally with `openssl rand -hex 32`).
+- `ZARINPAL_MERCHANT_ID` — Merchant ID مجاز و واقعیِ sandbox/پذیرنده.
+- `ZARINPAL_STATE_SECRET` — راز تصادفی حداقل ۳۲ بایتی.
 
-The Admin → Payments panel is status/read-only; secrets are never entered or stored there. The callback URL is `/api/payment/zarinpal/callback`. Production gateway endpoints are present, but the request endpoint returns 503 for production mode until the server owns persistent orders and inventory. Do not switch to production or accept real money based only on a configured merchant ID.
-
-## Remaining production blockers
-
-- `services/data-provider.js` and all store repositories still use local Demo data; products, carts, addresses, CMS, customer lists, orders and stock do not yet persist through Supabase.
-- The frontend cannot create a secure order by inserting rows directly. Before enabling checkout, implement a server-controlled/RPC transaction that verifies current product prices/coupons, reserves stock atomically, writes order/items/payment intent idempotently, and prevents clients from choosing totals or payment state. Add tests for concurrent stock checkout and retries.
-- ZarinPal API v4 is implemented server-side (`request`, `callback` verification, signed receipt) and Sandbox is available for testing. Production requests are hard-disabled in `lib/zarinpal.js` while order totals and inventory remain browser-local. Before enabling real payments, move order creation, authoritative price/coupon calculation and atomic inventory changes into a persistent server-side transaction; then run the complete official Sandbox E2E flow.
-- Configure and verify SMTP, custom-domain redirect allow-list, account recovery, privacy/terms, and a backup/restore runbook.
-- The image-generation API still lacks real admin authentication and durable global rate limiting. It is not production-safe merely because email Auth now works; admin AI access remains a separate server-side authorization task.
-
-Do not describe the shop as ready to accept real orders or payments until the remaining blockers are implemented and end-to-end tested.
+تست‌های `npm test` پاسخ‌های ZarinPal را stub می‌کنند؛ برای go-live باید callback و verify رسمی روی Sandbox واقعی، مبلغ ریالی، تکرار callback، لغو سفارش و تطبیق رسید end-to-end آزمایش شوند. Production mode عمداً fail-closed است و تا ارزیابی نهایی DB، امنیت، موجودی و پرداخت باز نمی‌شود.

@@ -2,10 +2,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const {
   generateStudioPhoto,
-  attachImageToProduct,
   DEFAULT_PROVIDER,
   DEFAULT_PIPELINE,
   SUPPORTED_PROVIDERS,
@@ -21,8 +19,6 @@ const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const zarinpal = require('./lib/zarinpal.js');
-const serverDb = require('./services/server-db.js');
-serverDb.initStore();
 
 function loadLocalEnv() {
   try {
@@ -40,7 +36,6 @@ loadLocalEnv();
 
 const root = __dirname;
 const aiGenerationTimes = [];
-const productImageSaveTimes = [];
 const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.webp':'image/webp', '.svg':'image/svg+xml', '.json':'application/json', '.xml':'application/xml; charset=utf-8', '.txt':'text/plain; charset=utf-8' };
 
 function json(res, status, value, extraHeaders = {}) {
@@ -113,46 +108,8 @@ const server = http.createServer(async (req, res) => {
     return fs.createReadStream(sdk).pipe(res);
   }
 
-  if (pathname === '/api/db') {
-    if (req.method === 'GET') {
-      return json(res, 200, { success:true, data: serverDb.getStore() });
-    }
-    if (req.method === 'POST') {
-      try {
-        const body = await readBody(req, 10 * 1024 * 1024);
-        if (body && body.data) {
-          serverDb.saveStore(body.data);
-          return json(res, 200, { success:true });
-        }
-        return json(res, 400, { error:'اطلاعات نامعتبر است' });
-      } catch (err) {
-        return json(res, 500, { error: err.message });
-      }
-    }
-    return json(res, 405, { error:'روش درخواست مجاز نیست' });
-  }
-
-  if (pathname === '/api/admin/login' && req.method === 'POST') {
-    try {
-      const body = await readBody(req, 1024 * 1024);
-      const user = serverDb.authenticateAdmin(body.email, body.password);
-      if (user) {
-        return json(res, 200, { success:true, user });
-      }
-      return json(res, 401, { error:'ایمیل یا رمز عبور مدیر نادرست است' });
-    } catch (err) {
-      return json(res, 400, { error: err.message });
-    }
-  }
-
-  if (pathname === '/api/orders' && req.method === 'POST') {
-    try {
-      const body = await readBody(req, 2 * 1024 * 1024);
-      const order = serverDb.createOrder(body);
-      return json(res, 201, { success:true, order });
-    } catch (err) {
-      return json(res, 400, { error: err.message });
-    }
+  if (['/api/db', '/api/admin/login', '/api/orders'].includes(pathname)) {
+    return json(res, 410, { error:'مسیرهای ذخیره‌سازی JSON و ورود/سفارش نمایشی غیرفعال شده‌اند؛ از Supabase Auth و RPCهای امن فروشگاه استفاده کنید.' });
   }
 
   if (pathname === '/api/payment/zarinpal/status') return zarinpal.status(req, res);
@@ -273,26 +230,8 @@ const server = http.createServer(async (req, res) => {
       });
     }
   }
-  if (pathname === '/api/ai/studio/attach') {
-    if (req.method !== 'POST') return json(res, 405, { error: 'روش درخواست مجاز نیست.' });
-    if (!requireSameOrigin(req, res)) return;
-    try { await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error: error.message }); }
-    let body;
-    try {
-      body = await readBody(req, 15 * 1024 * 1024);
-    } catch (error) { return json(res, 400, { error: error.message }); }
-    try {
-      const result = await attachImageToProduct({
-        productId: body.productId,
-        imageUrl: body.imageUrl,
-        asMainImage: Boolean(body.asMainImage),
-        addToGallery: body.addToGallery !== false,
-        serverDb
-      });
-      return json(res, 200, result);
-    } catch (error) {
-      return json(res, Number(error.status) || 400, { error: error.message });
-    }
+  if (pathname === '/api/ai/studio/attach' || pathname === '/api/uploads/product-image') {
+    return json(res, 410, { error:'ذخیرهٔ تصاویر فقط از مسیر Supabase Storage و repositoryهای متصل به پایگاه داده انجام می‌شود.' });
   }
   if (pathname === '/api/ai/product-photo') {
     if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
@@ -354,23 +293,6 @@ const server = http.createServer(async (req, res) => {
       });
     }
   }
-  if (pathname === '/api/uploads/product-image') {
-    if (req.method !== 'POST') return json(res, 405, { error:'روش درخواست مجاز نیست.' });
-    if (!requireSameOrigin(req, res)) return;
-    try { await requireAdminRequest(req); } catch (error) { return json(res, Number(error.status) || 503, { error:error.message }); }
-    let body, data;
-    try { body = await readBody(req, 3 * 1024 * 1024); data = parseJpegDataUrl(body.image, 2 * 1024 * 1024); }
-    catch (error) { return json(res, Number(error.status) || 400, { error:error.message || 'عکس معتبر نیست.' }); }
-    if (!useQuota(productImageSaveTimes, 40, 60 * 60 * 1000)) return json(res, 429, { error:'سقف ذخیرهٔ فایل تصویری در ساعت پر شده است.' });
-    try {
-      const dir = path.join(root, 'uploads', 'products');
-      await fs.promises.mkdir(dir, { recursive:true });
-      const filename = `ai-${Date.now()}-${crypto.randomBytes(5).toString('hex')}.jpg`;
-      await fs.promises.writeFile(path.join(dir, filename), data, { flag:'wx', mode:0o644 });
-      return json(res, 201, { url:`/uploads/products/${filename}`, bytes:data.length });
-    } catch (error) { return json(res, 500, { error:error.message || 'ذخیره فایل انجام نشد.' }); }
-  }
-
   let file = path.join(root, pathname.replace(/^\/+/, ''));
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
     const builtAsset = path.join(root, 'public', pathname.replace(/^\/+/, ''));

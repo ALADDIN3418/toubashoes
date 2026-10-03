@@ -2,7 +2,21 @@
 (function (g) {
   'use strict';
   const auth = g.ToubaAuth;
-  if (!auth?.configured) return;
+  if (!auth?.configured || !auth?.client) {
+    g.__TOUBA_DATABASE_READY = false;
+    g.render = function () {
+      const configured = Boolean(auth?.configured);
+      const detail = configured
+        ? 'تنظیم Supabase ناقص است یا کتابخانهٔ امن بارگذاری نشده. SUPABASE_URL، کلید عمومی و فایل SDK را بررسی کنید.'
+        : 'برای نمایش کاتالوگ و استفاده از فروشگاه، اتصال امن Supabase را در محیط سرور تنظیم کنید. دادهٔ نمایشی و LocalStorage به‌عنوان جایگزین استفاده نمی‌شوند.';
+      const app = g.document?.querySelector?.('#app');
+      if (g.document?.body?.classList) { g.document.body.classList.remove('storefront-mode','admin-body','has-commerce-sticky'); }
+      if (app) app.innerHTML = `<main class="page container"><section class="auth-card" role="status" style="max-width:680px;text-align:center;margin:48px auto"><div style="font-size:34px;color:#b45309">◈</div><h1>اتصال پایگاه داده آماده نیست</h1><p class="muted">${detail}</p><div class="notice" style="text-align:right"><b>راه‌اندازی لازم</b><br>۱. SUPABASE_URL و SUPABASE_PUBLISHABLE_KEY را در سرور تنظیم کنید.<br>۲. migrationهای Supabase را روی پروژهٔ واقعی اجرا و وضعیت موفق آن‌ها را تأیید کنید.<br>۳. برای APIهای امن پرداخت، کلید service role را فقط در سرور نگه دارید.</div><button class="btn" type="button" onclick="location.reload()">بررسی دوباره</button></section></main>`;
+    };
+    g.login = g.loginUser = g.demoLogin = g.adminLogin = g.logout = function () { g.toast('ورود تا آماده‌شدن اتصال پایگاه داده در دسترس نیست.'); };
+    g.render();
+    return;
+  }
 
   const old = {
     login: g.login,
@@ -156,6 +170,7 @@
     categories: 'دسته‌بندی‌های کالا',
     coupons: 'کدهای تخفیف و پروموشن',
     customers: 'لیست مشتریان و کاربران',
+    'contact-messages': 'پیام‌های پشتیبانی',
     reviews: 'نظرات و دیدگاه‌های خریداران',
     homepage: 'چیدمان صفحه اصلی',
     banners: 'بنرها و اسلایدرها',
@@ -194,6 +209,7 @@
       icon: '👥',
       items: [
         { key: 'customers', label: 'لیست مشتریان و کاربران', icon: '♙' },
+        { key: 'contact-messages', label: 'پیام‌های پشتیبانی', icon: '✉' },
         { key: 'coupons', label: 'کدهای تخفیف و پروموشن', icon: '٪' },
         { key: 'reviews', label: 'نظرات و دیدگاه‌های خریداران', icon: '☆' }
       ]
@@ -237,198 +253,240 @@
   function adminTable(headers, rows) {
     return `<div class="table-wrap"><table id="admin-table" class="data-table"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
+  function orderStatusControl(order) {
+    if(order.paymentStatus!=='PAID')return `<span class="muted">${order.paymentStatus==='PENDING'?'در انتظار پرداخت':'پرداخت نهایی نشده'}</span>`;
+    const steps=['تأیید شده','در حال آماده‌سازی','ارسال شده','تحویل داده شده'];
+    const currentIndex=order.status==='CONFIRMED'?0:Math.max(0,steps.indexOf(order.status));
+    const available=steps.slice(currentIndex);
+    return `<select class="select" aria-label="وضعیت سفارش ${esc(order.number||order.id)}" onchange="orderStatus('${esc(order.id)}',this.value)">${available.map(status=>`<option value="${status}" ${status===order.status?'selected':''}>${status}</option>`).join('')}</select>`;
+  }
 
-  g.deleteProduct = function (id) {
+  async function refreshAdminData(section) {
+    await g.DataProvider.refresh('toubashop-v1', getDb());
+    await loadAdminSection(section);
+  }
+  async function refreshDatabase() {
+    try {
+      await g.DataProvider.refresh('toubashop-v1', getDb());
+      g.toast('داده‌ها با موفقیت از پایگاه داده دوباره دریافت شدند.');
+      await loadAdminSection('demo');
+    } catch (error) { showActionError(error, 'به‌روزرسانی پایگاه داده انجام نشد.'); }
+  }
+  function showActionError(error, fallback) {
+    g.toast(error?.message || fallback || 'ذخیرهٔ تغییر در پایگاه داده انجام نشد.');
+  }
+
+  g.deleteProduct = async function (id) {
     if (!confirm('آیا از حذف این محصول اطمینان دارید؟')) return;
-    const database = getDb();
-    if (database && database.products) {
-      database.products = database.products.filter(p => p.id !== id);
-      g.save();
-      g.toast('محصول با موفقیت حذف شد');
-      loadAdminSection('products');
-    }
+    try { await g.StoreServices.products.remove(id); await refreshAdminData('products'); g.toast('محصول از پایگاه داده حذف شد.'); }
+    catch (error) { showActionError(error, 'حذف محصول انجام نشد.'); }
   };
 
-  g.deleteCategory = function (id) {
+  g.deleteCategory = async function (id) {
     if (!confirm('آیا از حذف این دسته‌بندی اطمینان دارید؟')) return;
-    const database = getDb();
-    if (database && database.categories) {
-      database.categories = database.categories.filter(c => c.id !== id);
-      g.save();
-      g.toast('دسته‌بندی با موفقیت حذف شد');
-      loadAdminSection('categories');
-    }
+    try { await g.DataRepositories.categories.delete(id); await refreshAdminData('categories'); g.toast('دسته‌بندی از پایگاه داده حذف شد.'); }
+    catch (error) { showActionError(error, 'حذف دسته‌بندی انجام نشد. اگر محصولی به آن متصل است، ابتدا آن را جابه‌جا کنید.'); }
   };
 
-  g.deleteCoupon = function (code) {
+  g.deleteCoupon = async function (code) {
     if (!confirm('آیا از حذف این کوپن تخفیف اطمینان دارید؟')) return;
-    const database = getDb();
-    if (database && database.coupons) {
-      database.coupons = database.coupons.filter(c => c.code !== code);
-      g.save();
-      g.toast('کوپن تخفیف با موفقیت حذف شد');
-      loadAdminSection('coupons');
-    }
+    try {
+      const coupon=getDb()?.coupons?.find(row=>row.code===code||row.id===code);
+      if(!coupon)throw new Error('کوپن پیدا نشد.');
+      await g.DataRepositories.coupons.delete(coupon.id);
+      await refreshAdminData('coupons');
+      g.toast('کوپن از پایگاه داده حذف شد.');
+    } catch (error) { showActionError(error, 'حذف کوپن انجام نشد.'); }
   };
 
-  g.couponModal = function () {
+  g.couponModal = function (code = '') {
+    const coupon=getDb()?.coupons?.find(row=>row.code===code||row.id===code)||{code:'',type:'درصدی',amount:'',min:0,start:'',end:'',limit:50,active:true};
+    const isoDate=value=>{const date=new Date(value||'');return Number.isNaN(date.getTime())?'':date.toISOString().slice(0,10)};
     g.showModal(`
-      <form onsubmit="event.preventDefault();saveNewCoupon(this)">
-        <h3>افزودن کوپن تخفیف جدید</h3>
+      <form onsubmit="event.preventDefault();saveNewCoupon(this,'${esc(coupon.code)}')">
+        <h3>${coupon.id?'ویرایش':'افزودن'} کوپن تخفیف</h3>
         <div class="form-grid">
-          <div class="field"><label>کد تخفیف (لاتین) *</label><input name="code" required style="text-transform:uppercase" placeholder="مثلاً YALDA25"></div>
-          <div class="field"><label>نوع تخفیف</label><select name="type"><option value="درصدی">درصدی (٪)</option><option value="مبلغ ثابت">مبلغ ثابت (تومان)</option></select></div>
-          <div class="field"><label>مقدار تخفیف *</label><input type="number" name="amount" min="1" required placeholder="مثلاً 20 یا 50000"></div>
-          <div class="field"><label>حداقل سفارش (تومان)</label><input type="number" name="min" value="0"></div>
-          <div class="field"><label><input type="checkbox" name="active" checked> فعال</label></div>
+          <div class="field"><label>کد تخفیف *</label><input name="code" required maxlength="64" style="text-transform:uppercase" value="${esc(coupon.code)}" ${coupon.id?'readonly':''}></div>
+          <div class="field"><label>نوع تخفیف</label><select name="type"><option value="درصدی" ${coupon.type==='درصدی'?'selected':''}>درصدی (٪)</option><option value="مبلغ ثابت" ${coupon.type==='مبلغ ثابت'?'selected':''}>مبلغ ثابت (تومان)</option></select></div>
+          <div class="field"><label>مقدار تخفیف *</label><input type="number" name="amount" min="1" required value="${esc(coupon.amount)}"></div>
+          <div class="field"><label>حداقل سفارش (تومان)</label><input type="number" name="min" min="0" value="${Number(coupon.min)||0}"></div>
+          <div class="field"><label>شروع اعتبار</label><input type="date" name="start" value="${isoDate(coupon.start)}"></div>
+          <div class="field"><label>پایان اعتبار</label><input type="date" name="end" value="${isoDate(coupon.end)}"></div>
+          <div class="field"><label>حداکثر استفاده (خالی = بدون محدودیت)</label><input type="number" name="limit" min="0" value="${Number(coupon.limit)||0}"></div>
+          <div class="field"><label><input type="checkbox" name="active" ${coupon.active?'checked':''}> فعال</label></div>
           <div class="field full"><button class="btn">ذخیره کوپن</button></div>
         </div>
       </form>
     `);
   };
 
-  g.saveNewCoupon = function (form) {
-    const database = getDb();
-    const code = form.code.value.trim().toUpperCase();
-    if (!code) { g.toast('کد تخفیف الزامی است'); return; }
-    if (!database.coupons) database.coupons = [];
-    if (database.coupons.some(c => c.code.toUpperCase() === code)) {
-      g.toast('این کد تخفیف قبلاً تعریف شده است'); return;
-    }
-    const newCoupon = {
-      id: `c_${Date.now().toString(36)}`,
-      code,
-      type: form.type.value,
-      amount: Number(form.amount.value) || 0,
-      min: Number(form.min.value) || 0,
-      active: form.active.checked,
-      used: 0
-    };
-    database.coupons.push(newCoupon);
-    g.save();
-    g.closeModal();
-    g.toast('کوپن تخفیف با موفقیت ذخیره شد');
-    loadAdminSection('coupons');
-  };
-
-  g.updateReviewStatus = function (id, status) {
-    const database = getDb();
-    const rev = database?.reviews?.find(r => r.id === id);
-    if (rev) {
-      rev.status = status;
-      g.save();
-      g.toast(`دیدگاه به وضعیت «${status}» تغییر یافت`);
-      loadAdminSection('reviews');
-    }
-  };
-
-  g.deleteReview = function (id) {
-    if (!confirm('آیا از حذف این نظر اطمینان دارید؟')) return;
-    const database = getDb();
-    if (database && database.reviews) {
-      database.reviews = database.reviews.filter(r => r.id !== id);
-      g.save();
-      g.toast('دیدگاه حذف شد');
-      loadAdminSection('reviews');
-    }
-  };
-
-  g.toggleBanner = function (id) {
-    const database = getDb();
-    const ban = database?.banners?.find(b => b.id === id);
-    if (ban) {
-      ban.active = !ban.active;
-      g.save();
-      g.toast(ban.active ? 'بنر فعال شد' : 'بنر غیرفعال شد');
-      loadAdminSection('banners');
-    }
-  };
-
-  g.saveHomepageCMS = function () {
-    const database = getDb();
-    if (database && database.settings) {
-      database.settings.homepage = database.settings.homepage || {};
-      database.settings.homepage.heroTitle = document.getElementById('cms-h-title')?.value || '';
-      database.settings.homepage.heroText = document.getElementById('cms-h-text')?.value || '';
-      database.settings.homepage.heroButtonText = document.getElementById('cms-h-btn')?.value || '';
-      database.settings.homepage.heroButtonUrl = document.getElementById('cms-h-url')?.value || '';
-      database.settings.homepage.heroImage = document.getElementById('cms-h-img')?.value || '';
-      database.settings.homepage.footerText = document.getElementById('cms-h-foot')?.value || '';
-      if (typeof g.save === 'function') g.save();
-      if (typeof g.toast === 'function') g.toast('محتوای صفحه اصلی ذخیره شد');
-    }
-  };
-
-  g.saveStoreSettings = function () {
-    const database = getDb();
-    if (database && database.settings) {
-      database.settings.storeName = document.getElementById('adm-set-name')?.value || '';
-      database.settings.phone = document.getElementById('adm-set-phone')?.value || '';
-      database.settings.address = document.getElementById('adm-set-address')?.value || '';
-      database.settings.shipping = Number(document.getElementById('adm-set-shipping')?.value) || 0;
-      database.settings.freeShipping = Number(document.getElementById('adm-set-free')?.value) || 0;
-      if (typeof g.save === 'function') g.save();
-      if (typeof g.toast === 'function') g.toast('تنظیمات ذخیره شد');
-    }
-  };
-
-  g.checkZarinpalStatus = async function () {
-    if (typeof g.toast === 'function') g.toast('در حال بررسی تنظیمات سروری زرین‌پال…');
+  g.saveNewCoupon = async function (form, code = '') {
+    const data=new FormData(form),database=getDb();
+    const normalizedCode=String(data.get('code')||'').trim().toUpperCase();
+    if(!/^[A-Z0-9_-]{3,64}$/.test(normalizedCode)){g.toast('کد تخفیف باید ۳ تا ۶۴ نویسهٔ لاتین، عدد، خط تیره یا زیرخط باشد.');return;}
+    const existing=database?.coupons?.find(row=>row.code===code||row.id===code||row.code===normalizedCode);
+    const record={id:existing?.id,code:normalizedCode,type:String(data.get('type')||'درصدی'),amount:Number(data.get('amount')),min:Number(data.get('min'))||0,start:String(data.get('start')||''),end:String(data.get('end')||''),limit:Number(data.get('limit'))||0,used:Number(existing?.used)||0,active:form.elements.active.checked};
     try {
-      const response = await fetch('/api/payment/zarinpal/status', { cache:'no-store' });
-      const data = await response.json();
-      if (data?.configured && data.paymentEnabled) {
-        const mode = data.mode === 'production' ? 'عملیاتی' : 'Sandbox';
-        if (typeof g.toast === 'function') g.toast(`درگاه زرین‌پال در حالت ${mode} آماده است.`);
-      } else if (data?.configured) {
-        if (typeof g.toast === 'function') g.toast('تنظیمات ثبت شده‌اند، اما دریافت وجه واقعی تا اتصال سفارش و موجودی به بک‌اند پایدار غیرفعال است.');
-      } else if (typeof g.toast === 'function') {
-        g.toast('شناسهٔ پذیرنده یا کلید امضای سرور تنظیم نشده است. متغیرهای محیطی Vercel را بررسی کنید.');
-      }
-      return data;
-    } catch {
-      if (typeof g.toast === 'function') g.toast('وضعیت زرین‌پال دریافت نشد؛ اتصال API سایت را بررسی کنید.');
-      return null;
-    }
+      if(existing)await g.DataRepositories.coupons.update(existing.id,record);
+      else await g.DataRepositories.coupons.create(record);
+      g.closeModal();await refreshAdminData('coupons');g.toast('کوپن در پایگاه داده ذخیره شد.');
+    } catch(error) { showActionError(error,'ذخیرهٔ کوپن انجام نشد.'); }
   };
 
-  g.mediaAddModal = function () {
+  async function updateContactMessageStatus(id, status, control) {
+    const allowed = new Set(['new', 'read', 'resolved']);
+    const previous = String(control?.dataset?.previousStatus || control?.value || 'new');
+    if (!id || !allowed.has(status)) {
+      if (control && allowed.has(previous)) control.value = previous;
+      g.toast('وضعیت انتخاب‌شده برای پیام پشتیبانی معتبر نیست.');
+      return false;
+    }
+    if (control) control.disabled = true;
+    try {
+      await g.DataRepositories.contactMessages.update(id, { status });
+      if (control) control.dataset.previousStatus = status;
+      await loadAdminSection('contact-messages');
+      g.toast(status === 'resolved' ? 'پیام به‌عنوان رسیدگی‌شده ثبت شد.' : status === 'read' ? 'وضعیت پیام به «در حال پیگیری» تغییر کرد.' : 'وضعیت پیام به «جدید» تغییر کرد.');
+      return true;
+    } catch (error) {
+      if (control && allowed.has(previous)) control.value = previous;
+      showActionError(error, 'به‌روزرسانی وضعیت پیام پشتیبانی انجام نشد.');
+      return false;
+    } finally {
+      if (control) control.disabled = false;
+    }
+  }
+
+  g.updateReviewStatus = async function (id, status) {
+    try { await g.StoreServices.reviews.moderate(id,status); await refreshAdminData('reviews'); g.toast(`وضعیت دیدگاه به «${status}» تغییر کرد.`); }
+    catch(error) { showActionError(error,'تغییر وضعیت دیدگاه انجام نشد.'); }
+  };
+
+  g.deleteReview = async function (id) {
+    if (!confirm('آیا از حذف این نظر اطمینان دارید؟')) return;
+    try { await g.StoreServices.reviews.remove(id); await refreshAdminData('reviews'); g.toast('دیدگاه از پایگاه داده حذف شد.'); }
+    catch(error) { showActionError(error,'حذف دیدگاه انجام نشد.'); }
+  };
+
+  g.toggleBanner = async function (id) {
+    const banner=getDb()?.banners?.find(row=>row.id===id);
+    if(!banner)return;
+    try { await g.DataRepositories.banners.update(id,{active:!banner.active}); await refreshAdminData('banners'); g.toast(banner.active?'بنر غیرفعال شد.':'بنر فعال شد.'); }
+    catch(error) { showActionError(error,'تغییر وضعیت بنر انجام نشد.'); }
+  };
+
+  g.bannerModal = function (id = '') {
+    const database=getDb(),banner=database?.banners?.find(row=>String(row.id)===String(id))||{
+      title:'',subtitle:'',imageUrl:'',linkUrl:'/shop',buttonText:'مشاهده کالکشن',position:'home-promo',
+      sortOrder:(database?.banners?.length||0),active:true
+    };
+    const editing=Boolean(id);
     g.showModal(`
-      <form onsubmit="event.preventDefault();saveNewMedia(this)">
-        <h3>افزودن تصویر جدید به کتابخانه</h3>
-        <div class="field"><label>آدرس اینترنتی یا مسیر محلی تصویر *</label><input name="url" required placeholder="/hero-shoe.jpg یا https://..." dir="ltr"></div>
-        <div class="field"><label>عنوان یا متن جایگزین تصویر</label><input name="alt" placeholder="مثلاً کفش چرم طبیعی طوبی"></div>
-        <button class="btn" style="margin-top:14px">ذخیره تصویر</button>
+      <form onsubmit="event.preventDefault();saveBanner(this,'${esc(id)}')">
+        <h3>${editing?'ویرایش بنر':'افزودن بنر'}</h3>
+        <div class="form-grid">
+          <div class="field full"><label>عنوان *</label><input name="title" required maxlength="200" value="${esc(banner.title)}"></div>
+          <div class="field full"><label>توضیحات</label><textarea name="subtitle" maxlength="2000">${esc(banner.subtitle||'')}</textarea></div>
+          <div class="field full"><label>آدرس تصویر *</label><input name="imageUrl" required maxlength="2048" dir="ltr" value="${esc(banner.imageUrl||'')}" placeholder="/touba-hero-editorial.jpg یا https://…"><small class="muted">مسیر محلی سایت یا URL امن HTTPS؛ آپلود فایل در فیلد بعدی، تصویر را در Supabase Storage نگه می‌دارد.</small></div>
+          <div class="field full"><label>آپلود تصویر (JPEG، PNG یا WebP؛ حداکثر ۵ مگابایت)</label><input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp"></div>
+          <div class="field"><label>متن دکمه</label><input name="buttonText" maxlength="100" value="${esc(banner.buttonText||'')}"></div>
+          <div class="field"><label>لینک مقصد</label><input name="linkUrl" maxlength="2048" dir="ltr" value="${esc(banner.linkUrl||'/shop')}" placeholder="/shop"></div>
+          <div class="field"><label>جایگاه نمایش</label><select name="position"><option value="home-promo" ${banner.position==='home-promo'?'selected':''}>بنر کالکشن صفحهٔ اصلی</option></select></div>
+          <div class="field"><label>ترتیب نمایش</label><input name="sortOrder" type="number" min="0" step="1" value="${Number(banner.sortOrder)||0}"></div>
+          <div class="field"><label><input type="checkbox" name="active" ${banner.active?'checked':''}> فعال</label></div>
+          <div class="field full"><button class="btn">ذخیره بنر در پایگاه داده</button></div>
+        </div>
       </form>
     `);
   };
 
-  g.saveNewMedia = function (form) {
-    const database = getDb();
-    const url = form.url.value.trim();
-    const alt = form.alt.value.trim() || 'تصویر محصول طوبی';
-    if (!url) return;
-    if (!database.media) database.media = [];
-    database.media.unshift({ id: 'm_' + Date.now().toString(36), url, alt });
-    if (typeof g.save === 'function') g.save();
-    if (typeof g.closeModal === 'function') g.closeModal();
-    if (typeof g.toast === 'function') g.toast('تصویر با موفقیت به کتابخانه اضافه شد');
-    loadAdminSection('media');
+  g.saveBanner = async function (form, id = '') {
+    const data=new FormData(form),title=String(data.get('title')||'').trim(),subtitle=String(data.get('subtitle')||'').trim();
+    if(!title||title.length>200){g.toast('عنوان بنر را وارد کنید (حداکثر ۲۰۰ نویسه).');return;}
+    let imageUrl=String(data.get('imageUrl')||'').trim(),file=form.elements.imageFile?.files?.[0];
+    try {
+      if(file){
+        if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('فقط تصویر JPEG، PNG یا WebP پذیرفته می‌شود.');
+        if(file.size<1||file.size>5*1024*1024)throw new Error('حجم تصویر باید کمتر از ۵ مگابایت باشد.');
+        imageUrl=await new Promise((resolve,reject)=>{const reader=new g.FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('خواندن فایل تصویر انجام نشد.'));reader.readAsDataURL(file);});
+      }
+      if(imageUrl.startsWith('data:image/'))imageUrl=(await g.DataRepositories.media.create({url:imageUrl,alt:title})).url;
+      else imageUrl=g.SupabaseRepositories.safePublicUrl(imageUrl,{optional:false});
+      const rawLink=String(data.get('linkUrl')||'').trim(),linkUrl=g.SupabaseRepositories.safePublicUrl(rawLink)||'';
+      const sortOrder=Number(data.get('sortOrder')||0);
+      if(!Number.isInteger(sortOrder)||sortOrder<0)throw new Error('ترتیب نمایش باید یک عدد صحیح مثبت یا صفر باشد.');
+      const banner={title,subtitle,imageUrl,linkUrl,buttonText:String(data.get('buttonText')||'').trim(),position:'home-promo',sortOrder,active:form.elements.active.checked};
+      if(id)await g.DataRepositories.banners.update(id,banner);else await g.DataRepositories.banners.create(banner);
+      g.closeModal();await refreshAdminData('banners');g.toast(id?'بنر در پایگاه داده به‌روزرسانی شد.':'بنر در پایگاه داده ایجاد شد.');
+    } catch(error) { showActionError(error,'ذخیرهٔ بنر انجام نشد.'); }
   };
 
-  g.deleteMediaItem = function (id) {
-    if (!confirm('آیا از حذف این تصویر از کتابخانه مطمئن هستید؟')) return;
-    const database = getDb();
-    if (database && database.media) {
-      if (typeof id === 'number' || (!isNaN(Number(id)) && String(Number(id)) === String(id))) {
-        database.media.splice(Number(id), 1);
-      } else {
-        database.media = database.media.filter(m => (typeof m === 'object' ? m.id !== id : m !== id));
-      }
-      if (typeof g.save === 'function') g.save();
-      if (typeof g.toast === 'function') g.toast('تصویر حذف شد');
-      loadAdminSection('media');
-    }
+  g.deleteBanner = async function (id) {
+    if(!confirm('آیا از حذف این بنر مطمئن هستید؟'))return;
+    try { await g.DataRepositories.banners.delete(id);await refreshAdminData('banners');g.toast('بنر از پایگاه داده حذف شد.'); }
+    catch(error) { showActionError(error,'حذف بنر انجام نشد.'); }
+  };
+
+  g.saveHomepageCMS = async function () {
+    const database=getDb(),homepage={...(database?.settings?.homepage||{})};
+    homepage.heroTitle=g.document.getElementById('cms-h-title')?.value.trim()||'';
+    homepage.heroText=g.document.getElementById('cms-h-text')?.value.trim()||'';
+    homepage.heroButtonText=g.document.getElementById('cms-h-btn')?.value.trim()||'';
+    homepage.heroButtonUrl=g.document.getElementById('cms-h-url')?.value.trim()||'/shop';
+    const rawHeroImage=g.document.getElementById('cms-h-img')?.value.trim()||'';
+    homepage.footerText=g.document.getElementById('cms-h-foot')?.value.trim()||'';
+    try {
+      homepage.heroImage=rawHeroImage.startsWith('data:image/')
+        ? (await g.DataRepositories.media.create({url:rawHeroImage,alt:'تصویر اصلی صفحهٔ فروشگاه'})).url
+        : (g.SupabaseRepositories.safePublicUrl(rawHeroImage)||'');
+      await g.DataRepositories.siteSettings.update('homepage',{value:homepage});
+      await refreshAdminData('homepage');
+      g.toast('محتوای صفحهٔ اصلی در پایگاه داده ذخیره شد.');
+    } catch(error) { showActionError(error,'ذخیرهٔ محتوای صفحهٔ اصلی انجام نشد.'); }
+  };
+
+  g.saveStoreSettings = async function () {
+    const database=getDb(),settings={
+      storeName:g.document.getElementById('adm-set-name')?.value.trim()||'',
+      phone:g.document.getElementById('adm-set-phone')?.value.trim()||'',
+      address:g.document.getElementById('adm-set-address')?.value.trim()||'',
+      shipping:Math.max(0,Number(g.document.getElementById('adm-set-shipping')?.value)||0),
+      freeShipping:Math.max(0,Number(g.document.getElementById('adm-set-free')?.value)||0),
+      metaDescription:g.document.getElementById('adm-set-meta')?.value.trim()||'',
+      about:g.document.getElementById('adm-set-about')?.value.trim()||''
+    };
+    settings.shippingOptions={...(database?.settings?.shippingOptions||{}),normal:settings.shipping,express:Math.max(0,Number(g.document.getElementById('adm-set-express')?.value)||0),freeFrom:settings.freeShipping};
+    try {
+      for(const [key,value] of Object.entries(settings))await g.DataRepositories.siteSettings.update(key,{value});
+      await refreshAdminData('settings');g.toast('تنظیمات فروشگاه در پایگاه داده ذخیره شد.');
+    } catch(error) { showActionError(error,'ذخیرهٔ تنظیمات فروشگاه کامل نشد.'); }
+  };
+
+  g.checkZarinpalStatus = async function () {
+    g.toast('در حال بررسی پیکربندی سرور و Supabase…');
+    try {
+      const response=await fetch('/api/payment/zarinpal/status',{cache:'no-store'}),data=await response.json();
+      if(data?.configured&&data.paymentEnabled)g.toast('درگاه زرین‌پال در حالت sandbox آمادهٔ آزمون است؛ Production هنوز غیرفعال است.');
+      else if(data?.configured)g.toast('پیکربندی سروری آماده است، اما دریافت وجه واقعی عمداً غیرفعال است.');
+      else g.toast('پیکربندی سروری Supabase یا زرین‌پال کامل نیست.');
+      return data;
+    } catch { g.toast('وضعیت زرین‌پال دریافت نشد؛ API سایت را بررسی کنید.');return null; }
+  };
+
+  g.mediaAddModal = function () {
+    g.showModal(`<form onsubmit="event.preventDefault();saveNewMedia(this)"><h3>افزودن تصویر به کتابخانهٔ پایگاه داده</h3><div class="field"><label>URL تصویر *</label><input name="url" type="url" required placeholder="https://..." dir="ltr"></div><div class="field"><label>متن جایگزین تصویر</label><input name="alt" maxlength="500"></div><button class="btn" style="margin-top:14px">ذخیره در کتابخانه</button></form>`);
+  };
+
+  g.saveNewMedia = async function (form) {
+    const data=new FormData(form),url=String(data.get('url')||'').trim(),alt=String(data.get('alt')||'').trim()||'تصویر محصول طوبی';
+    try { await g.DataRepositories.media.create({url,alt});g.closeModal();await refreshAdminData('media');g.toast('رسانه در پایگاه داده ذخیره شد.'); }
+    catch(error) { showActionError(error,'ذخیرهٔ رسانه انجام نشد.'); }
+  };
+
+  g.deleteMediaItem = async function (id) {
+    if(!confirm('آیا از حذف این تصویر از کتابخانه مطمئن هستید؟'))return;
+    try { await g.DataRepositories.media.delete(id);await refreshAdminData('media');g.toast('رسانه از پایگاه داده حذف شد.'); }
+    catch(error) { showActionError(error,'حذف رسانه انجام نشد.'); }
   };
 
   function selectAllCatalogRows(kind, checked) {
@@ -443,9 +501,8 @@
   }
 
   async function saveBulkRows(rows, repository) {
-    if (repository?.update) {
-      for (const row of rows) await repository.update(row.id, row);
-    } else if (typeof g.save === 'function') g.save();
+    if (!repository?.update) throw new Error('مخزن پایگاه داده برای عملیات گروهی در دسترس نیست.');
+    for (const row of rows) await repository.update(row.id, row);
   }
 
   async function bulkApplyProducts() {
@@ -460,7 +517,7 @@
     const percent = rawPercent.trim() === '' ? null : Number(rawPercent);
     if (percent !== null && (!Number.isFinite(percent) || percent < -90 || percent > 500)) { g.toast('درصد تغییر قیمت باید بین ۹۰- تا ۵۰۰ باشد.'); return; }
     if (!category && !active && !featured && !bestSeller && percent === null) { g.toast('حداقل یک تغییر گروهی انتخاب کنید.'); return; }
-    const changed = (database?.products || []).filter(product => ids.has(String(product.id)));
+    const changed = (database?.products || []).filter(product => ids.has(String(product.id))).map(product => ({...product}));
     for (const product of changed) {
       if (category) product.category = category;
       if (active) product.active = active === 'true';
@@ -471,10 +528,10 @@
     }
     try {
       await saveBulkRows(changed, g.DataRepositories?.products);
-      if (typeof g.save === 'function') g.save();
+      await g.DataProvider.refresh('toubashop-v1',getDb());
       g.toast(`تغییرات ${changed.length.toLocaleString('fa-IR')} محصول ذخیره شد.`);
       await loadAdminSection('products');
-    } catch (error) { g.toast(error.message || 'ذخیرهٔ گروهی محصولات انجام نشد.'); }
+    } catch (error) { try{await g.DataProvider.refresh('toubashop-v1',getDb())}catch{};showActionError(error,'ذخیرهٔ گروهی محصولات انجام نشد.'); }
   }
 
   async function bulkApplyCategories() {
@@ -484,7 +541,7 @@
     const active = g.document.querySelector('#bulk-category-active')?.value || '';
     const icon = String(g.document.querySelector('#bulk-category-icon')?.value || '').trim().slice(0, 12);
     if (!active && !icon) { g.toast('برای اعمال گروهی، وضعیت یا آیکون را انتخاب کنید.'); return; }
-    const changed = (database?.categories || []).filter(category => ids.has(String(category.id)));
+    const changed = (database?.categories || []).filter(category => ids.has(String(category.id))).map(category=>({...category}));
     for (const category of changed) {
       if (active) category.active = active === 'true';
       if (icon) category.icon = icon;
@@ -492,10 +549,10 @@
     }
     try {
       await saveBulkRows(changed, g.DataRepositories?.categories);
-      if (typeof g.save === 'function') g.save();
+      await g.DataProvider.refresh('toubashop-v1',getDb());
       g.toast(`تغییرات ${changed.length.toLocaleString('fa-IR')} دسته‌بندی ذخیره شد.`);
       await loadAdminSection('categories');
-    } catch (error) { g.toast(error.message || 'ذخیرهٔ گروهی دسته‌بندی‌ها انجام نشد.'); }
+    } catch (error) { try{await g.DataProvider.refresh('toubashop-v1',getDb())}catch{};showActionError(error,'ذخیرهٔ گروهی دسته‌بندی‌ها انجام نشد.'); }
   }
 
   async function loadAdminSection(section) {
@@ -507,31 +564,47 @@
       if (section === 'dashboard') {
         const prods = (database && database.products) || [];
         const ords = (database && database.orders) || [];
-        const totalSales = ords.reduce((n, o) => n + Number(o.total || 0), 0);
+        const paidOrders = ords.filter(order => order.paymentStatus === 'PAID');
+        const totalSales = paidOrders.reduce((n, order) => n + Number(order.total || 0), 0);
         const custs = (database && (database.customers || database.users)) || [];
+        const activeCustomers = custs.filter(customer => String(customer.role || 'customer').toLowerCase() === 'customer' && (customer.active === true || customer.isActive === true)).length;
+        const now = new Date();
+        const months = Array.from({length:6}, (_, index) => {
+          const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
+          return { year:date.getFullYear(), month:date.getMonth(), label:new Intl.DateTimeFormat('fa-IR',{month:'short'}).format(date), total:0 };
+        });
+        const monthByKey = new Map(months.map(month => [`${month.year}-${month.month}`, month]));
+        for (const order of paidOrders) {
+          const date = new Date(order.createdAt || '');
+          if (Number.isNaN(date.getTime())) continue;
+          const month = monthByKey.get(`${date.getFullYear()}-${date.getMonth()}`);
+          if (month) month.total += Number(order.total || 0);
+        }
+        const maxMonthSales = Math.max(0, ...months.map(month => month.total));
+        const monthBars = months.map(month => {
+          const height = maxMonthSales ? Math.max(4, Math.round(month.total * 100 / maxMonthSales)) : 0;
+          return `<div class="bar" style="height:${height}%" data-label="${esc(month.label)}" title="${esc(month.label)}: ${toman(month.total)}"></div>`;
+        }).join('');
+        const orderLabels = { pending_payment:'در انتظار پرداخت', NEW:'در انتظار پرداخت', paid:'پرداخت‌شده', CONFIRMED:'پرداخت‌شده', processing:'در حال آماده‌سازی', PROCESSING:'در حال آماده‌سازی', shipped:'ارسال‌شده', SHIPPED:'ارسال‌شده', delivered:'تحویل‌شده', DELIVERED:'تحویل‌شده', cancelled:'لغوشده', CANCELLED:'لغوشده', refunded:'بازپرداخت‌شده', REFUNDED:'بازپرداخت‌شده' };
         target.innerHTML = `
         <div class="stats" style="margin-bottom:20px">
-          <div class="stat-card"><span>تعداد کل محصولات</span><b>${prods.length.toLocaleString('fa-IR')}</b><i>👟</i></div>
-          <div class="stat-card"><span>سفارش‌های ثبت‌شده</span><b>${ords.length.toLocaleString('fa-IR')}</b><i>📦</i></div>
-          <div class="stat-card"><span>مجموع درآمد (تومان)</span><b>${toman(totalSales)}</b><i>💳</i></div>
-          <div class="stat-card"><span>مشتریان فعال</span><b>${custs.length.toLocaleString('fa-IR')}</b><i>👥</i></div>
+          <div class="stat-card"><span>محصولات پایگاه داده</span><b>${prods.length.toLocaleString('fa-IR')}</b><i>👟</i></div>
+          <div class="stat-card"><span>سفارش‌های پایگاه داده</span><b>${ords.length.toLocaleString('fa-IR')}</b><i>📦</i></div>
+          <div class="stat-card"><span>درآمد پرداخت‌شده (تومان)</span><b>${toman(totalSales)}</b><i>💳</i></div>
+          <div class="stat-card"><span>مشتریان فعال</span><b>${activeCustomers.toLocaleString('fa-IR')}</b><i>👥</i></div>
         </div>
         <div class="chart-card">
-          <h3 style="margin-top:0">نمودار فروش دوره‌ای</h3>
-          <div class="chart">
-            <div class="bar" style="height:65%" data-label="فروردین"></div>
-            <div class="bar" style="height:80%" data-label="اردیبهشت"></div>
-            <div class="bar" style="height:45%" data-label="خرداد"></div>
-            <div class="bar" style="height:90%" data-label="تیر"></div>
-            <div class="bar" style="height:70%" data-label="مرداد"></div>
-            <div class="bar" style="height:100%" data-label="شهریور"></div>
-          </div>
+          <h3 style="margin-top:0">درآمد پرداخت‌شده در شش ماه اخیر</h3>
+          ${paidOrders.length ? `<div class="chart" role="img" aria-label="نمودار درآمد سفارش‌های پرداخت‌شده">${monthBars}</div>` : '<p class="muted">هنوز پرداخت تأییدشده‌ای برای نمایش در نمودار ثبت نشده است.</p>'}
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin:24px 0 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:24px 0 10px;gap:10px;flex-wrap:wrap">
           <h3 style="margin:0">آخرین سفارش‌ها</h3>
           <button type="button" class="btn outline small" onclick="ToubaAuthUI.switchAdminSection('orders')">مشاهده همه سفارش‌ها ←</button>
         </div>
-        ` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ', 'وضعیت', 'تاریخ'], ords.slice(0, 6).map(o => `<tr><td><b>${esc(o.number || o.id)}</b></td><td>${esc(o.customer)}</td><td>${toman(o.total)}</td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td>${esc(o.date || '—')}</td></tr>`).join(''));
+        ` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ', 'وضعیت', 'تاریخ'], ords.slice(0, 6).map(order => {
+          const status = orderLabels[order.status] || order.status || '—';
+          return `<tr><td><b>${esc(order.number || order.id)}</b></td><td>${esc(order.customer)}</td><td>${toman(order.total)}</td><td><span class="badge ${order.status === 'لغو شده' || order.status === 'CANCELLED' ? 'red' : 'green'}">${esc(status)}</span></td><td>${esc(order.date || '—')}</td></tr>`;
+        }).join(''));
         return;
       }
 
@@ -564,7 +637,7 @@
           </div>
         </section>`;
         target.innerHTML = `<div class="admin-catalog-toolbar">
-          <div><h2 style="font-size:18px;margin:0">کاتالوگ محصولات (${prods.length})</h2><p class="muted" style="margin:4px 0 0">برای تغییر چند محصول، موارد را انتخاب کنید؛ عملیات گروهی محصولی را حذف نمی‌کند.</p><p class="notice" style="margin:6px 0 0">کاتالوگ فعلی از db و Mock Repository می‌آید؛ در Vercel تغییرها فقط در LocalStorage همین مرورگر می‌مانند و به Supabase همگام نیستند.</p></div>
+          <div><h2 style="font-size:18px;margin:0">کاتالوگ محصولات (${prods.length})</h2><p class="muted" style="margin:4px 0 0">برای تغییر چند محصول، موارد را انتخاب کنید؛ عملیات گروهی محصولی را حذف نمی‌کند.</p><p class="notice" style="margin:6px 0 0">کاتالوگ از Supabase خوانده می‌شود و ذخیره‌سازی هر تغییر پس از تأیید پایگاه داده انجام می‌شود.</p></div>
           <div class="admin-catalog-actions"><button class="btn small" onclick="quickProductModal()">＋ افزودن سریع محصول</button><button class="btn outline small" onclick="productModal()">فرم کامل محصول</button></div>
         </div>${toolbar}<div class="shop-toolbar"><input class="select" style="max-width:300px" placeholder="جستجوی نام، SKU یا برند" oninput="filterAdminTable(this.value)"><span>${prods.length.toLocaleString('fa-IR')} محصول · ${(database?.products||[]).filter(p=>p.active).length.toLocaleString('fa-IR')} فعال</span></div>`
         + adminTable(['انتخاب','نام محصول','SKU','دسته‌بندی','قیمت (تومان)','موجودی','وضعیت','عملیات'], prods.map(p => `<tr data-search="${esc(`${p.name||''} ${p.sku||''} ${p.brand||''}`.toLocaleLowerCase())}"><td><input type="checkbox" data-bulk-product value="${esc(p.id)}" aria-label="انتخاب ${esc(p.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('product')"></td><td><b>${esc(p.name)}</b></td><td><code>${esc(p.sku || '—')}</code></td><td>${esc(catName(p.category))}</td><td>${toman(p.price)}</td><td>${(p.variants || []).reduce((n, v) => n + Number(v.stock || 0), Number(p.stock || 0)).toLocaleString('fa-IR')}</td><td><span class="badge ${p.active ? 'green' : 'red'}">${p.active ? 'فعال' : 'پیش‌نویس'}</span></td><td><button class="action" onclick="productModal('${esc(p.id)}')">ویرایش کامل</button> <button class="action danger" onclick="deleteProduct('${esc(p.id)}')">حذف</button></td></tr>`).join(''));
@@ -575,7 +648,7 @@
         target.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <h2 style="font-size:18px;margin:0">سفارش‌ها (${ords.length})</h2>
-        </div>` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ (تومان)', 'تاریخ', 'کد پیگیری', 'وضعیت', 'تغییر وضعیت'], ords.map(o => `<tr><td><b>${esc(o.number || o.id)}</b></td><td>${esc(o.customer)}<br><small style="color:#666">${esc(o.phone || '')}</small></td><td>${toman(o.total)}</td><td>${esc(o.date || '—')}</td><td><code>${esc(o.trackingCode || o.id)}</code></td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td><select class="select" onchange="orderStatus('${o.id}',this.value);ToubaAuthUI.loadAdminSection('orders');">${['جدید', 'تأیید شده', 'در حال آماده‌سازی', 'ارسال شده', 'تحویل داده شده', 'لغو شده'].map(s => `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td></tr>`).join(''));
+        </div>` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ (تومان)', 'تاریخ', 'کد پیگیری', 'وضعیت', 'تغییر وضعیت'], ords.map(o => `<tr><td><b>${esc(o.number || o.id)}</b></td><td>${esc(o.customer)}<br><small style="color:#666">${esc(o.phone || '')}</small></td><td>${toman(o.total)}</td><td>${esc(o.date || '—')}</td><td><code>${esc(o.trackingCode || o.id)}</code></td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td>${orderStatusControl(o)}</td></tr>`).join(''));
         return;
       }
 
@@ -585,7 +658,7 @@
           <div class="admin-bulk-heading"><div><b>ویرایش گروهی دسته‌بندی‌ها</b><span id="bulk-category-selected-count">۰ مورد انتخاب‌شده</span></div><label><input type="checkbox" onchange="ToubaAuthUI.selectAllCatalogRows('category',this.checked)"> انتخاب همه</label></div>
           <div class="admin-bulk-controls"><label>وضعیت<select id="bulk-category-active"><option value="">بدون تغییر</option><option value="true">فعال‌سازی</option><option value="false">غیرفعال‌سازی</option></select></label><label>آیکون مشترک (اختیاری)<input id="bulk-category-icon" maxlength="12" placeholder="مثلاً 👟"></label><button class="btn small" type="button" onclick="ToubaAuthUI.bulkApplyCategories()">اعمال به دسته‌های انتخاب‌شده</button></div>
         </section>`;
-        target.innerHTML = `<div class="admin-catalog-toolbar"><div><h2 style="font-size:18px;margin:0">دسته‌بندی‌های فروشگاه (${cats.length})</h2><p class="muted" style="margin:4px 0 0">دسته‌های موجود حفظ می‌شوند؛ می‌توانید چند مورد را هم‌زمان فعال/غیرفعال یا آیکون‌گذاری کنید.</p><p class="notice" style="margin:6px 0 0">این عملیات روی دادهٔ Demo در همین مرورگر ذخیره می‌شود؛ CRUD دسته‌بندی هنوز به جدول‌های Supabase وصل نیست.</p></div><button class="btn small" onclick="categoryModal()">＋ دسته‌بندی جدید</button></div>${bulk}`
+        target.innerHTML = `<div class="admin-catalog-toolbar"><div><h2 style="font-size:18px;margin:0">دسته‌بندی‌های فروشگاه (${cats.length})</h2><p class="muted" style="margin:4px 0 0">دسته‌های موجود حفظ می‌شوند؛ می‌توانید چند مورد را هم‌زمان فعال/غیرفعال یا آیکون‌گذاری کنید.</p><p class="notice" style="margin:6px 0 0">دسته‌بندی‌ها از جدول Supabase خوانده می‌شوند؛ تغییر وضعیت، افزودن و حذف فقط پس از موفقیت پایگاه داده اعمال می‌شود.</p></div><button class="btn small" onclick="categoryModal()">＋ دسته‌بندی جدید</button></div>${bulk}`
         + adminTable(['انتخاب','آیکون','نام دسته‌بندی','شناسه لاتین','محصولات','وضعیت','عملیات'], cats.map(c => `<tr><td><input type="checkbox" data-bulk-category value="${esc(c.id)}" aria-label="انتخاب دسته ${esc(c.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('category')"></td><td style="font-size:20px">${esc(c.icon || '◈')}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td>${(database?.products||[]).filter(p=>p.category===c.id).length.toLocaleString('fa-IR')}</td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="categoryModal('${esc(c.id)}')">ویرایش</button> <button class="action danger" onclick="deleteCategory('${esc(c.id)}')">حذف</button></td></tr>`).join(''));
         return;
       }
@@ -604,7 +677,15 @@
         target.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <h2 style="font-size:18px;margin:0">کاربران و مشتریان (${users.length})</h2>
-        </div>` + adminTable(['نام', 'ایمیل / شماره تماس', 'نقش', 'وضعیت'], users.map(u => `<tr><td><b>${esc(u.name || u.displayName || '—')}</b></td><td>${esc(u.email || u.phone || '—')}</td><td>${u.role === 'super_admin' ? 'مدیر ارشد' : u.role === 'admin' ? 'مدیر فروشگاه' : 'مشتری'}</td><td><span class="badge green">فعال</span></td></tr>`).join(''));
+        </div>` + adminTable(['نام', 'ایمیل / شماره تماس', 'نقش', 'وضعیت'], users.map(u => { const active=u.active===true||u.isActive===true;return `<tr><td><b>${esc(u.name || u.displayName || '—')}</b></td><td>${esc(u.email || u.phone || '—')}</td><td>${u.role === 'super_admin' ? 'مدیر ارشد' : u.role === 'admin' ? 'مدیر فروشگاه' : 'مشتری'}</td><td><span class="badge ${active?'green':'red'}">${active?'فعال':'غیرفعال'}</span></td></tr>`; }).join(''));
+        return;
+      }
+
+      if (section === 'contact-messages') {
+        const messages=await g.DataRepositories.contactMessages.list();
+        const labels={new:'جدید',read:'در حال پیگیری',resolved:'رسیدگی‌شده'};
+        target.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap"><div><h2 style="font-size:18px;margin:0">پیام‌های پشتیبانی (${messages.length})</h2><p class="muted">پیام‌ها مستقیماً در پایگاه داده ثبت می‌شوند و فقط مدیر فعال به آن‌ها دسترسی دارد.</p></div><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('contact-messages')">به‌روزرسانی</button></div>`+
+          adminTable(['فرستنده','شماره تماس','پیام','زمان ثبت','وضعیت'],messages.map(message=>`<tr><td><b>${esc(message.name)}</b></td><td><a href="tel:${esc(message.phone)}" dir="ltr">${esc(message.phone)}</a></td><td style="white-space:pre-wrap;min-width:220px;max-width:420px">${esc(message.message)}</td><td>${esc(new Intl.DateTimeFormat('fa-IR',{dateStyle:'medium',timeStyle:'short'}).format(new Date(message.createdAt)))}</td><td><select class="select" data-previous-status="${esc(message.status)}" aria-label="وضعیت پیام ${esc(message.name)}" onchange="ToubaAuthUI.updateContactMessageStatus('${esc(message.id)}',this.value,this)">${['new','read','resolved'].map(status=>`<option value="${status}" ${message.status===status?'selected':''}>${labels[status]}</option>`).join('')}</select></td></tr>`).join(''));
         return;
       }
 
@@ -613,16 +694,17 @@
         target.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <h2 style="font-size:18px;margin:0">دیدگاه‌های مشتریان (${revs.length})</h2>
-        </div>` + adminTable(['مشتری', 'محصول', 'امتیاز', 'متن دیدگاه', 'وضعیت', 'عملیات'], revs.map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.product || '—')}</td><td>${'★'.repeat(r.rating || 5)}</td><td style="max-width:240px">${esc(r.text)}</td><td><span class="badge ${r.status==='تأیید شده'?'green':r.status==='رد شده'?'red':''}">${esc(r.status)}</span></td><td><button class="action" onclick="updateReviewStatus('${r.id}','تأیید شده')">تأیید</button> <button class="action" onclick="updateReviewStatus('${r.id}','رد شده')">رد</button> <button class="action danger" onclick="deleteReview('${r.id}')">حذف</button></td></tr>`).join(''));
+        </div>` + adminTable(['مشتری', 'محصول', 'امتیاز', 'متن دیدگاه', 'وضعیت', 'عملیات'], revs.map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.product || '—')}</td><td aria-label="${Number(r.rating)||0} از ۵">${'★'.repeat(Number(r.rating)||0)}${'☆'.repeat(Math.max(0,5-(Number(r.rating)||0)))}</td><td style="max-width:240px">${esc(r.text)}</td><td><span class="badge ${r.status==='تأیید شده'?'green':r.status==='رد شده'?'red':''}">${esc(r.status)}</span></td><td><button class="action" onclick="updateReviewStatus('${r.id}','تأیید شده')">تأیید</button> <button class="action" onclick="updateReviewStatus('${r.id}','رد شده')">رد</button> <button class="action danger" onclick="deleteReview('${r.id}')">حذف</button></td></tr>`).join(''));
         return;
       }
 
       if (section === 'banners') {
         const bans = (database && database.banners) || [];
         target.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <h2 style="font-size:18px;margin:0">بنرهای تبلیغاتی (${bans.length})</h2>
-        </div>` + adminTable(['تصویر', 'عنوان', 'توضیحات', 'جایگاه', 'وضعیت', 'عملیات'], bans.map(b => `<tr><td><img src="${esc(b.imageUrl || '/hero-shoe.jpg')}" alt="" width="56" height="36" style="object-fit:cover;border-radius:4px" onerror="this.src='/product-shoes.jpg'"></td><td><b>${esc(b.title)}</b></td><td>${esc(b.subtitle || '—')}</td><td><code>${esc(b.position || 'home')}</code></td><td><span class="badge ${b.active ? 'green' : 'red'}">${b.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="toggleBanner('${b.id}')">${b.active ? 'غیرفعال کردن' : 'فعال کردن'}</button></td></tr>`).join(''));
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+          <div><h2 style="font-size:18px;margin:0">بنرهای تبلیغاتی (${bans.length.toLocaleString('fa-IR')})</h2><p class="muted" style="margin:5px 0 0">بنرها از پایگاه داده خوانده می‌شوند؛ تصویر را می‌توانید از Storage یا یک URL معتبر انتخاب کنید.</p></div>
+          <button class="btn small" type="button" onclick="ToubaAuthUI.bannerModal()">＋ بنر جدید</button>
+        </div>` + adminTable(['تصویر', 'عنوان', 'توضیحات', 'جایگاه', 'وضعیت', 'عملیات'], bans.map(b => `<tr><td><img src="${esc(b.imageUrl || '')}" alt="${esc(b.title)}" width="56" height="36" style="object-fit:cover;border-radius:4px" onerror="this.style.visibility='hidden'"></td><td><b>${esc(b.title)}</b></td><td>${esc(b.subtitle || '—')}</td><td><code>${esc(b.position || 'home-promo')}</code></td><td><span class="badge ${b.active ? 'green' : 'red'}">${b.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="ToubaAuthUI.bannerModal('${esc(b.id)}')">ویرایش</button> <button class="action" onclick="toggleBanner('${esc(b.id)}')">${b.active ? 'غیرفعال کردن' : 'فعال کردن'}</button> <button class="action danger" onclick="deleteBanner('${esc(b.id)}')">حذف</button></td></tr>`).join('') || '<tr><td colspan="6">بنری در پایگاه داده ثبت نشده است.</td></tr>');
         return;
       }
 
@@ -650,7 +732,7 @@
         try {
           const response = await fetch('/api/payment/zarinpal/status', { cache:'no-store' });
           if (response.ok) paymentStatus = { ...paymentStatus, ...(await response.json()) };
-        } catch { /* the server-side status can be unavailable in local/demo mode */ }
+        } catch { /* status API may be unavailable when server payment settings are absent */ }
         const callbackUrl = `${g.location?.origin || ''}${paymentStatus.callbackPath || '/api/payment/zarinpal/callback'}`;
         const modeLabel = paymentStatus.mode === 'production' ? 'عملیاتی' : 'Sandbox';
         const paymentEnabled = Boolean(paymentStatus.paymentEnabled);
@@ -675,11 +757,11 @@
               <li><code>ZARINPAL_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای state و رسید callback.</li>
               <li><code>ZARINPAL_MODE</code> — ابتدا <code>sandbox</code>؛ پس از فعال‌سازی پذیرنده، <code>production</code>.</li>
             </ul>
-            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در این پنل یا LocalStorage وارد نکنید. متغیرها را فقط در سرور Vercel تنظیم و سپس Redeploy کنید. سفارش‌های فعلی هنوز در LocalStorage/حالت Demo هستند؛ این اتصال تا پیاده‌سازی دفتر سفارش و موجودی سمت سرور برای دریافت وجه Production امن نیست.</p>
+            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. سفارش و موجودی اکنون از Supabase خوانده می‌شوند؛ بااین‌حال دریافت وجه Production تا تنظیم و آزمون عملی پذیرنده و تأیید callback و reconciliation غیرفعال می‌ماند.</p>
           </div>
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
-            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های این مرورگر (${paymentsList.length})</h3>
-            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','کد مرجع / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'zarinpal' ? 'زرین‌پال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">در این مرورگر هنوز تراکنشی ثبت نشده است.</div>'}
+            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های پایگاه داده (${paymentsList.length})</h3>
+            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','کد مرجع / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'zarinpal' ? 'زرین‌پال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
           </div>
         </div>`;
         return;
@@ -692,10 +774,13 @@
           <h2 style="font-size:18px;margin-top:0">تنظیمات فروشگاه</h2>
           <div class="form-grid">
             <div class="field"><label>نام فروشگاه</label><input id="adm-set-name" value="${esc(st.storeName || 'کفش طوبی')}"></div>
-            <div class="field"><label>شماره تماس پشتیبانی</label><input id="adm-set-phone" value="${esc(st.phone || '۰۹۱۲ ۱۲۳ ۴۵۶۷')}"></div>
-            <div class="field full"><label>نشانی فروشگاه</label><input id="adm-set-address" value="${esc(st.address || 'تهران')}"></div>
-            <div class="field"><label>هزینه ارسال عادی (تومان)</label><input id="adm-set-shipping" type="number" value="${st.shipping || 80000}"></div>
-            <div class="field"><label>حداقل خرید برای ارسال رایگان (تومان)</label><input id="adm-set-free" type="number" value="${st.freeShipping || 2000000}"></div>
+            <div class="field"><label>شماره تماس پشتیبانی</label><input id="adm-set-phone" value="${esc(st.phone || '')}" placeholder="شمارهٔ واقعی پشتیبانی"></div>
+            <div class="field full"><label>نشانی فروشگاه</label><input id="adm-set-address" value="${esc(st.address || '')}" placeholder="نشانی واقعی فروشگاه"></div>
+            <div class="field"><label>هزینه ارسال عادی (تومان)</label><input id="adm-set-shipping" type="number" min="0" value="${Number(st.shipping ?? 0)}"></div>
+            <div class="field"><label>هزینه ارسال سریع (تومان)</label><input id="adm-set-express" type="number" min="0" value="${Number(st.shippingOptions?.express ?? 0)}"></div>
+            <div class="field"><label>حداقل خرید برای ارسال رایگان (تومان)</label><input id="adm-set-free" type="number" min="0" value="${Number(st.freeShipping ?? 0)}"></div>
+            <div class="field full"><label>معرفی فروشگاه</label><textarea id="adm-set-about">${esc(st.about || '')}</textarea></div>
+            <div class="field full"><label>توضیحات SEO</label><textarea id="adm-set-meta">${esc(st.metaDescription || '')}</textarea></div>
           </div>
           <button class="btn" style="margin-top:16px" onclick="saveStoreSettings()">ذخیره تنظیمات</button>
         </div>`;
@@ -735,27 +820,28 @@
         const prods = (database && database.products) || [];
         const ords = (database && database.orders) || [];
         const custs = (database && (database.users || database.customers)) || [];
+        const state = g.DataProvider?.state || {};
+        const ready = state.status === 'ready' && g.__TOUBA_DATABASE_READY === true;
         target.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
           <div>
-            <h2 style="font-size:18px;margin:0">مدیریت پایگاه داده و همگام‌سازی ابری</h2>
-            <small style="color:#94a3b8">وضعیت دیتابیس Supabase و همگام‌سازی داده‌های فروشگاه طوبی</small>
+            <h2 style="font-size:18px;margin:0">وضعیت پایگاه داده</h2>
+            <small style="color:#94a3b8">کاتالوگ، مشتریان و عملیات فروشگاه از Supabase بارگذاری می‌شوند.</small>
           </div>
-          <span class="badge green" style="padding:6px 12px;font-size:12px">● پایگاه داده متصل و فعال</span>
+          <span class="badge ${ready?'green':'red'}" style="padding:6px 12px;font-size:12px">${ready?'● متصل و schema تأییدشده':'● نیازمند بررسی'}</span>
         </div>
         <div class="stats" style="margin-bottom:20px">
-          <div class="stat-card"><span>محصولات در پایگاه داده</span><b>${prods.length.toLocaleString('fa-IR')}</b><i>👟</i></div>
-          <div class="stat-card"><span>سفارش‌های ثبت‌شده</span><b>${ords.length.toLocaleString('fa-IR')}</b><i>📦</i></div>
-          <div class="stat-card"><span>مشتریان و کاربران</span><b>${custs.length.toLocaleString('fa-IR')}</b><i>👥</i></div>
-          <div class="stat-card"><span>وضعیت اتصال ابری</span><b style="color:var(--green-emerald-light);font-size:16px">Supabase Live</b><i>⚡</i></div>
+          <div class="stat-card"><span>محصولات پایگاه داده</span><b>${prods.length.toLocaleString('fa-IR')}</b><i>👟</i></div>
+          <div class="stat-card"><span>سفارش‌های پایگاه داده</span><b>${ords.length.toLocaleString('fa-IR')}</b><i>📦</i></div>
+          <div class="stat-card"><span>مشتریان و مدیران قابل‌دسترسی</span><b>${custs.length.toLocaleString('fa-IR')}</b><i>👥</i></div>
+          <div class="stat-card"><span>نسخهٔ schema</span><b style="font-size:14px">${esc(state.schemaVersion||'—')}</b><i>🗄</i></div>
         </div>
-        <div class="panel" style="background:rgba(8,22,14,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px;margin-bottom:16px">
-          <h3 style="margin-top:0;font-size:15px;color:#fff">اقدامات نگهداری و یکپارچگی داده‌ها</h3>
-          <p style="color:#94a3b8;font-size:12px;line-height:1.8">کلیه تراکنش‌ها، کاتالوگ محصولات، کاربران و تغییرات وضعیت سفارش‌ها در مخزن داده Supabase ثبت می‌گردند. در صورت نیاز به بررسی سلامت داده‌ها، از دکمه‌های زیر استفاده کنید:</p>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-            <button class="btn outline small" onclick="seedDemoData()">⚡ بررسی یکپارچگی پایگاه داده</button>
-            <button class="btn outline small danger-button" onclick="resetDemoData()">بازنشانی داده‌های نمونه</button>
-          </div>
+        <div class="panel" style="padding:22px;margin-bottom:16px">
+          <h3 style="margin-top:0;font-size:15px">همگام‌سازی و سلامت اتصال</h3>
+          <p class="muted">آخرین دریافت: ${esc(state.loadedAt||'—')}</p>
+          ${state.error?`<p class="notice error-notice">${esc(state.error.message||'خطای پایگاه داده')}</p>`:''}
+          <p class="muted">ذخیره‌سازی snapshot مرورگر و داده‌های نمونه غیرفعال است. تغییرها پس از تأیید Supabase نمایش داده می‌شوند.</p>
+          <button class="btn outline small" onclick="ToubaAuthUI.refreshDatabase()">به‌روزرسانی از پایگاه داده</button>
         </div>`;
         return;
       }
@@ -834,6 +920,8 @@
     resetPassword,
     updatePassword,
     loadAdminSection,
+    refreshDatabase,
+    updateContactMessageStatus,
     bulkApplyProducts,
     bulkApplyCategories,
     checkZarinpalStatus:g.checkZarinpalStatus,
@@ -873,10 +961,20 @@
   let __isAuthRendering = false;
   g.render = function () {
     if (__isAuthRendering) return;
+    if (!g.__TOUBA_DATABASE_READY) {
+      const app = g.document.querySelector?.('#app');
+      const loading = g.DataProvider?.state?.status === 'loading' || g.DataProvider?.state?.status === 'disconnected';
+      const error = g.__TOUBA_DATABASE_ERROR || g.DataProvider?.state?.error;
+      if (g.document.body?.classList) g.document.body.classList.remove('storefront-mode','admin-body','has-commerce-sticky');
+      if (app) app.innerHTML = loading
+        ? '<main class="page container"><section class="auth-card" role="status" style="text-align:center;margin:48px auto"><h1>در حال اتصال امن به پایگاه داده…</h1><p class="muted">اطلاعات فروشگاه فقط از Supabase بارگذاری می‌شوند.</p></section></main>'
+        : `<main class="page container"><section class="auth-card" role="alert" style="max-width:720px;text-align:center;margin:48px auto"><h1>فروشگاه موقتاً در دسترس نیست</h1><p class="muted">${esc(error?.message || 'اتصال یا آماده‌سازی پایگاه داده انجام نشد.')}</p><div class="notice" style="text-align:right">برای ادامه، تنظیمات Supabase و اجرای migrationهای عملیاتی پروژه را بررسی کنید. برنامه عمداً به دادهٔ Demo یا ذخیره‌سازی محلی برنمی‌گردد.</div><button class="btn" type="button" onclick="location.reload()">تلاش دوباره</button></section></main>`;
+      return;
+    }
     __isAuthRendering = true;
     try {
       const pathname = g.location.pathname;
-      if (g.document.body?.classList) { if (pathname === '/admin' || pathname.startsWith('/admin/')) g.document.body.classList.remove?.('storefront-mode'); else g.document.body.classList.add?.('storefront-mode'); g.document.body.classList.remove?.('has-commerce-sticky'); }
+      if (g.document.body?.classList) { if (pathname === '/admin' || pathname.startsWith('/admin/')) { g.document.body.classList.remove?.('storefront-mode'); g.document.body.classList.add?.('admin-body'); } else { g.document.body.classList.add?.('storefront-mode'); g.document.body.classList.remove?.('admin-body'); } g.document.body.classList.remove?.('has-commerce-sticky'); }
       if (g.document.body?.dataset) g.document.body.dataset.route = pathname;
       if (pathname === '/reset-password') {
         g.document.body.classList.remove('admin-body');
@@ -916,16 +1014,22 @@
     }
   };
 
-  auth.start().then(() => {
-    if (auth.currentUser && new URLSearchParams(g.location.search).get('verified') === '1') {
-      navigate(auth.currentUser.role === 'admin' || auth.currentUser.role === 'super_admin' ? '/admin' : '/account');
-    } else {
+  (async function initializeApplication() {
+    try {
+      await auth.start();
+      await g.DataProvider.load('toubashop-v1', getDb());
+      if (auth.currentUser && new URLSearchParams(g.location.search).get('verified') === '1') {
+        navigate(auth.currentUser.role === 'admin' || auth.currentUser.role === 'super_admin' ? '/admin' : '/account');
+      } else {
+        g.render();
+      }
+    } catch (error) {
+      console.error('Supabase application initialization:', error);
+      g.__TOUBA_DATABASE_ERROR = error;
+      g.__TOUBA_DATABASE_READY = false;
       g.render();
     }
-  }).catch(error => {
-    console.error('Auth initialization:', error);
-    g.render();
-  });
+  })();
 
   if (g.location.pathname === '/reset-password' && g.supabase) {
     setTimeout(async () => {

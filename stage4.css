@@ -6563,3 +6563,166 @@ html, body, #app, main {
   }
 }
 
+
+/* Mobile guardrails: intrinsic SVG sizing and an intentionally compact admin workspace. */
+.mobile-bottom-nav svg {
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  flex: 0 0 20px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
+@media (max-width: 860px) {
+  body.admin-body {
+    min-width: 320px;
+    overflow-x: hidden;
+  }
+  body.admin-body #app {
+    width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+  .admin-page-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 12px 12px 32px !important;
+    gap: 12px !important;
+  }
+  .auth-admin-head {
+    min-width: 0;
+    border-radius: 16px !important;
+    padding: 14px !important;
+    margin-bottom: 0 !important;
+  }
+  .auth-admin-title-box,
+  .auth-admin-title-box small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .auth-admin-title-box .page-title {
+    font-size: clamp(19px, 5vw, 23px) !important;
+    line-height: 1.4;
+  }
+  .auth-admin-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100%;
+  }
+  .auth-admin-actions .btn {
+    min-width: 0;
+    min-height: 42px;
+    white-space: normal;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .admin-nav-bar {
+    top: max(8px, env(safe-area-inset-top)) !important;
+  }
+  .admin-hamburger-btn {
+    width: 100%;
+    min-height: 50px;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .admin-current-chip {
+    max-width: 42%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .auth-admin-content {
+    width: 100%;
+    min-width: 0 !important;
+    padding: 14px 12px !important;
+    border-radius: 16px !important;
+  }
+  .auth-admin-content > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .stat-card {
+    min-width: 0;
+    padding: 12px;
+    overflow-wrap: anywhere;
+  }
+  .stat-card span {
+    line-height: 1.5;
+  }
+  .chart-card {
+    min-width: 0;
+    padding: 14px;
+    overflow: hidden;
+  }
+  .chart {
+    min-width: 0;
+    gap: 6px;
+  }
+  .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .data-table {
+    width: max-content;
+    min-width: 580px;
+  }
+  body.admin-body .store-footer {
+    padding: 28px 0 calc(22px + env(safe-area-inset-bottom));
+  }
+  body.admin-body .store-footer .footer-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+    padding-bottom: 22px;
+  }
+  body.admin-body .store-footer .footer-brand-col {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+  body.admin-body .store-footer .footer-main > div:last-child {
+    grid-column: auto !important;
+  }
+  body.admin-body .store-footer .footer-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-page-container {
+    padding-inline: 10px !important;
+  }
+  .auth-admin-actions .btn {
+    font-size: 11px !important;
+    padding-inline: 6px !important;
+  }
+  .auth-admin-content {
+    padding: 12px 10px !important;
+  }
+  .admin-current-chip {
+    max-width: 34%;
+    font-size: 10px;
+  }
+  .stat-card {
+    padding: 10px;
+  }
+  .stat-card span {
+    font-size: 10px;
+  }
+  .stat-card b {
+    font-size: 17px;
+    line-height: 1.35;
+  }
+}

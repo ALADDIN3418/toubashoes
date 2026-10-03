@@ -391,39 +391,6 @@ async function generateStudioPhoto({
   };
 }
 
-async function attachImageToProduct({ productId, imageUrl, asMainImage = true, addToGallery = true, db, saveDb }) {
-  if (!productId) throw Object.assign(new Error('شناسه محصول (productId) الزامی است.'), { status: 400 });
-  if (!imageUrl) throw Object.assign(new Error('آدرس یا داده تصویر (imageUrl) الزامی است.'), { status: 400 });
-  if (!db || !Array.isArray(db.products)) throw Object.assign(new Error('پایگاه داده محصولات در دسترس نیست.'), { status: 500 });
-
-  const index = db.products.findIndex(product => String(product.id) === String(productId));
-  if (index < 0) throw Object.assign(new Error(`محصولی با شناسه ${productId} یافت نشد.`), { status: 404 });
-  const product = db.products[index];
-  const images = Array.isArray(product.images) ? [...product.images] : (product.image ? [product.image] : []);
-
-  if (asMainImage) {
-    product.image = imageUrl;
-    product.images = [imageUrl, ...images.filter(existing => existing !== imageUrl)];
-  } else if (addToGallery) {
-    if (!images.includes(imageUrl)) images.push(imageUrl);
-    product.images = images;
-    if (!product.image) product.image = imageUrl;
-  }
-  product.updatedAt = new Date().toISOString();
-  db.products[index] = product;
-  if (typeof saveDb === 'function') await saveDb(db);
-
-  return {
-    success: true,
-    productId: product.id,
-    productName: product.name,
-    mainImage: product.image,
-    images: product.images,
-    asMainImage,
-    addToGallery
-  };
-}
-
 module.exports = {
   PRESETS,
   DEFAULT_PRESET,
@@ -449,6 +416,5 @@ module.exports = {
   resetRotationState,
   getRotationCursor,
   generateStudioPhoto,
-  generateWithPuterRotation,
-  attachImageToProduct
+  generateWithPuterRotation
 };

@@ -4,7 +4,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const aiStatus = require('../api/ai/status.js');
 const productPhoto = require('../api/ai/product-photo.js');
-const productImageUpload = require('../api/uploads/product-image.js');
 const productDescription = require('../api/ai/describe.js');
 const { generateLocalShoeDescription } = require('../app/applet/lib/gemini-describer.js');
 const { parseProductReferenceImages, parseProductReferenceRoles, takeWindowQuota, reserveWindowQuota, finishWindowQuota, persistentAiQuotaConfig, requireAdminRequest, reservePersistentAiQuota, finalizePersistentAiQuota } = require('../lib/vercel-api.js');
@@ -62,12 +61,8 @@ async function main() {
     await assert.rejects(()=>reservePersistentAiQuota(50,authContext),/PGRST202.*Migrationهای سهمیه/);
     assert.match(quotaCalls[2].options.headers.Authorization,/Bearer 0123456789/);
   } finally {global.fetch=oldFetch;if(oldSupabaseUrl===undefined)delete process.env.SUPABASE_URL;else process.env.SUPABASE_URL=oldSupabaseUrl;if(oldPublicKey===undefined)delete process.env.SUPABASE_PUBLISHABLE_KEY;else process.env.SUPABASE_PUBLISHABLE_KEY=oldPublicKey;if(oldAnonKey===undefined)delete process.env.SUPABASE_ANON_KEY;else process.env.SUPABASE_ANON_KEY=oldAnonKey;if(oldServiceKey===undefined)delete process.env.SUPABASE_SERVICE_ROLE_KEY;else process.env.SUPABASE_SERVICE_ROLE_KEY=oldServiceKey;}
-  const oldAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const oldToken = process.env.CLOUDFLARE_API_TOKEN;
   const oldVercel = process.env.VERCEL;
   const oldPuter = globalThis.puter;
-  delete process.env.CLOUDFLARE_ACCOUNT_ID;
-  delete process.env.CLOUDFLARE_API_TOKEN;
   delete process.env.VERCEL;
   try {
     let res = response();
@@ -132,13 +127,8 @@ async function main() {
     assert.equal(res.statusCode, 400);
     assert(payload(res).error);
 
-    const tinyJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64');
-    const dataUrl = `data:image/jpeg;base64,${tinyJpeg}`;
-    res = response();
-    await productImageUpload({ method:'POST', headers:{ origin:'https://touba.test', host:'touba.test' }, body:{ image:dataUrl } }, res);
-    assert.equal(res.statusCode, 201);
-    assert.equal(payload(res).url, dataUrl);
-    assert.equal(payload(res).storage, 'browser-local');
+    assert.equal(fs.existsSync(path.join(__dirname,'../api/uploads/product-image.js')),false,'ephemeral/browser-local image upload endpoint is removed');
+    assert.doesNotMatch(fs.readFileSync(path.join(__dirname,'../local-server.js'),'utf8'),/productImageSaveTimes|storage:'browser-local'/,'local server cannot return ephemeral product-image storage');
 
     res = response();
     await productDescription({ method:'GET', headers:{} }, res);
@@ -154,14 +144,12 @@ async function main() {
     assert.equal(typeof payload(res).shortDesc, 'string');
     assert.equal(typeof payload(res).longDesc, 'string');
   } finally {
-    if (oldAccount === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID; else process.env.CLOUDFLARE_ACCOUNT_ID = oldAccount;
-    if (oldToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN; else process.env.CLOUDFLARE_API_TOKEN = oldToken;
     if (oldVercel === undefined) delete process.env.VERCEL; else process.env.VERCEL = oldVercel;
     if (oldSupabaseUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldSupabaseUrl;
     if (oldPublicKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = oldPublicKey;
     if (oldPuter === undefined) delete globalThis.puter; else globalThis.puter = oldPuter;
   }
-  console.log('PASS: Vercel function endpoints, same-origin checks and ephemeral upload behavior');
+  console.log('PASS: Vercel function endpoints, same-origin checks, Supabase-backed image-storage policy, and no ephemeral upload route');
   process.exit(0);
 }
 main().catch(error => { console.error(error); process.exit(1); });

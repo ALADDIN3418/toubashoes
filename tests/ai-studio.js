@@ -18,7 +18,6 @@ const {
   parseDataUrl,
   checkBackendHealth,
   generateStudioPhoto,
-  attachImageToProduct,
   DEFAULT_PROVIDER,
   PUTER_IMAGE_MODELS,
   PUTER_STUDIO_PROVIDER_NAME,
@@ -157,13 +156,6 @@ async function runTests() {
   }, res);
   assert.equal(res.statusCode, 503);
   assert.match(parsePayload(res).error, /Puter.js/);
-
-  // Product attachment remains supported.
-  const mockDb = { products: [{ id: 'shoe-101', name: 'کفش چرم مردانه', image: '/old.jpg', images: ['/old.jpg'] }] };
-  const attached = await attachImageToProduct({ productId: 'shoe-101', imageUrl: editedPng, asMainImage: true, db: mockDb });
-  assert.equal(attached.success, true);
-  assert.equal(mockDb.products[0].image, editedPng);
-  assert.equal(mockDb.products[0].images[0], editedPng);
 
   // Client checks: Puter SDK precedes the studio, the live image catalog is used,
   // and no Google API key/OAuth or old local compositor remains in the studio UI.
