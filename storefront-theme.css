@@ -387,8 +387,10 @@ body.storefront-mode .theme-toggle svg {
   stroke: currentColor;
   stroke-width: 1.8;
 }
-body.storefront-mode .mobile-theme-row {
-  display: none;
+@media (min-width: 1281px) {
+  body.storefront-mode .mobile-theme-row {
+    display: none;
+  }
 }
 
 /* Hero photo is shared; copy stays clear of the product on the right. */
@@ -701,9 +703,19 @@ body.storefront-mode .mobile-bottom-nav {
     font-size: 16px;
   }
   body.storefront-mode .brand-emblem {
-    width: 34px;
+    width: auto;
     height: 34px;
-    border-radius: 11px;
+    min-width: 0;
+    padding-inline-end: 10px;
+    border: 0;
+    border-inline-end: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  body.storefront-mode .brand-emblem img {
+    height: 32px;
+    max-width: 50px;
   }
   body.storefront-mode .minimal-actions {
     gap: 1px;
@@ -1120,7 +1132,7 @@ body.storefront-mode .trust-item span {
   color: var(--touba-muted) !important;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   body.storefront-mode .nav-mobile-secondary {
     display: block !important;
   }
@@ -1251,7 +1263,7 @@ body.storefront-mode .newsletter-card p {
 body.storefront-mode .collection-content h2 em {
   color: var(--touba-brand) !important;
 }
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   body.storefront-mode .nav-categories .nav-dropdown {
     background: transparent !important;
     border: 0 !important;
@@ -1511,4 +1523,10 @@ body.storefront-mode .latest-products-section {
   body.storefront-mode .lux-cream-trust-item:last-child {
     width: min(100%, 260px);
   }
+}
+
+/* Brand emblem: keep the logo divider and fallback mark readable on the light theme */
+body.storefront-mode[data-theme="light"] .brand-emblem {
+  color: inherit;
+  border-inline-end-color: rgba(15, 23, 17, 0.22);
 }
