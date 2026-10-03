@@ -4,6 +4,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
+    "api/payment/zarinpal/request.js": { "maxDuration": 30 },
+    "api/payment/zarinpal/callback.js": { "maxDuration": 30 },
+    "api/payment/zarinpal/receipt.js": { "maxDuration": 30 },
     "api/ai/product-photo.js": { "maxDuration": 120 },
     "api/ai/studio/generate.js": { "maxDuration": 120 },
     "api/ai/describe.js": { "maxDuration": 60 }

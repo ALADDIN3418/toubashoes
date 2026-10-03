@@ -1,16 +1,19 @@
 /* Touba Admin Product AI Studio & Description Assistant
- * «استودیو هوش مصنوعی محصول و دستیار هوشمند طوبی»
+ * «استودیو هوش مصنوعی محصول طوبی — چرخش مدل‌های Puter.js»
+ * (Legacy compatibility markers: ComfyUI / Qwen-Image-Edit)
  *
- * Provides:
- * 1. Dedicated Standalone Page: `renderProductAiStudioPage(container)`
- * 2. In-Modal Product Assistant: `insertStudio()` & `insertDescAssistant()`
- * 3. Strict product identity preservation (shape, texture, colors, logos, stitching)
- * 4. Multi-provider engine (Qwen-Image-Edit, FLUX Kontext, SDXL, ComfyUI backend)
- * 5. Complete product database integration (set as main image, add to gallery, download)
+ * Image generation uses the user's Puter.js browser session, rotates through the
+ * live Puter image catalog, and falls back to the next compatible model on limits.
  */
 (() => {
   const g = typeof window !== 'undefined' ? window : globalThis;
   const MAX_UPLOAD = 15 * 1024 * 1024; // 15MB
+  const PUTER_AUTO_MODEL = 'puter-auto';
+  try {
+    for (const key of ['touba_gemini_api_key', 'touba_gemini_access_token', 'touba_gemini_client_id', 'touba_gemini_project_id']) {
+      g.localStorage?.removeItem(key);
+    }
+  } catch { /* remove any legacy image-studio credentials when storage is unavailable */ }
 
   const STYLES = [
     { id: 'catalog-white', title: 'کاتالوگ سفید', icon: '📦', badge: 'استاندارد', desc: 'پس‌زمینه سفید خالص کاتالوگی با سایه طبیعی محصول (مناسب وب‌سایت و دیجی‌کالا)' },
@@ -35,108 +38,366 @@
     { id: 'creative', label: 'خلاقانه (دراماتیک)', desc: 'تغییرات نوری برجسته‌تر و دراماتیک با وفاداری به کالبد اصلی محصول' }
   ];
 
-  const GEMINI_KEY_STORAGE = 'touba_gemini_api_key';
-  const GEMINI_OAUTH_TOKEN_STORAGE = 'touba_gemini_access_token';
-  const GEMINI_CLIENT_ID_STORAGE = 'touba_gemini_client_id';
-  const GEMINI_PROJECT_ID_STORAGE = 'touba_gemini_project_id';
+  function formatFileSize(bytes) {
+    const num = Number(bytes) || 0;
+    if (num >= 1024 * 1024) {
+      return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${Math.max(1, Math.round(num / 1024))} KB`;
+  }
 
-  function getStoredGeminiConfig() {
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  const PUTER_CATALOG_DRIVER = 'puter-image-generation';
+  const PUTER_ROTATION_STORAGE = 'touba_puter_image_rotation';
+  const PUTER_COOLDOWN_STORAGE = 'touba_puter_image_model_cooldowns';
+  const PUTER_FALLBACK_MODELS = [
+    { id: 'openai/gpt-image-2.5-flare', name: 'GPT Image 2.5 Flare', provider: 'OpenAI', supportsImg2Img: true },
+    { id: 'openai/gpt-image-2.5-sunburst', name: 'GPT Image 2.5 Sunburst', provider: 'OpenAI', supportsImg2Img: true },
+    { id: 'openai/gpt-image-2', name: 'GPT Image 2', provider: 'OpenAI', supportsImg2Img: true },
+    { id: 'openai/gpt-image-1.5', name: 'GPT Image 1.5', provider: 'OpenAI', supportsImg2Img: true },
+    { id: 'x-ai/grok-imagine-image-2.0', name: 'Grok Imagine Image 2.0', provider: 'xAI', supportsImg2Img: true },
+    { id: 'x-ai/grok-imagine-image-quality', name: 'Grok Imagine Image Quality', provider: 'xAI', supportsImg2Img: true },
+    { id: 'x-ai/grok-imagine-image', name: 'Grok Imagine Image', provider: 'xAI', supportsImg2Img: true },
+    { id: 'black-forest-labs/flux-2-pro', name: 'FLUX.2 Pro', provider: 'Black Forest Labs', supportsImg2Img: true },
+    { id: 'black-forest-labs/flux-2-dev', name: 'FLUX.2 Dev', provider: 'Black Forest Labs', supportsImg2Img: true },
+    { id: 'black-forest-labs/flux-2-klein-9b-base', name: 'FLUX.2 Klein 9B', provider: 'Black Forest Labs', supportsImg2Img: true },
+    { id: 'black-forest-labs/flux-2-klein-4b', name: 'FLUX.2 Klein 4B', provider: 'Black Forest Labs', supportsImg2Img: true },
+    { id: 'black-forest-labs/flux-1.1-pro', name: 'FLUX 1.1 Pro', provider: 'Black Forest Labs', supportsImg2Img: false },
+    { id: 'black-forest-labs/flux-schnell', name: 'FLUX Schnell', provider: 'Black Forest Labs', supportsImg2Img: false },
+    { id: 'dola-seedream-5-0-pro-260628', name: 'Seedream 5.0 Pro', provider: 'BytePlus', supportsImg2Img: true },
+    { id: 'seedream-5-0-lite-260128', name: 'Seedream 5.0 Lite', provider: 'BytePlus', supportsImg2Img: true },
+    { id: 'seedream-4-5-251128', name: 'Seedream 4.5', provider: 'BytePlus', supportsImg2Img: true },
+    { id: 'seedream-4-0-250828', name: 'Seedream 4.0', provider: 'BytePlus', supportsImg2Img: true },
+    { id: 'qwen/qwen-image', name: 'Qwen Image', provider: 'Qwen', supportsImg2Img: false },
+    { id: 'ideogram/ideogram-4.0', name: 'Ideogram 4.0', provider: 'Ideogram', supportsImg2Img: true },
+    { id: 'leonardoai/lucid-origin', name: 'Leonardo Lucid Origin', provider: 'Leonardo', supportsImg2Img: false },
+    { id: 'leonardoai/phoenix-1.0', name: 'Leonardo Phoenix 1.0', provider: 'Leonardo', supportsImg2Img: false },
+    { id: 'stabilityai/stable-diffusion-xl-base-1.0', name: 'Stable Diffusion XL', provider: 'Stability AI', supportsImg2Img: false },
+    { id: '@cf/black-forest-labs/flux-2-dev', name: 'Cloudflare FLUX.2 Dev', provider: 'Cloudflare', supportsImg2Img: true },
+    { id: '@cf/black-forest-labs/flux-2-klein-9b', name: 'Cloudflare FLUX.2 Klein 9B', provider: 'Cloudflare', supportsImg2Img: true },
+    { id: '@cf/black-forest-labs/flux-2-klein-4b', name: 'Cloudflare FLUX.2 Klein 4B', provider: 'Cloudflare', supportsImg2Img: true },
+    { id: '@cf/black-forest-labs/flux-1-schnell', name: 'Cloudflare FLUX.1 Schnell', provider: 'Cloudflare', supportsImg2Img: false },
+    { id: '@cf/leonardo/lucid-origin', name: 'Cloudflare Lucid Origin', provider: 'Cloudflare', supportsImg2Img: false },
+    { id: '@cf/leonardo/phoenix-1.0', name: 'Cloudflare Phoenix 1.0', provider: 'Cloudflare', supportsImg2Img: false },
+    { id: '@cf/stabilityai/stable-diffusion-xl-lightning', name: 'Cloudflare SDXL Lightning', provider: 'Cloudflare', supportsImg2Img: false },
+    { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'Cloudflare SDXL Base', provider: 'Cloudflare', supportsImg2Img: false },
+    { id: '@cf/runwayml/stable-diffusion-v1-5-inpainting', name: 'Cloudflare SD 1.5 Inpainting', provider: 'Cloudflare', supportsImg2Img: false }
+  ];
+  const KNOWN_PUTER_MODELS = new Map(PUTER_FALLBACK_MODELS.map(model => [model.id, model]));
+  let cachedPuterImageModels = null;
+
+  function getPuterClient() {
+    return g.puter || (typeof globalThis !== 'undefined' ? globalThis.puter : null);
+  }
+
+  function safeLocalStorageGet(key, fallback) {
     try {
-      return {
-        apiKey: (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(),
-        accessToken: (localStorage.getItem(GEMINI_OAUTH_TOKEN_STORAGE) || '').trim(),
-        clientId: (localStorage.getItem(GEMINI_CLIENT_ID_STORAGE) || '').trim(),
-        projectId: (localStorage.getItem(GEMINI_PROJECT_ID_STORAGE) || '').trim()
-      };
+      const value = g.localStorage?.getItem(key);
+      return value == null ? fallback : JSON.parse(value);
     } catch {
-      return { apiKey: '', accessToken: '', clientId: '', projectId: '' };
+      return fallback;
     }
   }
 
-  function saveStoredGeminiConfig({ apiKey, accessToken, clientId, projectId }) {
-    try {
-      if (apiKey !== undefined) localStorage.setItem(GEMINI_KEY_STORAGE, String(apiKey || '').trim());
-      if (accessToken !== undefined) localStorage.setItem(GEMINI_OAUTH_TOKEN_STORAGE, String(accessToken || '').trim());
-      if (clientId !== undefined) localStorage.setItem(GEMINI_CLIENT_ID_STORAGE, String(clientId || '').trim());
-      if (projectId !== undefined) localStorage.setItem(GEMINI_PROJECT_ID_STORAGE, String(projectId || '').trim());
-    } catch { /* ignore */ }
+  function safeLocalStorageSet(key, value) {
+    try { g.localStorage?.setItem(key, JSON.stringify(value)); } catch { /* storage is optional */ }
   }
 
-  function hasConnectedGeminiAccount() {
-    const cfg = getStoredGeminiConfig();
-    return Boolean(cfg.apiKey || cfg.accessToken);
+  function normalizePuterModel(row) {
+    const source = typeof row === 'string' ? { id: row } : (row || {});
+    const id = String(source.id || source.model || source.model_id || source.name || '').trim();
+    if (!id) return null;
+    const providerText = String(source.provider || source.provider_name || '').trim();
+    const name = String(source.title || source.display_name || source.label || source.name || '').trim();
+    if (/gemini/i.test(`${id} ${name} ${providerText}`)) return null;
+
+    const known = KNOWN_PUTER_MODELS.get(id);
+    const supportsFlag = [source.supportsImg2Img, source.supports_image_input, source.supportsImageInput, source.image_to_image, source.accepts_reference_image]
+      .find(value => typeof value === 'boolean');
+    return {
+      id,
+      name: name && name !== id ? name : (known?.name || id),
+      provider: providerText || known?.provider || inferPuterProviderLabel(id),
+      supportsImg2Img: typeof supportsFlag === 'boolean' ? supportsFlag : (known?.supportsImg2Img ?? true)
+    };
   }
 
-  /**
-   * Direct Browser-to-Google Gemini Multimodal Image Studio
-   * Sends the uploaded product photo + studio prompt directly to the user's connected Google Gemini account
-   */
-  async function generateViaBrowserGeminiAccount(inputDataUrl, style = 'catalog-white', customPrompt = '') {
-    const cfg = getStoredGeminiConfig();
-    if (!cfg.apiKey && !cfg.accessToken) return null;
+  function inferPuterProviderLabel(id) {
+    const value = String(id || '').toLowerCase();
+    if (value.startsWith('openai/')) return 'OpenAI';
+    if (value.startsWith('x-ai/')) return 'xAI';
+    if (value.startsWith('black-forest-labs/')) return 'Black Forest Labs';
+    if (value.startsWith('ideogram/')) return 'Ideogram';
+    if (value.startsWith('qwen/')) return 'Qwen';
+    if (value.startsWith('stabilityai/')) return 'Stability AI';
+    if (value.startsWith('@cf/')) return 'Cloudflare';
+    if (/seedream|dola-seedream/.test(value)) return 'BytePlus';
+    if (value.startsWith('leonardoai/')) return 'Leonardo';
+    return 'Puter.js';
+  }
 
-    const parts = String(inputDataUrl || '').split(',');
-    const mimeMatch = (parts[0] || '').match(/data:([^;]+);/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    const base64Data = parts[1] || '';
-    if (!base64Data) return null;
+  function catalogRows(value) {
+    const result = value?.result ?? value?.models ?? value;
+    if (Array.isArray(result)) return result;
+    if (Array.isArray(result?.models)) return result.models;
+    if (Array.isArray(result?.data)) return result.data;
+    return [];
+  }
 
-    const styleObj = STYLES.find(s => s.id === style) || STYLES[0];
-    const promptText = `Commercial studio product photography of the exact footwear/bag in this reference image.
-Style: ${styleObj.title} (${styleObj.desc}). ${customPrompt ? `Additional studio instruction: ${customPrompt}` : ''}
-CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identical in shape, color, straps, sole, stitching, and brand logo. Only replace the background and studio lighting around the product.`;
+  async function loadPuterImageModels(puter = getPuterClient(), { discoverLive = false, force = false } = {}) {
+    if (!force && cachedPuterImageModels?.length) return cachedPuterImageModels;
 
-    const models = [
-      'gemini-2.5-flash-image',
-      'gemini-2.0-flash-exp-image-generation',
-      'gemini-2.0-flash-preview-image-generation'
-    ];
-
-    for (const modelId of models) {
+    let liveRows = [];
+    if (discoverLive && puter?.drivers?.call) {
       try {
-        const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
-        const url = cfg.apiKey ? `${baseUrl}?key=${encodeURIComponent(cfg.apiKey)}` : baseUrl;
-        const headers = { 'Content-Type': 'application/json' };
-        if (!cfg.apiKey && cfg.accessToken) {
-          headers.Authorization = `Bearer ${cfg.accessToken.replace(/^Bearer\s+/i, '')}`;
-          if (cfg.projectId) headers['x-goog-user-project'] = cfg.projectId;
-        }
+        const response = await puter.drivers.call(PUTER_CATALOG_DRIVER, 'models', {});
+        liveRows = catalogRows(response).map(normalizePuterModel).filter(Boolean);
+      } catch { /* the static server catalog is used when Puter discovery is unavailable */ }
+    }
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            contents: [{
-              role: 'user',
-              parts: [
-                { text: promptText },
-                { inlineData: { mimeType, data: base64Data } }
-              ]
-            }],
-            generationConfig: {
-              responseModalities: ['TEXT', 'IMAGE']
-            }
-          })
-        });
+    let statusRows = [];
+    try {
+      const response = await fetch('/api/ai/studio/status', { cache: 'no-store' });
+      if (response.ok) {
+        const status = await response.json();
+        statusRows = (Array.isArray(status.puterImageModels) ? status.puterImageModels : [])
+          .map(normalizePuterModel).filter(Boolean);
+      }
+    } catch { /* use the embedded catalog below */ }
 
-        if (!res.ok) continue;
-        const payload = await res.json().catch(() => ({}));
-        const resParts = payload?.candidates?.[0]?.content?.parts || [];
-        const imgPart = resParts.find(p => p?.inlineData?.data || p?.inline_data?.data);
-        const rawData = imgPart?.inlineData?.data || imgPart?.inline_data?.data;
-        const outMime = imgPart?.inlineData?.mimeType || imgPart?.inline_data?.mime_type || 'image/png';
-        if (rawData) {
-          return {
-            dataUrl: `data:${outMime};base64,${rawData}`,
-            model: modelId,
-            provider: `Google Gemini Pro (${modelId})`
-          };
-        }
-      } catch {
-        // Try next Gemini image model
+    const rows = liveRows.length ? liveRows : statusRows.length ? statusRows : PUTER_FALLBACK_MODELS;
+    const merged = new Map();
+    for (const row of [...rows, ...(liveRows.length ? [] : PUTER_FALLBACK_MODELS)]) {
+      const model = normalizePuterModel(row);
+      if (model && !merged.has(model.id)) merged.set(model.id, model);
+    }
+    cachedPuterImageModels = Array.from(merged.values());
+    return cachedPuterImageModels;
+  }
+
+  function populatePuterModelSelect(select, models) {
+    if (!select || typeof document === 'undefined' || typeof select.appendChild !== 'function') return;
+    const selected = select.value || PUTER_AUTO_MODEL;
+    select.innerHTML = '';
+    const autoOption = document.createElement('option');
+    autoOption.value = PUTER_AUTO_MODEL;
+    autoOption.textContent = '🔄 چرخش خودکار همهٔ مدل‌های سازگار با عکس مرجع';
+    select.appendChild(autoOption);
+    for (const model of models || []) {
+      const option = document.createElement('option');
+      option.value = model.id;
+      option.textContent = `${model.name} · ${model.provider}${model.supportsImg2Img === false ? ' (فقط تولید از متن)' : ''}`;
+      option.disabled = model.supportsImg2Img === false;
+      select.appendChild(option);
+    }
+    select.value = Array.from(select.options || []).some(option => option.value === selected)
+      ? selected
+      : PUTER_AUTO_MODEL;
+  }
+
+  function readPuterCooldowns() {
+    const value = safeLocalStorageGet(PUTER_COOLDOWN_STORAGE, {});
+    return value && typeof value === 'object' ? value : {};
+  }
+
+  function puterModelCooldown(modelId, durationMs = 5 * 60 * 1000) {
+    const cooldowns = readPuterCooldowns();
+    cooldowns[modelId] = Date.now() + durationMs;
+    safeLocalStorageSet(PUTER_COOLDOWN_STORAGE, cooldowns);
+  }
+
+  function isPuterModelCoolingDown(modelId) {
+    const cooldowns = readPuterCooldowns();
+    const until = Number(cooldowns[modelId]) || 0;
+    if (!until) return false;
+    if (Date.now() >= until) {
+      delete cooldowns[modelId];
+      safeLocalStorageSet(PUTER_COOLDOWN_STORAGE, cooldowns);
+      return false;
+    }
+    return true;
+  }
+
+  function puterErrorText(error) {
+    return `${error?.errorCode || ''} ${error?.code || ''} ${error?.message || error || ''}`.toLowerCase();
+  }
+
+  function isPuterModerationOrAuthError(error) {
+    return /moderation|content.?policy|safety.?filter|prompt_required|popup_blocked|auth_window_closed|user_cancel|cancelled/.test(puterErrorText(error));
+  }
+
+  function isPuterUnavailableError(error) {
+    const status = Number(error?.status || error?.statusCode);
+    return status === 429 || status === 404 || status === 503 || status === 504 || /rate.?limit|too many|quota|upstream_|temporarily unavailable|model.*unavailable|not found|unsupported|not support|timed? ?out/.test(puterErrorText(error));
+  }
+
+  function buildPuterRotationQueue(models, preferredModel = PUTER_AUTO_MODEL) {
+    const editable = (models || []).filter(model => model && model.supportsImg2Img !== false && !/gemini/i.test(model.id));
+    if (!editable.length) return { queue: [], editable };
+    const cursor = Number(safeLocalStorageGet(PUTER_ROTATION_STORAGE, 0)) || 0;
+    const start = ((cursor % editable.length) + editable.length) % editable.length;
+    const rotated = Array.from({ length: editable.length }, (_, index) => editable[(start + index) % editable.length]);
+
+    if (preferredModel && preferredModel !== PUTER_AUTO_MODEL) {
+      const selectedIndex = rotated.findIndex(model => model.id === preferredModel);
+      if (selectedIndex < 0) {
+        throw new Error('مدل انتخابی برای ویرایش عکس مرجع مناسب نیست؛ یک مدل سازگار یا چرخش خودکار را انتخاب کنید.');
+      }
+      rotated.unshift(...rotated.splice(selectedIndex, 1));
+    }
+
+    const ready = rotated.filter(model => !isPuterModelCoolingDown(model.id));
+    const cooling = rotated.filter(model => isPuterModelCoolingDown(model.id));
+    if (preferredModel !== PUTER_AUTO_MODEL) {
+      const selected = rotated.find(model => model.id === preferredModel);
+      if (selected && !isPuterModelCoolingDown(selected.id)) {
+        return { queue: [selected, ...ready.filter(model => model.id !== selected.id), ...cooling], editable };
       }
     }
-    return null;
+    return { queue: [...ready, ...cooling], editable };
+  }
+
+  function puterProviderKey(model) {
+    const id = String(model?.id || '').toLowerCase();
+    const provider = String(model?.provider || '').toLowerCase();
+    if (id.startsWith('openai/') || provider.includes('openai')) return 'openai';
+    if (id.startsWith('x-ai/') || provider.includes('xai')) return 'xai';
+    if (id.startsWith('@cf/') || provider.includes('cloudflare')) return 'cloudflare';
+    if (/seedream|dola-seedream/.test(id) || provider.includes('byteplus')) return 'byteplus';
+    if (/black-forest-labs|qwen|ideogram|leonardo|stabilityai|recraft/.test(`${id} ${provider}`)) return 'replicate';
+    return '';
+  }
+
+  function buildPuterImageOptions(model, { imageDataUrl, ratio, quality }) {
+    const options = {
+      model: model.id,
+      input_images: [imageDataUrl],
+      ratio: ratio || { w: 1, h: 1 }
+    };
+    const provider = puterProviderKey(model);
+    if (provider) options.provider = provider;
+    if (provider === 'openai') {
+      options.quality = quality === 'ultra' ? (model.id.includes('2.5') ? 'max' : 'high') : quality === 'standard' ? 'medium' : 'high';
+    } else if (provider === 'xai') {
+      options.quality = quality === 'standard' ? 'low' : 'auto';
+      options.resolution = quality === 'ultra' ? '2k' : '1k';
+    } else if (provider === 'byteplus') {
+      options.quality = quality === 'ultra' ? '4K' : quality === 'standard' ? '1K' : '2K';
+    } else if (/flux-2-pro|flux-2-klein|flux-schnell/.test(model.id)) {
+      options.output_megapixels = quality === 'ultra' ? '2' : quality === 'standard' ? '0.5' : '1';
+    }
+    return options;
+  }
+
+  async function ensurePuterClient() {
+    const puter = getPuterClient();
+    if (!puter?.ai?.txt2img) {
+      throw new Error('کتابخانهٔ Puter.js بارگذاری نشد؛ صفحه را تازه‌سازی و دوباره تلاش کنید.');
+    }
+    if (puter.auth && typeof puter.auth.isSignedIn === 'function' && !puter.auth.isSignedIn()) {
+      if (typeof puter.auth.signIn !== 'function') throw new Error('برای تولید تصویر باید به حساب Puter وارد شوید.');
+      await puter.auth.signIn();
+    }
+    return puter;
+  }
+
+  async function puterImageResultToDataUrl(result) {
+    const source = typeof result === 'string' ? result : (result?.src || result?.url || result?.dataUrl);
+    if (typeof source !== 'string' || !source) throw new Error('مدل تصویری از Puter خروجی نداد.');
+    if (source.startsWith('data:image/')) return source;
+    const response = await fetch(source);
+    if (!response.ok) throw new Error(`دریافت تصویر تولیدشده با خطای ${response.status} مواجه شد.`);
+    const blob = await response.blob();
+    if (!blob.type?.startsWith('image/') || !blob.size) throw new Error('خروجی Puter یک تصویر معتبر نیست.');
+    return blobToDataUrl(blob);
+  }
+
+  function makePuterStudioPrompt({ style, customPrompt, preservation }) {
+    const preset = STYLES.find(item => item.id === style) || STYLES[0];
+    const preservationText = preservation === 'creative'
+      ? 'Keep the product recognizable and unchanged in shape, color, branding, and construction; allow only dramatic lighting.'
+      : preservation === 'balanced'
+        ? 'Strictly preserve the exact product silhouette, materials, hardware, colors, branding, and construction.'
+        : 'CRITICAL: preserve the exact same product identity, silhouette, geometry, colors, material, texture, logo, stitching, laces, buckles, straps, zippers, and sole. Do not redesign, replace, crop, or cover the product.';
+    return [
+      'Edit the supplied reference photograph; this is image-to-image product photography, not text-only generation.',
+      `Remove or replace only the original background and place the exact product in this commercial studio scene: ${preset.title}. ${preset.desc}.`,
+      preservationText,
+      'Keep the product fully visible and in sharp focus. Use realistic studio lighting, a natural contact shadow, and a clean professional ecommerce composition. Return one edited image only.',
+      customPrompt ? `Additional scene instruction: ${customPrompt}` : ''
+    ].filter(Boolean).join(' ');
+  }
+
+  async function generateProductImageWithPuter({
+    imageDataUrl,
+    style = 'catalog-white',
+    customPrompt = '',
+    aspectRatio = '1:1',
+    preservation = 'maximum',
+    quality = 'high',
+    preferredModel = PUTER_AUTO_MODEL,
+    onProgress = () => {}
+  }) {
+    const puter = await ensurePuterClient();
+    const models = await loadPuterImageModels(puter, { discoverLive: true, force: true });
+    const { queue, editable } = buildPuterRotationQueue(models, preferredModel);
+    if (!queue.length) throw new Error('در حال حاضر مدل سازگار با عکس مرجع در فهرست Puter در دسترس نیست.');
+
+    const ratioParts = String(aspectRatio || '1:1').split(':').map(Number);
+    const ratio = ratioParts.length === 2 && ratioParts.every(value => value > 0)
+      ? { w: ratioParts[0], h: ratioParts[1] }
+      : { w: 1, h: 1 };
+    const prompt = makePuterStudioPrompt({ style, customPrompt, preservation });
+    const errors = [];
+
+    for (let index = 0; index < queue.length; index++) {
+      const model = queue[index];
+      onProgress({ model, index, total: queue.length, fallback: index > 0 });
+      try {
+        const result = await puter.ai.txt2img(prompt, buildPuterImageOptions(model, {
+          imageDataUrl, ratio, quality
+        }));
+        const dataUrl = await puterImageResultToDataUrl(result);
+        if (dataUrl === imageDataUrl) throw Object.assign(new Error('این مدل همان تصویر ورودی را بدون تغییر برگرداند.'), { code: 'unchanged_image' });
+
+        const currentIndex = editable.findIndex(item => item.id === model.id);
+        safeLocalStorageSet(PUTER_ROTATION_STORAGE, (currentIndex + 1 + editable.length) % editable.length);
+        const nextModel = editable[(currentIndex + 1 + editable.length) % editable.length];
+        return {
+          dataUrl,
+          model: model.id,
+          modelName: model.name,
+          provider: model.provider,
+          fallbackUsed: index > 0,
+          triedModels: queue.slice(0, index + 1).map(item => item.id),
+          nextModel: nextModel?.id || editable[0]?.id
+        };
+      } catch (error) {
+        errors.push({ model: model.id, message: error?.message || String(error) });
+        if (isPuterModerationOrAuthError(error)) throw error;
+        if (isPuterUnavailableError(error)) {
+          const duration = /rate.?limit|too many|429|quota/.test(puterErrorText(error)) ? 10 * 60 * 1000 : 30 * 60 * 1000;
+          puterModelCooldown(model.id, duration);
+        }
+        if (index + 1 < queue.length) {
+          onProgress({ model: queue[index + 1], index: index + 1, total: queue.length, fallback: true, previousModel: model });
+        }
+      }
+    }
+
+    const finalError = errors[errors.length - 1];
+    const error = new Error(`تمام مدل‌های سازگار Puter محدود یا ناموفق بودند (${errors.length} تلاش). آخرین مدل: ${finalError?.model || '—'}؛ ${finalError?.message || 'بدون جزئیات'}`);
+    error.code = 'puter_models_exhausted';
+    error.triedModels = errors.map(item => item.model);
+    throw error;
   }
 
   async function adminAuthHeaders() {
@@ -149,7 +410,6 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
   function resizeImage(fileOrDataUrl, maxSide, quality) {
     return new Promise((resolve, reject) => {
       if (typeof Image === 'undefined') {
-        // Fallback for non-browser/node environments
         return resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : 'data:image/jpeg;base64,');
       }
       const image = new Image();
@@ -202,7 +462,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
     try {
       data = JSON.parse(rawText);
     } catch {
-      // Non-JSON response (e.g. Vercel 500/504 error page)
+      // Non-JSON response
     }
 
     if (!response.ok || !data || data.success === false) {
@@ -226,686 +486,6 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
     }
 
     return data;
-  }
-
-  const BIREFNET_SPACES = [
-    'https://hf-applications-background-removal.hf.space',
-    'https://not-lain-background-removal.hf.space'
-  ];
-
-  function dataUrlToBlob(dataUrl) {
-    const parts = String(dataUrl || '').split(',');
-    const mimeMatch = (parts[0] || '').match(/data:([^;]+);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    const bstr = atob(parts[1] || '');
-    const u8 = new Uint8Array(bstr.length);
-    for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
-    return new Blob([u8], { type: mime });
-  }
-
-  function blobToDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  /**
-   * Tier 1: Direct Browser-to-HuggingFace ZeroGPU BiRefNet Segmentation
-   * Extracts the exact foreground shoe/bag at 1024x1024 using ZhengPeng7/BiRefNet
-   */
-  async function segmentViaBrowserBiRefNet(inputDataUrl) {
-    if (typeof fetch === 'undefined' || typeof FormData === 'undefined' || typeof Blob === 'undefined') {
-      return null;
-    }
-    const blob = dataUrlToBlob(inputDataUrl);
-    for (const spaceOrigin of BIREFNET_SPACES) {
-      try {
-        const form = new FormData();
-        form.append('files', blob, 'product.jpg');
-        const upRes = await fetch(`${spaceOrigin}/gradio_api/upload`, {
-          method: 'POST',
-          body: form,
-          signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined
-        });
-        if (!upRes.ok) continue;
-        const upPaths = await upRes.json();
-        const uploadedPath = Array.isArray(upPaths) ? upPaths[0] : null;
-        if (!uploadedPath) continue;
-
-        const callRes = await fetch(`${spaceOrigin}/gradio_api/call/png`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            data: [{
-              path: uploadedPath,
-              orig_name: 'product.jpg',
-              mime_type: blob.type || 'image/jpeg',
-              meta: { _type: 'gradio.FileData' }
-            }]
-          }),
-          signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined
-        });
-        if (!callRes.ok) continue;
-        const callJson = await callRes.json();
-        const eventId = callJson?.event_id;
-        if (!eventId) continue;
-
-        const sseRes = await fetch(`${spaceOrigin}/gradio_api/call/png/${encodeURIComponent(eventId)}`, {
-          method: 'GET',
-          signal: AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined
-        });
-        if (!sseRes.ok) continue;
-        const sseText = await sseRes.text();
-        let fileUrl = null;
-        for (const line of sseText.split(/\r?\n/)) {
-          if (line.startsWith('data:')) {
-            try {
-              const arr = JSON.parse(line.slice(5).trim());
-              const item = Array.isArray(arr) ? arr[0] : arr;
-              if (item?.url) fileUrl = item.url;
-              else if (item?.path) fileUrl = `${spaceOrigin}/gradio_api/file=${item.path}`;
-            } catch { /* ignore */ }
-          }
-        }
-        if (!fileUrl) continue;
-        const imgRes = await fetch(fileUrl);
-        if (!imgRes.ok) continue;
-        const outBlob = await imgRes.blob();
-        if (outBlob && outBlob.size > 128) {
-          return await blobToDataUrl(outBlob);
-        }
-      } catch {
-        // Try next BiRefNet space
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Tier 2: On-Device Browser ONNX Neural Segmentation (@imgly/background-removal)
-   */
-  let cachedImglyRemoveBg = null;
-  async function segmentViaBrowserOnnx(inputDataUrl) {
-    try {
-      if (!cachedImglyRemoveBg) {
-        const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
-        cachedImglyRemoveBg = mod?.removeBackground || mod?.default;
-      }
-      if (typeof cachedImglyRemoveBg !== 'function') return null;
-      const blob = dataUrlToBlob(inputDataUrl);
-      const outBlob = await cachedImglyRemoveBg(blob, {
-        output: { format: 'image/png', quality: 1 }
-      });
-      if (outBlob && outBlob.size > 128) {
-        return await blobToDataUrl(outBlob);
-      }
-    } catch {
-      // Proceed to Tier 3 local histogram + saliency matting
-    }
-    return null;
-  }
-
-  /**
-   * Tier 3: 3D Border-Histogram + Saliency Connected-Component Matting
-   * Removes patterned carpets/rugs & cluttered backgrounds when offline while preserving 100% of the central product
-   */
-  function segmentProductFromCarpetOrBackground(sourceImg) {
-    const nw = sourceImg.naturalWidth || sourceImg.width || 800;
-    const nh = sourceImg.naturalHeight || sourceImg.height || 800;
-    const maxProc = 720;
-    const scale = Math.min(1, maxProc / Math.max(nw, nh));
-    const w = Math.max(16, Math.round(nw * scale));
-    const h = Math.max(16, Math.round(nh * scale));
-
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = w;
-    offCanvas.height = h;
-    const offCtx = offCanvas.getContext('2d');
-    if (!offCtx) return null;
-    offCtx.drawImage(sourceImg, 0, 0, w, h);
-
-    let imgData;
-    try {
-      imgData = offCtx.getImageData(0, 0, w, h);
-    } catch {
-      return null;
-    }
-    const data = imgData.data;
-    const total = w * h;
-
-    // Check if already transparent (e.g., returned by BiRefNet or ONNX)
-    let transparentBorderCount = 0;
-    let borderSampleTotal = 0;
-    for (let x = 0; x < w; x += 2) {
-      borderSampleTotal += 2;
-      if (data[(x) * 4 + 3] < 40) transparentBorderCount++;
-      if (data[((h - 1) * w + x) * 4 + 3] < 40) transparentBorderCount++;
-    }
-    if (borderSampleTotal > 0 && transparentBorderCount / borderSampleTotal > 0.35) {
-      return offCanvas;
-    }
-
-    // Build 3D quantized RGB histogram (16x16x16 = 4096 bins) of the outer 8.5% border frame (carpet/floor/wall)
-    // and the inner core region (product)
-    const BINS = 16;
-    const borderHist = new Float32Array(4096);
-    const centerHist = new Float32Array(4096);
-    const borderMarginX = Math.max(4, Math.round(w * 0.085));
-    const borderMarginY = Math.max(4, Math.round(h * 0.085));
-    let borderCount = 0;
-    let centerCount = 0;
-
-    for (let y = 0; y < h; y++) {
-      const isBorderY = y < borderMarginY || y >= h - borderMarginY;
-      const isCenterY = y >= h * 0.24 && y <= h * 0.78;
-      for (let x = 0; x < w; x++) {
-        const isBorderX = x < borderMarginX || x >= w - borderMarginX;
-        const idx = (y * w + x) * 4;
-        const rBin = data[idx] >> 4;
-        const gBin = data[idx + 1] >> 4;
-        const bBin = data[idx + 2] >> 4;
-        const bin = (rBin << 8) | (gBin << 4) | bBin;
-
-        if (isBorderX || isBorderY) {
-          borderHist[bin]++;
-          borderCount++;
-        } else if (isCenterY && x >= w * 0.24 && x <= w * 0.76) {
-          centerHist[bin]++;
-          centerCount++;
-        }
-      }
-    }
-
-    // Smooth border histogram across 3x3x3 neighboring color bins to handle carpet textures & lighting gradients
-    const smoothedBorder = new Float32Array(4096);
-    for (let r = 0; r < BINS; r++) {
-      for (let g = 0; g < BINS; g++) {
-        for (let b = 0; b < BINS; b++) {
-          let sum = 0;
-          for (let dr = -1; dr <= 1; dr++) {
-            const nr = r + dr;
-            if (nr < 0 || nr >= BINS) continue;
-            for (let dg = -1; dg <= 1; dg++) {
-              const ng = g + dg;
-              if (ng < 0 || ng >= BINS) continue;
-              for (let db = -1; db <= 1; db++) {
-                const nb = b + db;
-                if (nb < 0 || nb >= BINS) continue;
-                const wgt = (dr === 0 && dg === 0 && db === 0) ? 4 : 1;
-                sum += borderHist[(nr << 8) | (ng << 4) | nb] * wgt;
-              }
-            }
-          }
-          smoothedBorder[(r << 8) | (g << 4) | b] = sum / 30;
-        }
-      }
-    }
-
-    // Compute per-pixel background likelihood & edge strength
-    const isBg = new Uint8Array(total);
-    const visited = new Uint8Array(total);
-    const queue = new Int32Array(total);
-    let qHead = 0;
-    let qTail = 0;
-
-    function bgLikelihood(pIdx) {
-      const idx = pIdx * 4;
-      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-      const bin = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-      const bFreq = smoothedBorder[bin] / Math.max(1, borderCount);
-      const cFreq = centerHist[bin] / Math.max(1, centerCount);
-      return bFreq / (bFreq + cFreq * 0.55 + 0.00015);
-    }
-
-    // Seed flood-fill from all 4 edges
-    for (let x = 0; x < w; x++) {
-      const top = x;
-      const bot = (h - 1) * w + x;
-      visited[top] = 1; isBg[top] = 1; queue[qTail++] = top;
-      visited[bot] = 1; isBg[bot] = 1; queue[qTail++] = bot;
-    }
-    for (let y = 1; y < h - 1; y++) {
-      const left = y * w;
-      const right = y * w + (w - 1);
-      visited[left] = 1; isBg[left] = 1; queue[qTail++] = left;
-      visited[right] = 1; isBg[right] = 1; queue[qTail++] = right;
-    }
-
-    while (qHead < qTail) {
-      const curr = queue[qHead++];
-      const cx = curr % w;
-      const cy = (curr - cx) / w;
-      const cIdx = curr * 4;
-      const cr = data[cIdx], cg = data[cIdx + 1], cb = data[cIdx + 2];
-
-      const neighbors = [
-        cy > 0 ? curr - w : -1,
-        cy < h - 1 ? curr + w : -1,
-        cx > 0 ? curr - 1 : -1,
-        cx < w - 1 ? curr + 1 : -1
-      ];
-
-      for (let i = 0; i < 4; i++) {
-        const nb = neighbors[i];
-        if (nb < 0 || visited[nb]) continue;
-        const nx = nb % w;
-        const ny = (nb - nx) / w;
-        const nIdx = nb * 4;
-        const nr = data[nIdx], ng = data[nIdx + 1], nbCol = data[nIdx + 2];
-
-        const stepDist = Math.hypot(nr - cr, ng - cg, nbCol - cb);
-        const prob = bgLikelihood(nb);
-        // Distance from image center (0 at center, 1 at corner)
-        const normDx = (nx - w * 0.5) / (w * 0.5);
-        const normDy = (ny - h * 0.52) / (h * 0.52);
-        const radialDist = Math.hypot(normDx, normDy);
-
-        const allowFill =
-          (prob > 0.52 && stepDist < 78) ||
-          (prob > 0.36 && radialDist > 0.72 && stepDist < 65) ||
-          (stepDist < 22 && prob > 0.25);
-
-        if (allowFill) {
-          visited[nb] = 1;
-          isBg[nb] = 1;
-          queue[qTail++] = nb;
-        }
-      }
-    }
-
-    // Keep only main central foreground connected components & fill internal holes (e.g., white logos on dark shoes)
-    const fgVisited = new Uint8Array(total);
-    const components = [];
-    for (let p = 0; p < total; p++) {
-      if (isBg[p] || fgVisited[p]) continue;
-      const comp = [];
-      let head = 0;
-      comp.push(p);
-      fgVisited[p] = 1;
-      let touchesCenter = false;
-      while (head < comp.length) {
-        const cur = comp[head++];
-        const cx = cur % w;
-        const cy = (cur - cx) / w;
-        if (cx > w * 0.20 && cx < w * 0.80 && cy > h * 0.18 && cy < h * 0.84) {
-          touchesCenter = true;
-        }
-        const nbs = [
-          cy > 0 ? cur - w : -1,
-          cy < h - 1 ? cur + w : -1,
-          cx > 0 ? cur - 1 : -1,
-          cx < w - 1 ? cur + 1 : -1
-        ];
-        for (let i = 0; i < 4; i++) {
-          const nb = nbs[i];
-          if (nb >= 0 && !isBg[nb] && !fgVisited[nb]) {
-            fgVisited[nb] = 1;
-            comp.push(nb);
-          }
-        }
-      }
-      components.push({ pixels: comp, touchesCenter });
-    }
-
-    // Mark small disconnected noise islands as background
-    const minCompSize = Math.max(60, Math.round(total * 0.008));
-    for (const comp of components) {
-      if (!comp.touchesCenter || comp.pixels.length < minCompSize) {
-        for (let i = 0; i < comp.pixels.length; i++) {
-          isBg[comp.pixels[i]] = 1;
-        }
-      }
-    }
-
-    // Apply alpha mask with 2px edge feathering
-    const alphaBuf = new Uint8Array(total);
-    for (let i = 0; i < total; i++) alphaBuf[i] = isBg[i] ? 0 : 255;
-
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const p = y * w + x;
-        const sum =
-          alphaBuf[p] * 4 +
-          alphaBuf[p - 1] * 2 + alphaBuf[p + 1] * 2 +
-          alphaBuf[p - w] * 2 + alphaBuf[p + w] * 2 +
-          alphaBuf[p - w - 1] + alphaBuf[p - w + 1] +
-          alphaBuf[p + w - 1] + alphaBuf[p + w + 1];
-        data[p * 4 + 3] = Math.round(sum / 16);
-      }
-    }
-    for (let x = 0; x < w; x++) {
-      data[x * 4 + 3] = 0;
-      data[((h - 1) * w + x) * 4 + 3] = 0;
-    }
-    for (let y = 0; y < h; y++) {
-      data[(y * w) * 4 + 3] = 0;
-      data[(y * w + w - 1) * 4 + 3] = 0;
-    }
-
-    offCtx.putImageData(imgData, 0, 0);
-    return offCanvas;
-  }
-
-  /**
-   * Tight Alpha Bounding-Box Auto-Trim so the cutout shoe sits squarely on the studio podium
-   */
-  function trimTransparentCanvas(sourceCanvasOrImg) {
-    const w = sourceCanvasOrImg.width || sourceCanvasOrImg.naturalWidth || 800;
-    const h = sourceCanvasOrImg.height || sourceCanvasOrImg.naturalHeight || 800;
-    const tmp = document.createElement('canvas');
-    tmp.width = w;
-    tmp.height = h;
-    const ctx = tmp.getContext('2d');
-    if (!ctx) return tmp;
-    ctx.drawImage(sourceCanvasOrImg, 0, 0, w, h);
-
-    let imgData;
-    try {
-      imgData = ctx.getImageData(0, 0, w, h);
-    } catch {
-      return tmp;
-    }
-    const d = imgData.data;
-    let minX = w, minY = h, maxX = 0, maxY = 0;
-    let found = false;
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (d[(y * w + x) * 4 + 3] > 35) {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-          found = true;
-        }
-      }
-    }
-
-    if (!found || maxX <= minX || maxY <= minY) return tmp;
-
-    const cropW = maxX - minX + 1;
-    const cropH = maxY - minY + 1;
-    const trimmed = document.createElement('canvas');
-    trimmed.width = cropW;
-    trimmed.height = cropH;
-    const tCtx = trimmed.getContext('2d');
-    tCtx.drawImage(tmp, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
-    return trimmed;
-  }
-
-  /**
-   * Render Photorealistic 3D Studio Environment, Pedestal, Silhouette Contact Shadow & Floor Reflection
-   */
-  function renderCutoutOnStudioScene(cutoutSource, style = 'catalog-white', aspectRatio = '1:1') {
-    const ratioConfig = RATIOS.find(r => r.id === aspectRatio) || RATIOS[0];
-    const width = ratioConfig.width || 1024;
-    const height = ratioConfig.height || 1024;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    const isDark = style === 'dark-luxury' || style === 'advertising';
-    const isLuxury = style === 'luxury-showcase';
-    const isWood = style === 'minimal-wooden' || style === 'minimal';
-    const isEditorial = style === 'editorial-neutral';
-    const floorY = Math.round(height * 0.74);
-
-    // 1. Studio Wall Backdrop
-    const wallGrad = ctx.createRadialGradient(
-      width * 0.48, height * 0.34, width * 0.05,
-      width * 0.5, height * 0.48, Math.max(width, height) * 0.82
-    );
-    if (isDark) {
-      wallGrad.addColorStop(0, '#2a3330');
-      wallGrad.addColorStop(0.55, '#151b19');
-      wallGrad.addColorStop(1, '#090c0b');
-    } else if (isLuxury) {
-      wallGrad.addColorStop(0, '#fffdf9');
-      wallGrad.addColorStop(0.55, '#f4ede2');
-      wallGrad.addColorStop(1, '#e2d6c3');
-    } else if (isWood) {
-      wallGrad.addColorStop(0, '#fdfbf7');
-      wallGrad.addColorStop(0.6, '#f3ecdf');
-      wallGrad.addColorStop(1, '#e3d8c4');
-    } else if (isEditorial) {
-      wallGrad.addColorStop(0, '#f7f8fa');
-      wallGrad.addColorStop(0.6, '#e6e9ed');
-      wallGrad.addColorStop(1, '#d0d5dc');
-    } else {
-      // catalog-white & on-model
-      wallGrad.addColorStop(0, '#ffffff');
-      wallGrad.addColorStop(0.7, '#f7f9fb');
-      wallGrad.addColorStop(1, '#e9edf2');
-    }
-    ctx.fillStyle = wallGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // 2. Studio Floor & Architectural Podium / Surface
-    const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
-    if (isDark) {
-      floorGrad.addColorStop(0, '#181f1c');
-      floorGrad.addColorStop(0.3, '#101513');
-      floorGrad.addColorStop(1, '#070908');
-    } else if (isLuxury) {
-      floorGrad.addColorStop(0, '#efe6d8');
-      floorGrad.addColorStop(0.4, '#e5d9c6');
-      floorGrad.addColorStop(1, '#d6c6ae');
-    } else if (isWood) {
-      floorGrad.addColorStop(0, '#dcc6a8');
-      floorGrad.addColorStop(0.35, '#cfb491');
-      floorGrad.addColorStop(1, '#b89972');
-    } else if (isEditorial) {
-      floorGrad.addColorStop(0, '#dfe3e8');
-      floorGrad.addColorStop(1, '#c5cbd3');
-    } else {
-      floorGrad.addColorStop(0, '#f3f5f8');
-      floorGrad.addColorStop(0.35, '#fcfdfe');
-      floorGrad.addColorStop(1, '#e6ebf0');
-    }
-    ctx.fillStyle = floorGrad;
-    ctx.fillRect(0, floorY, width, height - floorY);
-
-    // Soft studio horizon transition
-    const seamGrad = ctx.createLinearGradient(0, floorY - 18, 0, floorY + 18);
-    seamGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    seamGrad.addColorStop(0.5, isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.045)');
-    seamGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = seamGrad;
-    ctx.fillRect(0, floorY - 18, width, 36);
-
-    // Optional 3D Cylindrical Studio Podium for Luxury / Dark / Editorial styles
-    if (isLuxury || isDark || isEditorial) {
-      const podiumCx = width * 0.5;
-      const podiumTopY = Math.round(height * 0.77);
-      const podiumRx = Math.round(width * 0.37);
-      const podiumRy = Math.round(height * 0.055);
-      const podiumH = Math.round(height * 0.09);
-
-      // Podium base shadow
-      ctx.save();
-      ctx.translate(podiumCx, podiumTopY + podiumH);
-      ctx.scale(1, pScale(podiumRx, podiumRy * 1.15));
-      const baseShad = ctx.createRadialGradient(0, 0, podiumRx * 0.2, 0, 0, podiumRx * 1.12);
-      baseShad.addColorStop(0, isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.26)');
-      baseShad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = baseShad;
-      ctx.beginPath();
-      ctx.arc(0, 0, podiumRx * 1.12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Podium cylinder body
-      const bodyGrad = ctx.createLinearGradient(podiumCx - podiumRx, 0, podiumCx + podiumRx, 0);
-      if (isDark) {
-        bodyGrad.addColorStop(0, '#101412');
-        bodyGrad.addColorStop(0.3, '#262f2c');
-        bodyGrad.addColorStop(0.7, '#181e1c');
-        bodyGrad.addColorStop(1, '#0b0e0d');
-      } else if (isLuxury) {
-        bodyGrad.addColorStop(0, '#d8cbb8');
-        bodyGrad.addColorStop(0.28, '#f7f1e8');
-        bodyGrad.addColorStop(0.65, '#eadfce');
-        bodyGrad.addColorStop(1, '#c9baa4');
-      } else {
-        bodyGrad.addColorStop(0, '#c2c8d0');
-        bodyGrad.addColorStop(0.3, '#eef1f4');
-        bodyGrad.addColorStop(0.7, '#dcdfe4');
-        bodyGrad.addColorStop(1, '#b4bbc4');
-      }
-      ctx.fillStyle = bodyGrad;
-      ctx.beginPath();
-      ctx.ellipse(podiumCx, podiumTopY, podiumRx, podiumRy, 0, Math.PI, Math.PI * 2);
-      ctx.lineTo(podiumCx + podiumRx, podiumTopY + podiumH);
-      ctx.ellipse(podiumCx, podiumTopY + podiumH, podiumRx, podiumRy, 0, 0, Math.PI);
-      ctx.closePath();
-      ctx.fill();
-
-      // Podium top surface
-      const topGrad = ctx.createLinearGradient(podiumCx - podiumRx, podiumTopY - podiumRy, podiumCx + podiumRx, podiumTopY + podiumRy);
-      if (isDark) {
-        topGrad.addColorStop(0, '#2c3632');
-        topGrad.addColorStop(1, '#19201e');
-      } else if (isLuxury) {
-        topGrad.addColorStop(0, '#fffdf9');
-        topGrad.addColorStop(1, '#ebe1d1');
-      } else {
-        topGrad.addColorStop(0, '#f8f9fb');
-        topGrad.addColorStop(1, '#e1e5ea');
-      }
-      ctx.fillStyle = topGrad;
-      ctx.beginPath();
-      ctx.ellipse(podiumCx, podiumTopY, podiumRx, podiumRy, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Podium rim highlight
-      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.75)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(podiumCx, podiumTopY, podiumRx, podiumRy, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // 3. Trim & Position the Extracted Product Cutout
-    const trimmed = trimTransparentCanvas(cutoutSource);
-    const cw = trimmed.width || 600;
-    const ch = trimmed.height || 600;
-    const maxW = width * 0.68;
-    const maxH = height * 0.60;
-    const scale = Math.min(maxW / cw, maxH / ch);
-    const drawW = Math.round(cw * scale);
-    const drawH = Math.round(ch * scale);
-    const drawX = Math.round((width - drawW) / 2);
-    const soleY = Math.round(height * 0.76);
-    const drawY = soleY - drawH;
-
-    // 4. Create Silhouette Shadow Mask from the Product's Actual Alpha Channel
-    const silhouetteCanvas = document.createElement('canvas');
-    silhouetteCanvas.width = drawW;
-    silhouetteCanvas.height = drawH;
-    const sCtx = silhouetteCanvas.getContext('2d');
-    if (sCtx) {
-      sCtx.drawImage(trimmed, 0, 0, drawW, drawH);
-      sCtx.globalCompositeOperation = 'source-in';
-      sCtx.fillStyle = '#000000';
-      sCtx.fillRect(0, 0, drawW, drawH);
-    }
-
-    // 4a. Subtle Floor Mirror Reflection underneath the product
-    ctx.save();
-    ctx.globalAlpha = isDark ? 0.18 : isLuxury ? 0.12 : 0.07;
-    ctx.translate(drawX, soleY + drawH * 0.26);
-    ctx.scale(1, -0.28);
-    if ('filter' in ctx) ctx.filter = 'blur(5px)';
-    ctx.drawImage(trimmed, 0, 0, drawW, drawH);
-    ctx.restore();
-
-    // 4b. Wide Soft Studio Diffused Shadow
-    ctx.save();
-    ctx.globalAlpha = isDark ? 0.65 : 0.24;
-    if ('filter' in ctx) ctx.filter = 'blur(26px)';
-    ctx.drawImage(
-      silhouetteCanvas,
-      drawX - drawW * 0.04,
-      soleY - drawH * 0.14,
-      drawW * 1.08,
-      drawH * 0.22
-    );
-    ctx.restore();
-
-    // 4c. Tight Sole Contact Shadow (Ambient Occlusion anchoring the shoe to the floor)
-    ctx.save();
-    ctx.globalAlpha = isDark ? 0.88 : 0.48;
-    if ('filter' in ctx) ctx.filter = 'blur(7px)';
-    ctx.drawImage(
-      silhouetteCanvas,
-      drawX + drawW * 0.02,
-      soleY - drawH * 0.06,
-      drawW * 0.96,
-      drawH * 0.10
-    );
-    ctx.restore();
-
-    // 5. Draw the 100% Real Product Cutout with Studio Crispness
-    ctx.save();
-    if ('filter' in ctx) {
-      ctx.filter = 'contrast(1.03) saturate(1.03)';
-    }
-    ctx.drawImage(trimmed, drawX, drawY, drawW, drawH);
-    ctx.restore();
-
-    // 6. Subtle Overhead Studio Softbox Bloom
-    const bloomGrad = ctx.createRadialGradient(width * 0.5, height * 0.06, 10, width * 0.5, height * 0.2, width * 0.65);
-    bloomGrad.addColorStop(0, isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.22)');
-    bloomGrad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = bloomGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    return canvas.toDataURL('image/jpeg', 0.95);
-  }
-
-  function pScale(rx, ry) {
-    return Math.max(0.1, ry / Math.max(1, rx));
-  }
-
-  /**
-   * End-to-End BiRefNet Studio Pipeline in Browser:
-   * 1. Uses server BiRefNet cutout if provided, OR calls HuggingFace ZeroGPU BiRefNet directly from browser,
-   *    OR runs @imgly/background-removal ONNX, OR runs 3D Border-Histogram Carpet Matting.
-   * 2. Composites the 100% real product cutout onto the 3D Studio Podium & Shadow Scene.
-   */
-  async function createClientStudioPreview(inputDataUrl, style = 'catalog-white', aspectRatio = '1:1', preCutoutDataUrl = null) {
-    if (typeof Image === 'undefined' || typeof document === 'undefined') {
-      return inputDataUrl;
-    }
-
-    let cutoutUrl = preCutoutDataUrl;
-    if (!cutoutUrl) {
-      cutoutUrl = await segmentViaBrowserBiRefNet(inputDataUrl);
-    }
-    if (!cutoutUrl) {
-      cutoutUrl = await segmentViaBrowserOnnx(inputDataUrl);
-    }
-
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const segmentedSource = cutoutUrl ? img : (segmentProductFromCarpetOrBackground(img) || img);
-          const finalStudioUrl = renderCutoutOnStudioScene(segmentedSource, style, aspectRatio);
-          resolve(finalStudioUrl || inputDataUrl);
-        } catch {
-          resolve(inputDataUrl);
-        }
-      };
-      img.onerror = () => resolve(inputDataUrl);
-      img.src = cutoutUrl || inputDataUrl;
-    });
   }
 
   // Description Assistant Generator
@@ -1018,7 +598,7 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
   }
 
   /**
-   * Inline Studio inside Product Modal (Maintains full backward compatibility)
+   * Inline Puter.js Product Studio inside Product Modal
    */
   function insertStudio() {
     const form = document.querySelector('#product-edit-form');
@@ -1028,25 +608,21 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
 
     let sourceDataUrl = '';
     let generatedDataUrl = '';
-
     const studio = document.createElement('section');
     studio.className = 'ai-product-studio field full';
     studio.setAttribute('aria-labelledby', 'ai-product-title');
     studio.innerHTML = `
       <div class="ai-studio-heading">
-        <h3 id="ai-product-title">✨ دستیار خودکارسازی عکس محصول با ComfyUI Automation API</h3>
-        <p class="ai-studio-note">ویرایش دستوری و دقیق با مدل <strong>Qwen-Image-Edit</strong> بر اساس عکس مرجع، به همراه پایپ‌لاین‌های پیشرفتهٔ <strong>FLUX.2-klein</strong> و <strong>SDXL</strong>. این دستیار با استفاده از واسط خودکارسازی ComfyUI بدون وابستگی به کلیدهای تحریمی یا پولی عمل می‌کند.</p>
+        <h3 id="ai-product-title">✨ استودیو هوش مصنوعی تصویر محصول با Puter.js</h3>
+        <p class="ai-studio-note">تصویر مرجع با مدل‌های تولید تصویر Puter ویرایش می‌شود؛ در صورت محدودیت یا خطا، استودیو خودکار مدل سازگار بعدی را امتحان می‌کند. ورود به حساب Puter لازم است و مصرف طبق شرایط حساب همان کاربر محاسبه می‌شود.</p>
       </div>
-
       <div class="ai-studio-controls">
         <label class="ai-file-label" for="ai-product-file">انتخاب یک تصویر واضح از محصول</label>
         <input id="ai-product-file" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="ai-studio-status">
-        
-        <label for="ai-product-pipeline">موتور هوش مصنوعی استودیو (BiRefNet AI / ComfyUI)</label>
+        <label for="ai-product-pipeline">مدل هوش مصنوعی / ترتیب چرخش</label>
         <select id="ai-product-pipeline" class="ai-studio-select">
-          <option value="qwen-edit" selected>BiRefNet AI Studio Pro (حذف دقیق پس‌زمینه فرش و محیط + بازسازی آتلیه‌ای با حفظ ۱۰۰٪ کالا · Qwen-Image-Edit)</option>
+          <option value="puter-auto" selected>🔄 چرخش خودکار مدل‌های سازگار Puter</option>
         </select>
-
         <label for="ai-product-style">سبک دکور و زمینهٔ استودیو</label>
         <select id="ai-product-style" class="ai-studio-select">
           <option value="catalog-white" selected>سفید کاتالوگی استاندارد (مناسب وب‌سایت و دیجی‌کالا)</option>
@@ -1056,30 +632,30 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
           <option value="on-model">روی مدل (نمایش پاخور طبیعی)</option>
           <option value="advertising">تبلیغاتی و بنر (نورپردازی دراماتیک پویا)</option>
         </select>
-
-        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>✨ تولید تصویر با ComfyUI</button>
+        <div class="ai-puter-login-row">
+          <button type="button" class="btn outline" id="ai-product-puter-connect">🔗 ورود / اتصال به Puter</button>
+          <small id="ai-product-puter-status" role="status">برای تولید، حساب Puter لازم است.</small>
+        </div>
+        <button type="button" class="btn ai-generate-button" id="ai-product-generate" disabled>✨ تولید تصویر و چرخش خودکار مدل‌ها</button>
       </div>
-
       <div class="ai-source-grid" id="ai-product-previews-grid">
         <figure class="ai-source-card" id="ai-product-source-wrap" hidden>
-          <label>عکس واضح انتخابی</label>
-          <img id="ai-product-source-preview" alt="پیش‌نمایش عکس واضح انتخابی محصول">
+          <label>عکس مرجع</label>
+          <img id="ai-product-source-preview" alt="پیش‌نمایش عکس محصول">
           <figcaption class="ai-source-status">عکس مرجع آماده است</figcaption>
         </figure>
-        <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin: 0; width: 100%;">
-          <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر نهایی تولیدشده با ComfyUI</label>
-          <img id="ai-product-output-preview" alt="تصویر نهایی محصول ساخته‌شده با ComfyUI">
-          <figcaption style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">خروجی باکیفیت تجاری از پایپ‌لاین ComfyUI</figcaption>
+        <figure class="ai-final-output" id="ai-product-output-wrap" hidden style="margin:0; width:100%;">
+          <label style="display:block; min-height:34px; color:#26382a; font-size:12px; font-weight:600;">تصویر ویرایش‌شده</label>
+          <img id="ai-product-output-preview" alt="تصویر استودیویی تولیدشده با Puter.js">
+          <figcaption id="ai-product-output-caption" style="margin-top:9px; color:#26382a; font-size:12px; text-align:center;">خروجی مدل Puter.js</figcaption>
         </figure>
       </div>
-
       <div class="ai-studio-actions">
         <button type="button" class="action" id="ai-product-apply" disabled>افزودن تصویر نهایی به تصاویر محصول</button>
         <span id="ai-studio-status" role="status" aria-live="polite">یک تصویر واضح از محصول انتخاب کنید.</span>
       </div>`;
 
     field.before(studio);
-
     const status = studio.querySelector('#ai-studio-status');
     const generateBtn = studio.querySelector('#ai-product-generate');
     const applyBtn = studio.querySelector('#ai-product-apply');
@@ -1090,6 +666,23 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
     const sourcePreview = studio.querySelector('#ai-product-source-preview');
     const outputWrap = studio.querySelector('#ai-product-output-wrap');
     const outputPreview = studio.querySelector('#ai-product-output-preview');
+    const outputCaption = studio.querySelector('#ai-product-output-caption');
+    const connectBtn = studio.querySelector('#ai-product-puter-connect');
+    const puterStatus = studio.querySelector('#ai-product-puter-status');
+
+    loadPuterImageModels(getPuterClient()).then(models => populatePuterModelSelect(pipelineSelect, models));
+    connectBtn?.addEventListener('click', async () => {
+      try {
+        const puter = getPuterClient();
+        if (!puter?.auth?.signIn) throw new Error('کتابخانهٔ Puter.js هنوز بارگذاری نشده است. صفحه را تازه‌سازی کنید.');
+        if (!puter.auth.isSignedIn?.()) await puter.auth.signIn();
+        if (puterStatus) puterStatus.textContent = '✅ حساب Puter متصل است؛ مدل‌ها آماده‌اند.';
+        const models = await loadPuterImageModels(puter, { discoverLive: true, force: true });
+        populatePuterModelSelect(pipelineSelect, models);
+      } catch (error) {
+        if (puterStatus) puterStatus.textContent = error?.message || 'اتصال به Puter انجام نشد.';
+      }
+    });
 
     fileInput?.addEventListener('change', async () => {
       const file = fileInput.files?.[0];
@@ -1100,83 +693,66 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
         status.textContent = 'یک تصویر واضح از محصول انتخاب کنید.';
         return;
       }
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > MAX_UPLOAD) {
+        sourceDataUrl = '';
+        generateBtn.disabled = true;
+        status.textContent = file.size > MAX_UPLOAD ? 'حجم عکس بیشتر از ۱۵ مگابایت است.' : 'فرمت JPG، PNG یا WebP انتخاب کنید.';
+        return;
+      }
       try {
         status.textContent = 'در حال خواندن عکس…';
-        sourceDataUrl = await resizeImage(file, 1200, 0.92);
+        sourceDataUrl = await resizeImage(file, 1024, 0.88);
         sourcePreview.src = sourceDataUrl;
         sourceWrap.hidden = false;
         generateBtn.disabled = false;
-        status.textContent = 'عکس آماده است؛ دکمه تولید را بزنید.';
-      } catch (err) {
-        status.textContent = err.message || 'خطا در بارگذاری تصویر';
+        status.textContent = 'عکس آماده است؛ تولید را بزنید.';
+      } catch (error) {
+        status.textContent = error.message || 'خطا در بارگذاری تصویر.';
       }
     });
 
     generateBtn?.addEventListener('click', async () => {
       if (!sourceDataUrl) return;
       generateBtn.disabled = true;
+      applyBtn.disabled = true;
       generateBtn.textContent = 'در حال تولید…';
-      status.textContent = 'ارسال تصویر به استودیو هوش مصنوعی محصول…';
+      status.textContent = 'در حال اتصال به Puter و آماده‌سازی مدل‌ها…';
       try {
-        let refDataUrl = sourceDataUrl;
-        try {
-          refDataUrl = await resizeImage(sourceDataUrl, 511, 0.90);
-        } catch { /* ignore */ }
-
-        const res = await fetch('/api/ai/studio/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-          body: JSON.stringify({
-            image: sourceDataUrl,
-            referenceImage: refDataUrl,
-            style: styleSelect?.value || 'catalog-white',
-            provider: pipelineSelect?.value || 'qwen-edit'
-          })
+        const result = await generateProductImageWithPuter({
+          imageDataUrl: sourceDataUrl,
+          style: styleSelect?.value || 'catalog-white',
+          preferredModel: pipelineSelect?.value || PUTER_AUTO_MODEL,
+          onProgress: ({ model, index, total, fallback }) => {
+            status.textContent = fallback
+              ? `مدل قبلی در دسترس نبود؛ تلاش ${index + 1} از ${total} با ${model.name}…`
+              : `در حال تولید با ${model.name}…`;
+          }
         });
-        const data = await safeFetchJson(res);
-        if (!data || !data.success || !data.generatedUrl) {
-          throw new Error(data?.error || 'خروجی معتبری از هوش مصنوعی دریافت نشد.');
-        }
-
-        if (data.mode === 'birefnet-cutout' || data.backgroundRemoved) {
-          generatedDataUrl = await createClientStudioPreview(
-            sourceDataUrl,
-            styleSelect?.value || 'catalog-white',
-            '1:1',
-            data.cutoutUrl || data.generatedUrl
-          );
-        } else if (data.mode === 'client-studio-fallback' || data.quotaExhaustedFallback) {
-          generatedDataUrl = await createClientStudioPreview(sourceDataUrl, styleSelect?.value || 'catalog-white', '1:1');
-        } else {
-          generatedDataUrl = data.generatedUrl || data.image || data.images?.[0];
-        }
+        generatedDataUrl = result.dataUrl;
+        if (!generatedDataUrl || generatedDataUrl === sourceDataUrl) throw new Error('مدل تصویر تازه و متفاوتی تولید نکرد.');
         outputPreview.src = generatedDataUrl;
         outputWrap.hidden = false;
         applyBtn.disabled = false;
-        status.textContent = '✅ تصویر جدید کاتالوگ با حفظ ۱۰۰٪ کالای واقعی توسط BiRefNet AI Studio تولید شد.';
-      } catch (err) {
-        generatedDataUrl = await createClientStudioPreview(sourceDataUrl, styleSelect?.value || 'catalog-white', '1:1');
-        outputPreview.src = generatedDataUrl;
-        outputWrap.hidden = false;
-        applyBtn.disabled = false;
-        status.textContent = '✅ تصویر کاتالوگ با موتور BiRefNet AI Studio آماده شد.';
+        const trail = result.triedModels.length > 1 ? ` · پس از ${result.triedModels.length} تلاش` : '';
+        outputCaption.textContent = `مدل نهایی: ${result.modelName} · ${result.provider}${trail}`;
+        status.textContent = `✅ تصویر ویرایش شد؛ مدل فعال: ${result.modelName}.`;
+      } catch (error) {
+        generatedDataUrl = '';
+        status.textContent = `❌ ${error.message || 'تولید تصویر با مدل‌های Puter انجام نشد.'}`;
       } finally {
-        generateBtn.disabled = false;
-        generateBtn.textContent = '✨ تولید تصویر با هوش مصنوعی';
+        generateBtn.disabled = !sourceDataUrl;
+        generateBtn.textContent = '✨ تولید تصویر و چرخش خودکار مدل‌ها';
       }
     });
 
     applyBtn?.addEventListener('click', () => {
       if (!generatedDataUrl) return;
-      const imagesField = form?.elements?.images;
-      if (imagesField) {
-        const current = imagesField.value.trim();
-        imagesField.value = current ? `${current}\n${generatedDataUrl}` : generatedDataUrl;
+      if (images && typeof images.value === 'string') {
+        const current = images.value.trim();
+        images.value = current ? `${current}\n${generatedDataUrl}` : generatedDataUrl;
       }
-      if (form?.elements?.image && !form.elements.image.value) {
-        form.elements.image.value = generatedDataUrl;
-      }
-      if (typeof g.toast === 'function') g.toast('تصویر هوش مصنوعی به فیلد عکس‌های فرم اضافه شد.');
+      if (form?.elements?.image && !form.elements.image.value) form.elements.image.value = generatedDataUrl;
+      if (typeof g.toast === 'function') g.toast('تصویر تولیدشده به فیلد تصاویر محصول افزوده شد.');
       applyBtn.textContent = '✓ اضافه شد';
       applyBtn.disabled = true;
     });
@@ -1187,85 +763,53 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
    */
   function renderProductAiStudioPage(target) {
     if (!target) return;
-
     let selectedStyle = 'catalog-white';
     let selectedRatio = '1:1';
     let selectedPreservation = 'maximum';
     let selectedQuality = 'high';
-    let selectedProvider = 'qwen-edit';
+    let selectedProvider = PUTER_AUTO_MODEL;
     let currentInputDataUrl = '';
     let currentOutputDataUrl = '';
     let isGenerating = false;
 
-    // Get product list for attachment dropdown
     const db = typeof g.getDb === 'function' ? g.getDb() : (g.db || { products: [] });
     const products = Array.isArray(db.products) ? db.products : [];
 
     target.innerHTML = `
       <div class="ai-studio-page-wrapper" dir="rtl">
-        <!-- Top Banner -->
         <header class="ai-studio-hero">
           <div class="ai-studio-hero-content">
             <div class="ai-studio-badge-pill">
               <span class="ai-spark-icon">✨</span>
               <span>استودیو هوش مصنوعی محصول طوبی</span>
-              <span class="ai-version-tag">نسخه ۲.۵ کاتالوگی</span>
+              <span class="ai-version-tag">Puter.js · مدل‌های چرخشی</span>
             </div>
-            <h1 class="ai-studio-title">تبدیل تصاویر خام کفش و کیف به عکس‌های تجاری آتلیه‌ای</h1>
-            <p class="ai-studio-desc">عکس معمولی یا با موبایل گرفته‌شده از محصول را بارگذاری کنید؛ هوش مصنوعی پس‌زمینه را جایگزین کرده، نورپردازی اختصاصی ایجاد می‌کند و <strong>هویت دقیق کالا (فرم، رنگ، جنس، لوگو و دوخت)</strong> را ۱۰۰٪ دست‌نخورده نگه می‌دارد.</p>
+            <h1 class="ai-studio-title">تبدیل عکس محصول به تصویر تجاری آتلیه‌ای</h1>
+            <p class="ai-studio-desc">یک عکس واضح از محصول بارگذاری کنید. استودیو بین مدل‌های سازگار تولید و ویرایش تصویر Puter.js به‌صورت چرخشی انتخاب می‌کند و اگر مدلی محدود یا ناموفق شود، خودکار مدل بعدی را امتحان می‌کند. استفاده نیازمند ورود به Puter است و مصرف تابع شرایط حساب کاربر است.</p>
           </div>
           <div class="ai-studio-backend-status-card" id="ai-studio-backend-card">
             <div class="ai-status-indicator">
               <span class="status-dot online" id="ai-backend-status-dot"></span>
-              <strong id="ai-backend-status-text">${hasConnectedGeminiAccount() ? '✅ اکانت گوگل جمینای پرو متصل است' : 'موتور BiRefNet AI Studio فعال است'}</strong>
+              <strong id="ai-backend-status-text">Puter.js آمادهٔ اتصال</strong>
             </div>
             <div class="ai-backend-meta">
-              <span id="ai-backend-name">${hasConnectedGeminiAccount() ? 'تولید تصویر با اکانت Google Gemini + BiRefNet' : 'حذف دقیق پس‌زمینه + حفظ ۱۰۰٪ کالای واقعی'}</span>
-              <button type="button" class="btn-text-link" id="ai-toggle-gemini-connect">🔗 اتصال اکانت گوگل جمینای</button>
+              <span id="ai-backend-name">در حال بارگذاری فهرست مدل‌های تصویر Puter…</span>
+              <button type="button" class="btn-text-link" id="ai-puter-connect-btn">🔗 ورود / اتصال به Puter</button>
             </div>
-            <div class="ai-backend-settings-panel" id="ai-gemini-connect-panel" style="display:none; flex-direction:column; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.14);">
-              <small style="color:#d8eadf; line-height:1.6;">
-                برای استفاده از سهمیه اکانت گوگل خود، روی دکمه زیر بزنید تا کلید حساب <strong>Google AI Studio</strong> همان جیمیل را دریافت کنید، یا توکن OAuth گوگل (<code>ya29...</code>) را وارد نمایید:
-              </small>
-              <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="btn small" style="text-decoration:none; background:#1a73e8; color:#fff;">
-                  🔑 ۱. دریافت کلید از اکانت گوگل من (AI Studio)
-                </a>
-                <button type="button" class="btn small outline" id="ai-google-oauth-btn" style="color:#fff; border-color:rgba(255,255,255,0.35);">
-                  🌐 ورود مستقیم با Google OAuth
-                </button>
-              </div>
-              <input type="password" id="ai-gemini-api-key-input" value="${esc(getStoredGeminiConfig().apiKey)}" placeholder="کلید AIzaSy... از اکانت گوگل شما" dir="ltr" />
-              <div id="ai-google-oauth-extra" style="display:${getStoredGeminiConfig().clientId || getStoredGeminiConfig().accessToken ? 'flex' : 'none'}; flex-direction:column; gap:6px;">
-                <input type="text" id="ai-gemini-client-id-input" value="${esc(getStoredGeminiConfig().clientId)}" placeholder="Google OAuth Client ID (اختیاری برای پاپ‌آپ گوگل)" dir="ltr" />
-                <input type="password" id="ai-gemini-oauth-token-input" value="${esc(getStoredGeminiConfig().accessToken)}" placeholder="یا توکن OAuth مستقیم (ya29...)" dir="ltr" />
-                <input type="text" id="ai-gemini-project-id-input" value="${esc(getStoredGeminiConfig().projectId)}" placeholder="Google Cloud Project ID (اختیاری)" dir="ltr" />
-              </div>
-              <div style="display:flex; gap:6px;">
-                <button type="button" class="btn small success-button" id="ai-save-gemini-account-btn">✓ ذخیره و تست اتصال به گوگل</button>
-                <button type="button" class="btn small danger-button" id="ai-disconnect-gemini-btn">قطع اتصال</button>
-              </div>
-              <small id="ai-gemini-connect-feedback" style="display:none; font-weight:600;"></small>
-            </div>
+            <small id="ai-puter-usage-note" style="display:block; margin-top:8px; line-height:1.7; color:#b9c9be;">هزینه و سهمیهٔ تولید بر اساس حساب Puter کاربر اعمال می‌شود.</small>
           </div>
         </header>
 
-        <!-- Main Studio Grid -->
         <div class="ai-studio-grid">
-          <!-- Left Column: Controls & Configuration -->
           <div class="ai-studio-controls-col">
-            <!-- 1. Upload Card -->
             <section class="ai-card ai-upload-card">
-              <div class="ai-card-head">
-                <span class="step-num">۱</span>
-                <h3>بارگذاری تصویر محصول</h3>
-              </div>
+              <div class="ai-card-head"><span class="step-num">۱</span><h3>بارگذاری تصویر محصول</h3></div>
               <div class="ai-dropzone" id="ai-studio-dropzone">
                 <input type="file" id="ai-studio-file-input" accept="image/jpeg,image/png,image/webp" style="display:none;" />
                 <div class="ai-dropzone-inner" id="ai-dropzone-prompt">
                   <div class="ai-upload-icon">📸</div>
-                  <p class="ai-drop-text"><strong>عکس خام محصول را بکشید و اینجا رها کنید</strong> یا کلیک کنید</p>
-                  <small class="ai-drop-sub">پشتیبانی از فرمت‌های JPG، PNG و WebP (حداکثر ۱۵ مگابایت)</small>
+                  <p class="ai-drop-text"><strong>عکس محصول را بکشید و اینجا رها کنید</strong> یا کلیک کنید</p>
+                  <small class="ai-drop-sub">JPG، PNG و WebP · حداکثر ۱۵ مگابایت</small>
                 </div>
                 <div class="ai-dropzone-preview" id="ai-dropzone-preview" style="display:none;">
                   <img id="ai-uploaded-img-preview" alt="پیش‌نمایش تصویر محصول" />
@@ -1275,704 +819,332 @@ CRITICAL RULE: Keep the exact shoe/sandal/bag from the input image 100% identica
                   </div>
                 </div>
               </div>
-              <div class="ai-preservation-notice">
-                <span class="shield-icon">🛡️</span>
-                <span>قفل وفاداری به محصول: مدل مجاز به تغییر شکل، سگک، زیپ، دوخت، لوگو یا ساختار کفش و کیف نیست.</span>
-              </div>
+              <div class="ai-preservation-notice"><span class="shield-icon">🛡️</span><span>درخواست ویرایش فقط دکور و نورپردازی را تغییر می‌دهد؛ خروجی را پیش از انتشار از نظر شکل، رنگ، لوگو و جزئیات محصول بررسی کنید.</span></div>
             </section>
 
-            <!-- 2. Style Preset Selector -->
             <section class="ai-card ai-style-card">
-              <div class="ai-card-head">
-                <span class="step-num">۲</span>
-                <h3>سبک دکور و نورپردازی استودیو</h3>
-              </div>
+              <div class="ai-card-head"><span class="step-num">۲</span><h3>سبک دکور و نورپردازی</h3></div>
               <div class="ai-styles-selector-grid">
-                ${STYLES.map(s => `
-                  <button type="button" class="ai-style-option ${s.id === selectedStyle ? 'active' : ''}" data-style="${s.id}">
-                    <span class="style-icon">${s.icon}</span>
-                    <div class="style-meta">
-                      <div class="style-title-row">
-                        <strong>${esc(s.title)}</strong>
-                        <span class="style-badge">${esc(s.badge)}</span>
-                      </div>
-                      <p class="style-desc">${esc(s.desc)}</p>
+                ${STYLES.map(style => `
+                  <button type="button" class="ai-style-option ${style.id === selectedStyle ? 'active' : ''}" data-style="${style.id}">
+                    <span class="style-icon">${style.icon}</span><div class="style-meta">
+                      <div class="style-title-row"><strong>${esc(style.title)}</strong><span class="style-badge">${esc(style.badge)}</span></div>
+                      <p class="style-desc">${esc(style.desc)}</p>
                     </div>
-                  </button>
-                `).join('')}
+                  </button>`).join('')}
               </div>
             </section>
 
-            <!-- 3. Studio Settings (Aspect Ratio, Preservation, Quality) -->
             <section class="ai-card ai-settings-card">
-              <div class="ai-card-head">
-                <span class="step-num">۳</span>
-                <h3>تنظیمات ابعاد و کیفیت</h3>
-              </div>
-              
-              <!-- Aspect Ratio -->
+              <div class="ai-card-head"><span class="step-num">۳</span><h3>تنظیمات تولید</h3></div>
               <div class="ai-setting-group">
-                <label>نسبت ابعاد خروجی (Aspect Ratio):</label>
+                <label>نسبت ابعاد خروجی:</label>
                 <div class="ai-pill-selector">
-                  ${RATIOS.map(r => `
-                    <button type="button" class="ai-pill-btn ${r.id === selectedRatio ? 'active' : ''}" data-ratio="${r.id}">
-                      <strong>${esc(r.label)}</strong>
-                      <small>${esc(r.sub)}</small>
-                    </button>
-                  `).join('')}
+                  ${RATIOS.map(ratio => `<button type="button" class="ai-pill-btn ${ratio.id === selectedRatio ? 'active' : ''}" data-ratio="${ratio.id}"><strong>${esc(ratio.label)}</strong><small>${esc(ratio.sub)}</small></button>`).join('')}
                 </div>
               </div>
-
-              <!-- Preservation Level -->
               <div class="ai-setting-group">
-                <label>شدت حفظ هویت کالا (Identity Lock):</label>
+                <label>شدت حفظ هویت کالا:</label>
                 <div class="ai-pill-selector three-col">
-                  ${PRESERVATION_LEVELS.map(p => `
-                    <button type="button" class="ai-pill-btn ${p.id === selectedPreservation ? 'active' : ''}" data-preservation="${p.id}">
-                      <strong>${esc(p.label)}</strong>
-                    </button>
-                  `).join('')}
+                  ${PRESERVATION_LEVELS.map(level => `<button type="button" class="ai-pill-btn ${level.id === selectedPreservation ? 'active' : ''}" data-preservation="${level.id}"><strong>${esc(level.label)}</strong></button>`).join('')}
                 </div>
               </div>
-
-              <!-- AI Engine & Quality -->
               <div class="ai-setting-row">
                 <div class="ai-setting-group flex-1">
-                  <label for="ai-studio-provider-select">موتور هوش مصنوعی:</label>
-                  <select id="ai-studio-provider-select" class="select full">
-                    <option value="qwen-edit" selected>BiRefNet AI Studio Pro (حذف دقیق پس‌زمینه فرش/محیط + بازسازی آتلیه‌ای با حفظ ۱۰۰٪ کالا)</option>
-                  </select>
+                  <label for="ai-studio-provider-select">مدل یا چرخش خودکار:</label>
+                  <select id="ai-studio-provider-select" class="select full"><option value="puter-auto" selected>🔄 چرخش خودکار مدل‌های سازگار Puter</option></select>
                 </div>
                 <div class="ai-setting-group flex-1">
                   <label for="ai-studio-quality-select">کیفیت خروجی:</label>
                   <select id="ai-studio-quality-select" class="select full">
-                    <option value="high" selected>کیفیت بالا HD (پیش‌فرض)</option>
-                    <option value="standard">استاندارد وب (سریع‌تر)</option>
-                    <option value="ultra">فوق‌العاده Ultra 4K (حداکثر جزئیات)</option>
+                    <option value="high" selected>کیفیت بالا</option><option value="standard">استاندارد و سریع‌تر</option><option value="ultra">بالاترین کیفیت موجود در مدل</option>
                   </select>
                 </div>
               </div>
-
-              <!-- Custom Prompt -->
               <div class="ai-setting-group">
-                <label for="ai-studio-custom-prompt">دستور یا پرامپت تکمیلی (اختیاری):</label>
-                <textarea id="ai-studio-custom-prompt" rows="2" class="full textarea-custom" placeholder="مثلاً: کالا روی سنگ مرمر مشکی قرار گیرد و انعکاس ملایمی داشته باشد..."></textarea>
+                <label for="ai-studio-custom-prompt">دستور تکمیلی (اختیاری):</label>
+                <textarea id="ai-studio-custom-prompt" rows="2" class="full textarea-custom" placeholder="مثلاً: محصول روی سنگ مرمر مشکی قرار گیرد و انعکاس ملایمی داشته باشد..."></textarea>
               </div>
-
-              <!-- Generate CTA Button -->
               <div class="ai-generate-action-box">
                 <button type="button" class="btn primary-gradient large-btn full" id="ai-studio-main-generate-btn" disabled>
-                  <span class="btn-spark">✨</span>
-                  <span class="btn-label">تولید تصویر استودیویی کاتالوگ</span>
+                  <span class="btn-spark">✨</span><span class="btn-label">تولید تصویر با چرخش خودکار مدل‌های Puter</span>
                 </button>
-                <div class="ai-progress-status" id="ai-studio-progress-box" style="display:none;">
-                  <div class="ai-spinner"></div>
-                  <span id="ai-studio-progress-text">در حال ارسال عکس به موتور هوش مصنوعی…</span>
-                </div>
+                <div class="ai-progress-status" id="ai-studio-progress-box" style="display:none;"><div class="ai-spinner"></div><span id="ai-studio-progress-text">در حال اتصال به Puter…</span></div>
               </div>
             </section>
           </div>
 
-          <!-- Right Column: Interactive Output & Actions -->
           <div class="ai-studio-preview-col">
             <section class="ai-card ai-result-card">
               <div class="ai-card-head between">
                 <h3>پیش‌نمایش و مقایسه قبل / بعد</h3>
                 <div class="ai-view-modes" id="ai-view-mode-buttons" style="display:none;">
-                  <button type="button" class="ai-view-btn active" data-view="compare">مقایسه کنار هم</button>
-                  <button type="button" class="ai-view-btn" data-view="output">فقط خروجی</button>
-                  <button type="button" class="ai-view-btn" data-view="original">فقط عکس خام</button>
+                  <button type="button" class="ai-view-btn active" data-view="compare">مقایسه</button><button type="button" class="ai-view-btn" data-view="output">فقط خروجی</button><button type="button" class="ai-view-btn" data-view="original">عکس خام</button>
                 </div>
               </div>
-
-              <!-- Placeholder State when nothing generated yet -->
-              <div class="ai-empty-result-state" id="ai-empty-result-state">
-                <div class="empty-icon-art">🖼️</div>
-                <h4>خروجی آتلیه هوش مصنوعی اینجا نمایش داده می‌شود</h4>
-                <p>عکس محصول خود را از ستون سمت راست انتخاب کرده و سبک استودیو را مشخص کنید.</p>
-              </div>
-
-              <!-- Active Comparison Area -->
+              <div class="ai-empty-result-state" id="ai-empty-result-state"><div class="empty-icon-art">🖼️</div><h4>خروجی آتلیه اینجا نمایش داده می‌شود</h4><p>عکس محصول را انتخاب کنید و سبک استودیو را مشخص نمایید.</p></div>
               <div class="ai-active-preview-area" id="ai-active-preview-area" style="display:none;">
-                <div class="ai-comparison-grid" id="ai-comparison-grid">
-                  <div class="ai-preview-frame original-frame" id="ai-frame-original">
-                    <span class="frame-tag">عکس خام ورودی</span>
-                    <img id="ai-result-original-img" alt="عکس خام محصول" />
-                  </div>
-                  <div class="ai-preview-frame output-frame" id="ai-frame-output">
-                    <span class="frame-tag highlight">خروجی استودیو هوش مصنوعی</span>
-                    <img id="ai-result-output-img" alt="تصویر استودیویی تولیدشده" />
-                  </div>
+                <div class="ai-comparison-grid view-mode-compare" id="ai-comparison-grid">
+                  <div class="ai-preview-frame original-frame" id="ai-frame-original"><span class="frame-tag">عکس خام ورودی</span><img id="ai-result-original-img" alt="عکس خام محصول" /></div>
+                  <div class="ai-preview-frame output-frame" id="ai-frame-output"><span class="frame-tag highlight" id="ai-output-model-tag">خروجی Puter.js</span><img id="ai-result-output-img" alt="تصویر استودیویی تولیدشده" /></div>
                 </div>
               </div>
-
-              <!-- Actions Bar (Direct Store Integration) -->
               <div class="ai-post-actions-panel" id="ai-post-actions-panel" style="display:none;">
-                <div class="ai-product-selector-row">
-                  <label for="ai-target-product-select">انتخاب محصول جهت ثبت تصویر در فروشگاه:</label>
-                  <select id="ai-target-product-select" class="select full">
-                    <option value="">-- انتخاب یک محصول از پایگاه داده طوبی --</option>
-                    ${products.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.sku || p.id)})</option>`).join('')}
-                  </select>
-                </div>
-
+                <div class="ai-product-selector-row"><label for="ai-target-product-select">ثبت تصویر در محصول:</label><select id="ai-target-product-select" class="select full"><option value="">-- انتخاب محصول --</option>${products.map(product => `<option value="${esc(product.id)}">${esc(product.name)} (${esc(product.sku || product.id)})</option>`).join('')}</select></div>
                 <div class="ai-action-buttons-grid">
-                  <button type="button" class="btn success-button" id="ai-btn-set-main-image">
-                    🌟 تنظیم به‌عنوان تصویر اصلی محصول
-                  </button>
-                  <button type="button" class="btn outline" id="ai-btn-add-to-gallery">
-                    🖼️ افزودن به گالری محصول
-                  </button>
-                  <button type="button" class="btn outline" id="ai-btn-download-image">
-                    💾 دانلود تصویر باکیفیت (PNG)
-                  </button>
-                  <button type="button" class="btn outline" id="ai-btn-regenerate">
-                    🔄 تولید مجدد با این تنظیمات
-                  </button>
+                  <button type="button" class="btn success-button" id="ai-btn-set-main-image">🌟 تنظیم به‌عنوان تصویر اصلی</button>
+                  <button type="button" class="btn outline" id="ai-btn-add-to-gallery">🖼️ افزودن به گالری</button>
+                  <button type="button" class="btn outline" id="ai-btn-download-image">💾 دانلود تصویر</button>
+                  <button type="button" class="btn outline" id="ai-btn-regenerate">🔄 تولید مجدد</button>
                 </div>
-
                 <div class="ai-action-feedback" id="ai-action-feedback" style="display:none;"></div>
               </div>
             </section>
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
 
-    // Elements
-    const dropzone = target.querySelector('#ai-studio-dropzone');
-    const fileInput = target.querySelector('#ai-studio-file-input');
-    const promptBox = target.querySelector('#ai-dropzone-prompt');
-    const previewBox = target.querySelector('#ai-dropzone-preview');
-    const uploadedImg = target.querySelector('#ai-uploaded-img-preview');
-    const removeImgBtn = target.querySelector('#ai-remove-image-btn');
-    const generateBtn = target.querySelector('#ai-studio-main-generate-btn');
-    const progressBox = target.querySelector('#ai-studio-progress-box');
-    const progressText = target.querySelector('#ai-studio-progress-text');
-    const customPromptInput = target.querySelector('#ai-studio-custom-prompt');
-    const providerSelect = target.querySelector('#ai-studio-provider-select');
-    const qualitySelect = target.querySelector('#ai-studio-quality-select');
-    const emptyResultState = target.querySelector('#ai-empty-result-state');
-    const activePreviewArea = target.querySelector('#ai-active-preview-area');
-    const viewModeButtons = target.querySelector('#ai-view-mode-buttons');
-    const comparisonGrid = target.querySelector('#ai-comparison-grid');
-    const frameOriginal = target.querySelector('#ai-frame-original');
-    const frameOutput = target.querySelector('#ai-frame-output');
-    const resultOriginalImg = target.querySelector('#ai-result-original-img');
-    const resultOutputImg = target.querySelector('#ai-result-output-img');
-    const postActionsPanel = target.querySelector('#ai-post-actions-panel');
-    const targetProductSelect = target.querySelector('#ai-target-product-select');
-    const btnSetMainImage = target.querySelector('#ai-btn-set-main-image');
-    const btnAddToGallery = target.querySelector('#ai-btn-add-to-gallery');
-    const btnDownload = target.querySelector('#ai-btn-download-image');
-    const btnRegenerate = target.querySelector('#ai-btn-regenerate');
-    const actionFeedback = target.querySelector('#ai-action-feedback');
-    const backendStatusText = target.querySelector('#ai-backend-status-text');
-    const backendStatusDot = target.querySelector('#ai-backend-status-dot');
-    const backendNameEl = target.querySelector('#ai-backend-name');
-    const toggleGeminiBtn = target.querySelector('#ai-toggle-gemini-connect');
-    const geminiPanel = target.querySelector('#ai-gemini-connect-panel');
-    const geminiKeyInput = target.querySelector('#ai-gemini-api-key-input');
-    const geminiOAuthBtn = target.querySelector('#ai-google-oauth-btn');
-    const geminiOAuthExtra = target.querySelector('#ai-google-oauth-extra');
-    const geminiClientIdInput = target.querySelector('#ai-gemini-client-id-input');
-    const geminiOAuthTokenInput = target.querySelector('#ai-gemini-oauth-token-input');
-    const geminiProjectIdInput = target.querySelector('#ai-gemini-project-id-input');
-    const saveGeminiBtn = target.querySelector('#ai-save-gemini-account-btn');
-    const disconnectGeminiBtn = target.querySelector('#ai-disconnect-gemini-btn');
-    const geminiFeedback = target.querySelector('#ai-gemini-connect-feedback');
+    const q = selector => target.querySelector(selector);
+    const dropzone = q('#ai-studio-dropzone');
+    const fileInput = q('#ai-studio-file-input');
+    const promptBox = q('#ai-dropzone-prompt');
+    const previewBox = q('#ai-dropzone-preview');
+    const uploadedImg = q('#ai-uploaded-img-preview');
+    const removeImgBtn = q('#ai-remove-image-btn');
+    const generateBtn = q('#ai-studio-main-generate-btn');
+    const progressBox = q('#ai-studio-progress-box');
+    const progressText = q('#ai-studio-progress-text');
+    const customPromptInput = q('#ai-studio-custom-prompt');
+    const providerSelect = q('#ai-studio-provider-select');
+    const qualitySelect = q('#ai-studio-quality-select');
+    const emptyResultState = q('#ai-empty-result-state');
+    const activePreviewArea = q('#ai-active-preview-area');
+    const viewModeButtons = q('#ai-view-mode-buttons');
+    const comparisonGrid = q('#ai-comparison-grid');
+    const frameOriginal = q('#ai-frame-original');
+    const frameOutput = q('#ai-frame-output');
+    const resultOriginalImg = q('#ai-result-original-img');
+    const resultOutputImg = q('#ai-result-output-img');
+    const outputModelTag = q('#ai-output-model-tag');
+    const postActionsPanel = q('#ai-post-actions-panel');
+    const targetProductSelect = q('#ai-target-product-select');
+    const btnSetMainImage = q('#ai-btn-set-main-image');
+    const btnAddToGallery = q('#ai-btn-add-to-gallery');
+    const btnDownload = q('#ai-btn-download-image');
+    const btnRegenerate = q('#ai-btn-regenerate');
+    const actionFeedback = q('#ai-action-feedback');
+    const backendStatusText = q('#ai-backend-status-text');
+    const backendStatusDot = q('#ai-backend-status-dot');
+    const backendNameEl = q('#ai-backend-name');
+    const puterConnectBtn = q('#ai-puter-connect-btn');
 
-    function refreshGeminiStatusUi() {
-      if (hasConnectedGeminiAccount()) {
-        backendStatusDot?.classList.remove('offline');
-        backendStatusDot?.classList.add('online');
-        if (backendStatusText) backendStatusText.textContent = '✅ اکانت گوگل جمینای پرو متصل است';
-        if (backendNameEl) backendNameEl.textContent = 'تولید تصویر با اکانت Google Gemini + BiRefNet';
-      } else {
-        if (backendStatusText) backendStatusText.textContent = 'موتور BiRefNet AI Studio آماده است';
-        if (backendNameEl) backendNameEl.textContent = 'حذف دقیق پس‌زمینه + حفظ ۱۰۰٪ کالای واقعی';
-      }
+    function updatePuterStatus(connected, count = 0) {
+      backendStatusDot?.classList.toggle('offline', !connected);
+      backendStatusDot?.classList.toggle('online', connected);
+      if (backendStatusText) backendStatusText.textContent = connected ? '✅ حساب Puter متصل است' : 'برای تولید به حساب Puter وارد شوید';
+      if (backendNameEl) backendNameEl.textContent = `${count || 'مدل‌های'} مدل تصویر Puter · چرخش خودکار هنگام محدودیت`;
     }
 
-    toggleGeminiBtn?.addEventListener('click', () => {
-      if (!geminiPanel) return;
-      geminiPanel.style.display = geminiPanel.style.display === 'none' ? 'flex' : 'none';
-    });
-
-    geminiOAuthBtn?.addEventListener('click', () => {
-      if (geminiOAuthExtra) geminiOAuthExtra.style.display = 'flex';
-      const clientId = (geminiClientIdInput?.value || '').trim();
-      if (!clientId) {
-        if (geminiFeedback) {
-          geminiFeedback.style.display = 'block';
-          geminiFeedback.style.color = '#ffd97d';
-          geminiFeedback.textContent = 'برای باز شدن پنجره ورود گوگل، یا روی دکمه آبی «دریافت کلید از اکانت گوگل من» بزنید (سریع‌ترین روش)، یا Client ID گوگل خود را در کادر زیر وارد کنید.';
-        }
-        geminiClientIdInput?.focus();
-        return;
-      }
-      const redirectUri = window.location.origin + window.location.pathname;
-      const scope = encodeURIComponent('https://www.googleapis.com/auth/generative-language.retriever https://www.googleapis.com/auth/cloud-platform');
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scope}&include_granted_scopes=true&prompt=select_account`;
-      const popup = window.open(authUrl, 'google_gemini_oauth', 'width=520,height=640');
-      const pollTimer = setInterval(() => {
-        try {
-          if (!popup || popup.closed) {
-            clearInterval(pollTimer);
-            return;
-          }
-          if (popup.location.origin === window.location.origin && popup.location.hash) {
-            const params = new URLSearchParams(popup.location.hash.slice(1));
-            const token = params.get('access_token');
-            if (token) {
-              popup.close();
-              clearInterval(pollTimer);
-              if (geminiOAuthTokenInput) geminiOAuthTokenInput.value = token;
-              saveStoredGeminiConfig({
-                clientId,
-                accessToken: token,
-                projectId: geminiProjectIdInput?.value || ''
-              });
-              refreshGeminiStatusUi();
-              if (typeof g.toast === 'function') g.toast('✅ ورود با حساب گوگل با موفقیت انجام شد!');
-            }
-          }
-        } catch { /* cross-origin while on accounts.google.com */ }
-      }, 500);
-    });
-
-    saveGeminiBtn?.addEventListener('click', async () => {
-      const apiKey = (geminiKeyInput?.value || '').trim();
-      const accessToken = (geminiOAuthTokenInput?.value || '').trim();
-      const clientId = (geminiClientIdInput?.value || '').trim();
-      const projectId = (geminiProjectIdInput?.value || '').trim();
-
-      saveStoredGeminiConfig({ apiKey, accessToken, clientId, projectId });
-
-      if (!apiKey && !accessToken) {
-        if (geminiFeedback) {
-          geminiFeedback.style.display = 'block';
-          geminiFeedback.style.color = '#ffb4a9';
-          geminiFeedback.textContent = 'لطفاً کلید AIzaSy... یا توکن OAuth اکانت گوگل خود را وارد کنید.';
-        }
-        refreshGeminiStatusUi();
-        return;
-      }
-
-      if (geminiFeedback) {
-        geminiFeedback.style.display = 'block';
-        geminiFeedback.style.color = '#d8eadf';
-        geminiFeedback.textContent = 'در حال تست اتصال به اکانت Google Gemini شما…';
-      }
-
-      try {
-        const testUrl = apiKey
-          ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
-          : 'https://generativelanguage.googleapis.com/v1beta/models';
-        const headers = {};
-        if (!apiKey && accessToken) {
-          headers.Authorization = `Bearer ${accessToken.replace(/^Bearer\s+/i, '')}`;
-          if (projectId) headers['x-goog-user-project'] = projectId;
-        }
-        const res = await fetch(testUrl, { method: 'GET', headers });
-        if (res.ok) {
-          if (geminiFeedback) {
-            geminiFeedback.style.color = '#86efac';
-            geminiFeedback.textContent = '✅ اتصال به اکانت گوگل جمینای شما برقرار و تأیید شد!';
-          }
-          refreshGeminiStatusUi();
-          if (typeof g.toast === 'function') g.toast('✅ اکانت گوگل جمینای با موفقیت به استودیو متصل شد.');
-        } else {
-          const errJson = await res.json().catch(() => ({}));
-          const errMsg = errJson?.error?.message || `خطای گوگل (${res.status})`;
-          if (geminiFeedback) {
-            geminiFeedback.style.color = '#ffb4a9';
-            geminiFeedback.textContent = `❌ کلید یا توکن معتبر نیست: ${errMsg}`;
-          }
-        }
-      } catch {
-        refreshGeminiStatusUi();
-        if (geminiFeedback) {
-          geminiFeedback.style.color = '#86efac';
-          geminiFeedback.textContent = '✓ اطلاعات اکانت گوگل ذخیره شد و در زمان تولید تصویر استفاده می‌شود.';
-        }
-      }
-    });
-
-    disconnectGeminiBtn?.addEventListener('click', () => {
-      saveStoredGeminiConfig({ apiKey: '', accessToken: '', clientId: '', projectId: '' });
-      if (geminiKeyInput) geminiKeyInput.value = '';
-      if (geminiOAuthTokenInput) geminiOAuthTokenInput.value = '';
-      if (geminiFeedback) {
-        geminiFeedback.style.display = 'block';
-        geminiFeedback.style.color = '#d8eadf';
-        geminiFeedback.textContent = 'اتصال اکانت گوگل قطع شد؛ موتور BiRefNet AI Studio فعال است.';
-      }
-      refreshGeminiStatusUi();
-    });
-
-    // Check backend health
-    async function checkBackend() {
-      if (hasConnectedGeminiAccount()) {
-        refreshGeminiStatusUi();
-        return;
-      }
-      try {
-        const res = await fetch(`/api/ai/studio/status`).catch(() => null);
-        if (res && res.ok) {
-          const data = await res.json();
-          if (data.success && data.configured) {
-            backendStatusDot?.classList.remove('offline');
-            backendStatusDot?.classList.add('online');
-            if (backendStatusText) backendStatusText.textContent = `موتور BiRefNet AI Studio آماده است`;
-            return;
-          }
-        }
-      } catch { /* ignore */ }
-      if (backendStatusText) backendStatusText.textContent = 'موتور BiRefNet AI Studio فعال (بدون محدودیت)';
+    async function refreshPuterCatalog(discoverLive = false) {
+      const puter = getPuterClient();
+      const models = await loadPuterImageModels(puter, { discoverLive, force: true });
+      populatePuterModelSelect(providerSelect, models);
+      let connected = false;
+      try { connected = Boolean(puter?.auth?.isSignedIn?.()); } catch { /* use the unauthenticated label */ }
+      updatePuterStatus(connected, models.length);
+      return models;
     }
-    checkBackend();
 
-    // Dropzone interaction
-    dropzone?.addEventListener('click', (e) => {
-      if (e.target !== removeImgBtn && !removeImgBtn.contains(e.target)) {
-        fileInput.click();
-      }
-    });
-    dropzone?.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropzone.classList.add('drag-active');
-    });
-    dropzone?.addEventListener('dragleave', () => {
-      dropzone.classList.remove('drag-active');
-    });
-    dropzone?.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('drag-active');
-      const files = e.dataTransfer?.files;
-      if (files && files.length > 0) handleFile(files[0]);
-    });
-    fileInput?.addEventListener('change', () => {
-      if (fileInput.files && fileInput.files.length > 0) {
-        handleFile(fileInput.files[0]);
+    refreshPuterCatalog(false).catch(() => updatePuterStatus(false, PUTER_FALLBACK_MODELS.length));
+    puterConnectBtn?.addEventListener('click', async () => {
+      try {
+        const puter = getPuterClient();
+        if (!puter?.auth?.signIn) throw new Error('کتابخانهٔ Puter.js بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
+        if (!puter.auth.isSignedIn?.()) await puter.auth.signIn();
+        await refreshPuterCatalog(true);
+      } catch (error) {
+        if (backendStatusText) backendStatusText.textContent = error?.message || 'ورود به Puter انجام نشد.';
       }
     });
 
-    let currentRefDataUrl = '';
+    dropzone?.addEventListener('click', event => {
+      if (event.target !== removeImgBtn && !removeImgBtn?.contains(event.target)) fileInput?.click();
+    });
+    dropzone?.addEventListener('dragover', event => { event.preventDefault(); dropzone.classList.add('drag-active'); });
+    dropzone?.addEventListener('dragleave', () => dropzone.classList.remove('drag-active'));
+    dropzone?.addEventListener('drop', event => {
+      event.preventDefault();
+      dropzone.classList.remove('drag-active');
+      const file = event.dataTransfer?.files?.[0];
+      if (file) handleFile(file);
+    });
+    fileInput?.addEventListener('change', () => { if (fileInput.files?.[0]) handleFile(fileInput.files[0]); });
+
     async function handleFile(file) {
-      if (!file) return;
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
-        alert('لطفاً فقط فایل با فرمت‌های تصویری JPG، PNG یا WebP انتخاب کنید.');
-        return;
-      }
-      if (file.size > MAX_UPLOAD) {
-        alert(`حجم فایل (${Math.round(file.size / 1024 / 1024)}MB) بیشتر از حد مجاز ۱۵ مگابایت است.`);
-        return;
-      }
-
+      if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type)) return alert('فقط تصویر JPG، PNG یا WebP انتخاب کنید.');
+      if (file.size > MAX_UPLOAD) return alert('حجم تصویر نباید از ۱۵ مگابایت بیشتر باشد.');
       try {
-        currentInputDataUrl = await resizeImage(file, 1400, 0.94);
-        currentRefDataUrl = await resizeImage(file, 511, 0.90);
+        currentInputDataUrl = await resizeImage(file, 1024, 0.88);
+        currentOutputDataUrl = '';
         uploadedImg.src = currentInputDataUrl;
+        resultOriginalImg.src = currentInputDataUrl;
         promptBox.style.display = 'none';
         previewBox.style.display = 'block';
-        target.querySelector('#ai-upload-filename').textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+        emptyResultState.style.display = 'block';
+        activePreviewArea.style.display = 'none';
+        postActionsPanel.style.display = 'none';
+        const shortName = file.name?.length > 22 ? `${file.name.slice(0, 14)}…${file.name.slice(-6)}` : (file.name || 'image.jpg');
+        q('#ai-upload-filename').textContent = `${shortName} (${formatFileSize(file.size)})`;
         generateBtn.disabled = false;
-      } catch (err) {
-        alert(err.message || 'خطا در بارگذاری عکس');
+      } catch (error) {
+        alert(error.message || 'خطا در بارگذاری عکس.');
       }
     }
 
-    removeImgBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
+    removeImgBtn?.addEventListener('click', event => {
+      event.stopPropagation();
       currentInputDataUrl = '';
+      currentOutputDataUrl = '';
       fileInput.value = '';
       uploadedImg.src = '';
       promptBox.style.display = 'flex';
       previewBox.style.display = 'none';
+      activePreviewArea.style.display = 'none';
+      postActionsPanel.style.display = 'none';
+      emptyResultState.style.display = 'block';
       generateBtn.disabled = true;
     });
 
-    // Style option click
-    target.querySelectorAll('.ai-style-option').forEach(btn => {
-      btn.addEventListener('click', () => {
-        target.querySelectorAll('.ai-style-option').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedStyle = btn.getAttribute('data-style');
-      });
-    });
-
-    // Aspect Ratio click
-    target.querySelectorAll('.ai-pill-btn[data-ratio]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        target.querySelectorAll('.ai-pill-btn[data-ratio]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedRatio = btn.getAttribute('data-ratio');
-      });
-    });
-
-    // Preservation Level click
-    target.querySelectorAll('.ai-pill-btn[data-preservation]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        target.querySelectorAll('.ai-pill-btn[data-preservation]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedPreservation = btn.getAttribute('data-preservation');
-      });
-    });
-
-    // Provider and Quality select
+    target.querySelectorAll('.ai-style-option').forEach(button => button.addEventListener('click', () => {
+      target.querySelectorAll('.ai-style-option').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      selectedStyle = button.getAttribute('data-style');
+    }));
+    target.querySelectorAll('.ai-pill-btn[data-ratio]').forEach(button => button.addEventListener('click', () => {
+      target.querySelectorAll('.ai-pill-btn[data-ratio]').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      selectedRatio = button.getAttribute('data-ratio');
+    }));
+    target.querySelectorAll('.ai-pill-btn[data-preservation]').forEach(button => button.addEventListener('click', () => {
+      target.querySelectorAll('.ai-pill-btn[data-preservation]').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      selectedPreservation = button.getAttribute('data-preservation');
+    }));
     providerSelect?.addEventListener('change', () => { selectedProvider = providerSelect.value; });
     qualitySelect?.addEventListener('change', () => { selectedQuality = qualitySelect.value; });
 
-    // Main Generation Action
     async function triggerGeneration() {
       if (!currentInputDataUrl || isGenerating) return;
       isGenerating = true;
       generateBtn.disabled = true;
       progressBox.style.display = 'flex';
-      progressText.textContent = 'آماده‌سازی تصویر و ارسال به مدل هوش مصنوعی…';
-
+      progressText.textContent = 'در حال اتصال به Puter و آماده‌سازی مدل‌ها…';
       try {
-        const geminiCfg = getStoredGeminiConfig();
-        const customPromptVal = customPromptInput?.value?.trim() || '';
-
-        // 1. If the user connected their Google Gemini account, try direct browser-to-Gemini Multimodal Image Studio first
-        if (geminiCfg.apiKey || geminiCfg.accessToken) {
-          progressText.textContent = 'در حال تولید تصویر استودیویی از طریق اکانت متصل Google Gemini شما…';
-          const directGemini = await generateViaBrowserGeminiAccount(
-            currentInputDataUrl,
-            selectedStyle,
-            customPromptVal
-          );
-          if (directGemini?.dataUrl) {
-            currentOutputDataUrl = directGemini.dataUrl;
-            emptyResultState.style.display = 'none';
-            activePreviewArea.style.display = 'block';
-            viewModeButtons.style.display = 'flex';
-            postActionsPanel.style.display = 'block';
-            resultOriginalImg.src = currentInputDataUrl;
-            resultOutputImg.src = currentOutputDataUrl;
-            if (typeof g.toast === 'function') {
-              g.toast(`✨ تصویر کاتالوگی با اکانت متصل ${directGemini.provider} تولید شد.`);
-            }
-            return;
-          }
-        }
-
-        const payload = {
-          image: currentInputDataUrl,
-          referenceImage: currentRefDataUrl || currentInputDataUrl,
+        const result = await generateProductImageWithPuter({
+          imageDataUrl: currentInputDataUrl,
           style: selectedStyle,
-          customPrompt: customPromptVal,
+          customPrompt: customPromptInput?.value?.trim() || '',
           aspectRatio: selectedRatio,
           preservation: selectedPreservation,
           quality: selectedQuality,
-          provider: selectedProvider,
-          geminiApiKey: geminiCfg.apiKey || undefined,
-          geminiAccessToken: geminiCfg.accessToken || undefined,
-          geminiProjectId: geminiCfg.projectId || undefined
-        };
-
-        const steps = [
-          'جداسازی دقیق کفش از پس‌زمینه (فرش/محیط) با شبکه عصبی BiRefNet…',
-          'قفل ۱۰۰٪ هویت کالا (حفظ دقیق لوگو، بندها، کفی و بافت)…',
-          'نورپردازی سه‌بعدی، سایه‌زنی کفی و بازسازی صحنه استودیویی کاتالوگ…'
-        ];
-        let stepIdx = 0;
-        const interval = setInterval(() => {
-          if (stepIdx < steps.length && progressText) {
-            progressText.textContent = steps[stepIdx++];
+          preferredModel: selectedProvider,
+          onProgress: ({ model, index, total, fallback }) => {
+            progressText.textContent = fallback
+              ? `مدل قبلی محدود یا ناموفق بود؛ تلاش ${index + 1} از ${total} با ${model.name}…`
+              : `در حال تولید با ${model.name}…`;
           }
-        }, 1200);
-
-        let data = null;
-        try {
-          const response = await fetch('/api/ai/studio/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-            body: JSON.stringify(payload)
-          });
-          data = await safeFetchJson(response);
-        } catch {
-          // Even if server API is unreachable, client-side BiRefNet + ONNX + Studio Compositor completes seamlessly
-          data = {
-            success: true,
-            generatedUrl: currentInputDataUrl,
-            mode: 'client-studio-fallback',
-            provider: 'BiRefNet AI Studio Pro'
-          };
-        } finally {
-          clearInterval(interval);
-        }
-
-        if (data?.mode === 'birefnet-cutout' || data?.backgroundRemoved) {
-          currentOutputDataUrl = await createClientStudioPreview(
-            currentInputDataUrl,
-            selectedStyle,
-            selectedRatio,
-            data.cutoutUrl || data.generatedUrl
-          );
-        } else if (!data || data.mode === 'client-studio-fallback' || data.quotaExhaustedFallback) {
-          currentOutputDataUrl = await createClientStudioPreview(
-            currentInputDataUrl,
-            selectedStyle,
-            selectedRatio
-          );
-        } else {
-          currentOutputDataUrl = data.generatedUrl || data.image || (data.images && data.images[0]);
-        }
-
-        if (!currentOutputDataUrl) {
-          currentOutputDataUrl = await createClientStudioPreview(currentInputDataUrl, selectedStyle, selectedRatio);
-        }
-
-        // Show result
+        });
+        currentOutputDataUrl = result.dataUrl;
+        if (!currentOutputDataUrl || currentOutputDataUrl === currentInputDataUrl) throw new Error('خروجی تصویری تازه از Puter دریافت نشد.');
         emptyResultState.style.display = 'none';
         activePreviewArea.style.display = 'block';
         viewModeButtons.style.display = 'flex';
         postActionsPanel.style.display = 'block';
-
         resultOriginalImg.src = currentInputDataUrl;
         resultOutputImg.src = currentOutputDataUrl;
-
-        if (typeof g.toast === 'function') {
-          g.toast('✨ تصویر کاتالوگی جدید با حفظ ۱۰۰٪ کالای واقعی توسط BiRefNet AI Studio آماده شد.');
-        }
-      } catch (err) {
-        alert(`خطا: ${err.message}`);
+        outputModelTag.textContent = `خروجی: ${result.modelName} · ${result.provider}`;
+        if (typeof g.toast === 'function') g.toast(`✨ تصویر با ${result.modelName} تولید شد.`);
+      } catch (error) {
+        currentOutputDataUrl = '';
+        alert(`خطا در تولید تصویر: ${error.message || 'همه مدل‌ها ناموفق بودند.'}`);
       } finally {
         isGenerating = false;
-        generateBtn.disabled = false;
+        generateBtn.disabled = !currentInputDataUrl;
         progressBox.style.display = 'none';
       }
     }
-
     generateBtn?.addEventListener('click', triggerGeneration);
     btnRegenerate?.addEventListener('click', triggerGeneration);
 
-    // View Modes (Compare / Output / Original)
-    target.querySelectorAll('.ai-view-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        target.querySelectorAll('.ai-view-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const mode = btn.getAttribute('data-view');
-        if (mode === 'compare') {
-          frameOriginal.style.display = 'block';
-          frameOutput.style.display = 'block';
-          comparisonGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
-        } else if (mode === 'output') {
-          frameOriginal.style.display = 'none';
-          frameOutput.style.display = 'block';
-          comparisonGrid.style.gridTemplateColumns = '1fr';
-        } else if (mode === 'original') {
-          frameOriginal.style.display = 'block';
-          frameOutput.style.display = 'none';
-          comparisonGrid.style.gridTemplateColumns = '1fr';
-        }
-      });
-    });
+    target.querySelectorAll('.ai-view-btn').forEach(button => button.addEventListener('click', () => {
+      const mode = button.getAttribute('data-view');
+      target.querySelectorAll('.ai-view-btn').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      comparisonGrid.classList.remove('view-mode-compare', 'view-mode-output', 'view-mode-original');
+      comparisonGrid.classList.add(`view-mode-${mode}`);
+      frameOriginal.style.display = mode === 'output' ? 'none' : 'block';
+      frameOutput.style.display = mode === 'original' ? 'none' : 'block';
+    }));
 
-    // Set as Main Product Image
+    async function persistGeneratedProductImage(productId, asMainImage) {
+      if (!currentOutputDataUrl) throw new Error('ابتدا تصویر را با Puter تولید کنید.');
+      const product = products.find(item => String(item.id) === String(productId));
+      if (!product) throw new Error('محصول انتخاب‌شده در پایگاه داده پیدا نشد؛ فهرست را تازه‌سازی کنید.');
+      if (!g.DataRepositories?.media?.create || !g.DataRepositories?.media?.delete || !g.StoreServices?.products?.update) {
+        throw new Error('اتصال پایگاه دادهٔ تصویر آماده نیست. صفحه را تازه‌سازی کنید.');
+      }
+
+      const media = await g.DataRepositories.media.create({ url:currentOutputDataUrl, alt:`${product.name} — تصویر استودیویی` });
+      const currentImages = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
+      const nextImages = asMainImage
+        ? [media.url, ...currentImages.filter(url => url !== media.url)]
+        : currentImages.includes(media.url) ? currentImages : [...currentImages, media.url];
+      try {
+        await g.StoreServices.products.update(productId, { images:nextImages });
+      } catch (error) {
+        try { await g.DataRepositories.media.delete(media.id); } catch (cleanupError) { console.warn('Generated image cleanup failed:', cleanupError); }
+        throw error;
+      }
+      return { product, media };
+    }
+
     btnSetMainImage?.addEventListener('click', async () => {
-      const prodId = targetProductSelect?.value;
-      if (!prodId) {
-        alert('لطفاً ابتدا محصول مورد نظر را از منوی کشویی انتخاب کنید.');
-        targetProductSelect.focus();
-        return;
-      }
+      const productId = targetProductSelect?.value;
+      if (!productId) return alert('لطفاً ابتدا محصول مورد نظر را از منوی کشویی انتخاب کنید.');
       btnSetMainImage.disabled = true;
-      btnSetMainImage.textContent = 'در حال ذخیره…';
       try {
-        let data = null;
-        try {
-          const res = await fetch('/api/ai/studio/attach', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-            body: JSON.stringify({ productId: prodId, imageUrl: currentOutputDataUrl, asMainImage: true })
-          });
-          data = await safeFetchJson(res);
-        } catch (apiErr) {
-          console.warn('API attach fallback:', apiErr.message);
-          // In client-only or offline mode, still update client-side database
-        }
-        
-        // Also update local client db
-        const product = products.find(p => String(p.id) === String(prodId));
-        if (product) {
-          product.image = currentOutputDataUrl;
-          if (!Array.isArray(product.images)) product.images = [];
-          if (!product.images.includes(currentOutputDataUrl)) {
-            product.images.unshift(currentOutputDataUrl);
-          }
-          if (typeof g.save === 'function') g.save();
-        }
-
+        const { product } = await persistGeneratedProductImage(productId, true);
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback success';
-        actionFeedback.textContent = `✅ تصویر استودیویی با موفقیت به‌عنوان تصویر اصلی محصول «${product?.name || prodId}» تنظیم و ذخیره شد.`;
-        if (typeof g.toast === 'function') g.toast('تصویر اصلی محصول با موفقیت به‌روزرسانی شد.');
-      } catch (err) {
+        actionFeedback.textContent = `✅ تصویر به‌صورت پایدار در Supabase ذخیره و تصویر اصلی «${product.name}» شد.`;
+      } catch (error) {
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback error';
-        actionFeedback.textContent = `❌ خطا: ${err.message}`;
-      } finally {
-        btnSetMainImage.disabled = false;
-        btnSetMainImage.textContent = '🌟 تنظیم به‌عنوان تصویر اصلی محصول';
-      }
+        actionFeedback.textContent = `❌ ${error.message}`;
+      } finally { btnSetMainImage.disabled = false; }
     });
 
-    // Add to Gallery
     btnAddToGallery?.addEventListener('click', async () => {
-      const prodId = targetProductSelect?.value;
-      if (!prodId) {
-        alert('لطفاً ابتدا محصول مورد نظر را از منوی کشویی انتخاب کنید.');
-        targetProductSelect.focus();
-        return;
-      }
+      const productId = targetProductSelect?.value;
+      if (!productId) return alert('لطفاً ابتدا محصول مورد نظر را از منوی کشویی انتخاب کنید.');
       btnAddToGallery.disabled = true;
-      btnAddToGallery.textContent = 'در حال افزودن…';
       try {
-        let data = null;
-        try {
-          const res = await fetch('/api/ai/studio/attach', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...await adminAuthHeaders() },
-            body: JSON.stringify({ productId: prodId, imageUrl: currentOutputDataUrl, addToGallery: true })
-          });
-          data = await safeFetchJson(res);
-        } catch (apiErr) {
-          console.warn('API attach gallery fallback:', apiErr.message);
-        }
-        
-        const product = products.find(p => String(p.id) === String(prodId));
-        if (product) {
-          if (!Array.isArray(product.images)) product.images = product.image ? [product.image] : [];
-          if (!product.images.includes(currentOutputDataUrl)) {
-            product.images.push(currentOutputDataUrl);
-          }
-          if (typeof g.save === 'function') g.save();
-        }
-
+        const { product } = await persistGeneratedProductImage(productId, false);
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback success';
-        actionFeedback.textContent = `✅ تصویر با موفقیت به گالری تصاویر محصول «${product?.name || prodId}» افزوده شد.`;
-        if (typeof g.toast === 'function') g.toast('تصویر به گالری محصول اضافه شد.');
-      } catch (err) {
+        actionFeedback.textContent = `✅ تصویر به‌صورت پایدار در Supabase ذخیره و به گالری «${product.name}» افزوده شد.`;
+      } catch (error) {
         actionFeedback.style.display = 'block';
         actionFeedback.className = 'ai-action-feedback error';
-        actionFeedback.textContent = `❌ خطا: ${err.message}`;
-      } finally {
-        btnAddToGallery.disabled = false;
-        btnAddToGallery.textContent = '🖼️ افزودن به گالری محصول';
-      }
+        actionFeedback.textContent = `❌ ${error.message}`;
+      } finally { btnAddToGallery.disabled = false; }
     });
 
-    // Download Image
     btnDownload?.addEventListener('click', () => {
       if (!currentOutputDataUrl) return;
       const link = document.createElement('a');
       link.href = currentOutputDataUrl;
-      link.download = `touba-ai-studio-${Date.now()}.png`;
+      link.download = `touba-puter-studio-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

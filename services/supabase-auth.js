@@ -1,4 +1,4 @@
-/* Supabase Auth only. Commerce remains in mock mode until its server-side repository/RPCs are shipped. */
+/* Supabase Auth and profile-based authorization for the live Supabase commerce repositories. */
 (function (g) {
   'use strict';
   const config = g.TOUBA_PUBLIC_CONFIG || {};
@@ -62,6 +62,8 @@
   }
 
   async function setSession(session, { render = true } = {}) {
+    const previousUserId = g.db?.currentUser?.id || null;
+    const previousRole = g.db?.currentUser?.role || null;
     applying = applying.catch(() => null).then(async () => {
       if (!session?.user) {
         if (g.db) g.db.currentUser = null;
@@ -77,7 +79,21 @@
         throw error;
       }
     });
-    const user = await applying;
+    let user;
+    try { user = await applying; }
+    catch (error) {
+      if(g.db){
+        g.db.currentUser=null;
+        if(previousUserId){for(const key of ['cart','orders','customers','coupons','payments','addresses','users','profiles','favorites'])g.db[key]=[];}
+      }
+      if(g.DataProvider?.state?.status==='ready'&&g.db){try{await g.DataProvider.refresh('toubashop-v1',g.db)}catch(refreshError){console.error('Public Supabase state refresh after auth failure:',refreshError)}}
+      if(g.save)g.save();
+      if(render&&g.render)g.render();
+      throw error;
+    }
+    if (g.DataProvider?.state?.status === 'ready' && (previousUserId !== (user?.id || null) || previousRole !== (user?.role || null)) && g.db) {
+      await g.DataProvider.refresh('toubashop-v1', g.db);
+    }
     if (g.save) g.save();
     if (render && g.render) g.render();
     return user;
@@ -163,6 +179,7 @@
     const { error } = await requireClient().auth.signOut();
     if (error) throw error;
     if (g.db) g.db.currentUser = null;
+    if (g.DataProvider?.state?.status === 'ready' && g.db) await g.DataProvider.refresh('toubashop-v1', g.db);
     if (g.save) g.save();
     if (g.render) g.render();
   }

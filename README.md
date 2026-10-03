@@ -1,99 +1,63 @@
-# کفش طوبی — فروشگاه فارسی RTL با Supabase Auth و حالت Demo
+# کفش طوبی — فروشگاه فارسی RTL با Supabase
 
-فروشگاه فارسی RTL، پنل CMS، mock checkout/payment، داده‌های Demo در LocalStorage و Repository/Service layer. اتصال ورود/ثبت‌نام ایمیلی Supabase به‌صورت اختیاری از تنظیمات عمومی پروژه فعال می‌شود؛ کاتالوگ، مدیریت فروشگاه، سفارش و موجودی هنوز به دیتابیس وصل نیستند و پرداخت همچنان mock است. پنل محصول، دستیار نگارش توضیحات با Gemini (به‌همراه پیش‌نویس محلی در نبود کلید) و استودیوی تولید تصویر سه‌زاویه‌ای دارد. تصویرها از Cloudflare Workers AI و مدل FLUX.2 [klein] 9B با سه تصویر مرجع ساخته می‌شوند.
+فروشگاه فارسی RTL و پنل مدیریت با احراز هویت Supabase، کاتالوگ و تنظیمات پایدار در PostgreSQL، سبد خرید و عملیات سفارش متکی به RPCهای امن، و ذخیرهٔ تصویر محصول در Supabase Storage. هیچ کاتالوگ، سفارش، کاربر، آمار یا تنظیم فروشگاهی از Demo/LocalStorage بارگذاری نمی‌شود؛ در نبود اتصال معتبر یا migration هماهنگ، برنامه عمداً fail-closed است و صفحهٔ خطای اتصال نشان می‌دهد.
 
-## اجرا
-- نیازمندی: Node.js 22+ (Supabase JS SDK در build بسته‌بندی می‌شود).
-- `npm start` یا `node local-server.js`؛ سرور توسعه روی پورت 4173 باز می‌شود. روی Vercel، فایل `local-server.js` اجرا نمی‌شود؛ سایت به‌صورت static به‌همراه API Functions جداگانه منتشر می‌شود.
-- تمام routeهای SPA با fallback سرور محلی و rewrite وریسل به `index.html` کار می‌کنند.
-- `npm run build` اجرای syntax/build-check و بسته‌بندی SDK مرورگر Supabase؛ `npm test` تست Repository، API، Auth و Demo E2E را اجرا می‌کند.
+## اجرا و بررسی محلی
 
-## انتشار روی Vercel
-- مخزن را در Vercel دوباره Deploy کنید (یا پس از push منتظر deploy خودکار GitHub بمانید). `vercel.json`، preset را روی Other/static قرار می‌دهد؛ `npm run build` فقط فایل‌های لازم وب را در `public/` آماده می‌کند، مسیرهای SPA به `index.html` می‌روند و endpointها به Vercel Functions متصل می‌شوند.
-- صفحهٔ فروشگاه بدون کلیدهای AI هم بالا می‌آید. برای Gemini، `GEMINI_API_KEY` را فقط به‌صورت Environment Variable سمت‌سرور در Vercel تنظیم کنید. برای تصویر، Vercel به `CLOUDFLARE_ACCOUNT_ID` و `CLOUDFLARE_API_TOKEN` نیاز دارد. سهمیهٔ پایدار تصویر، Supabase URL و کلید عمومی (`SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY`) را به‌همراه migration سهمیه می‌خواهد؛ service-role key لازم نیست. تا زمان merge و اجرای migration، endpoint در Vercel عمداً fail-closed است. هیچ کلیدی را در کد/مرورگر یا گفتگو قرار ندهید.
-- احراز هویت ایمیلی Supabase اختیاری است. پرداخت و checkout واقعی خاموش‌اند؛ کاتالوگ/سفارش/موجودی فعلاً از Repository محلی و LocalStorage خوانده می‌شوند و CRUD آن‌ها هنوز به Supabase متصل نیست، بنابراین تغییرات مدیریت کاتالوگ سراسری یا همگام‌شده بین مرورگرها نیستند.
+- نیازمندی: Node.js 22+.
+- نصب وابستگی‌ها: `npm install`.
+- اجرای سرور: `npm start` (روی `0.0.0.0` و پورت `PORT` یا 3000؛ پیش‌فرض این شاخه 3000 است).
+- آزمون: `npm test`.
+- Build: `npm run build`؛ خروجی وب و Supabase browser SDK در `public/` ساخته می‌شود.
+- سرور محلی بدون کلید عمومی Supabase، دیتای ساختگی نمایش نمی‌دهد. برای تجربهٔ فروشگاه باید `SUPABASE_URL` و `SUPABASE_PUBLISHABLE_KEY` یا `SUPABASE_ANON_KEY` را در `.env` محلی یا Environment Variables سرور تنظیم کنید.
 
-### اتصال Auth ایمیل/رمز Supabase
+## اتصال Supabase
 
-برای فعال‌کردن صفحهٔ واقعی ورود/ثبت‌نام در Vercel، در **Project → Settings → Environment Variables** فقط این موارد را برای Production (و در صورت نیاز Preview) اضافه کنید:
+در Environment Variables محیط Vercel:
 
-- `SUPABASE_URL`: URL پروژه از Supabase → Project Settings → API.
-- `SUPABASE_PUBLISHABLE_KEY`: کلید publishable/public از همان بخش. اگر پروژه فقط کلید قدیمی دارد، می‌توانید به‌جای آن `SUPABASE_ANON_KEY` بگذارید.
+- `SUPABASE_URL`: URL پروژه.
+- `SUPABASE_PUBLISHABLE_KEY`: کلید عمومی/publishable؛ در پروژه‌های قدیمی `SUPABASE_ANON_KEY` قابل استفاده است.
 
-این endpoint عمداً فقط URL و کلید عمومی را به مرورگر می‌دهد؛ `service_role`, database password و GitHub migration token را اضافه نکنید. بعد از افزودن متغیرها Redeploy کنید. در Supabase → **Authentication → URL Configuration**، Site URL را روی `https://toubashoes.vercel.app` بگذارید و Redirect URLهای `/login?verified=1` و `/reset-password` را مجاز کنید (پس از اتصال دامنهٔ نهایی، دامنهٔ همان‌جا هم اضافه شود). در Authentication → Providers، Email را فعال و تأیید ایمیل را روشن کنید؛ برای ارسال قابل‌اعتماد Production باید SMTP دامنهٔ تأییدشده را تنظیم کنید.
+این مقادیر عمومی‌اند و برای Auth مرورگر استفاده می‌شوند. هرگز `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub Actions token یا credential پرداخت را به مرورگر ندهید.
 
-در حالت Supabase، حساب Demo و ورود مدیر نمایشی غیرفعال‌اند؛ signup فقط نقش `customer` می‌سازد. حساب مدیر را پس از ثبت‌نام/تأیید، فقط مالک از SQL Editor و با بررسی ایمیل به `super_admin` ارتقا دهد. ورود به پنل به پروفایل فعال Supabase وابسته است، اما مدیریت کاتالوگ/سفارش در حال حاضر از `g.db` و Mock Repository می‌خواند: فرم کامل، افزودن سریع و عملیات دسته‌جمعی می‌توانند همان Demo را ویرایش کنند، نه جداول Supabase. در Vercel این تغییرها فقط در LocalStorage همان مرورگر می‌مانند و نباید برای سفارش یا کاتالوگ واقعی استفاده شوند؛ در اجرای local server یک فایل Demo جدا نیز نگهداری می‌شود. Checkout و پرداخت مشتری Supabase واقعی/فعال نیستند.
+در Supabase، Email provider را فعال کنید، تأیید ایمیل و سیاست رمز قوی را تنظیم کنید، Site URL و Redirect URLهای `/login?verified=1` و `/reset-password` را برای دامنهٔ واقعی ثبت کنید و SMTP قابل‌اعتماد را برای Production پیکربندی کنید. ثبت‌نام عمومی فقط حساب `customer` می‌سازد؛ نقش مدیر باید از مسیر مورداعتماد مالک در Supabase به‌روزرسانی شود.
 
-### دستیار توضیحات محصول
-در پنل Products فرم محصول را باز کنید و «تولید هوشمند توضیحات» را بزنید. با `GEMINI_API_KEY`، API از Gemini 3.8 Flash متن پیشنهادی کوتاه/کامل، ویژگی‌ها و مشخصات را می‌گیرد؛ در نبود کلید یا اختلال API، یک پیش‌نویس محلیِ محافظه‌کارانه ارائه می‌شود. متن و ادعاهای فنی را پیش از ذخیره با مشخصات واقعی کالا بررسی کنید. کلید Gemini فقط در Vercel Environment Variables یا `.env` محلی قرار گیرد.
+### Migrationهای پایگاه داده
 
-### استودیو هوش مصنوعی محصول (Product AI Studio)
-بخش اختصاصی «استودیو هوش مصنوعی محصول» در پنل مدیریت طوبی (با دسترسی مستقیم از منوی مدیریت و دکمهٔ اختصاصی) جهت تبدیل عکس‌های خام و موبایلی کالاها به تصاویر تجاری و آتلیه‌ای کاتالوگ:
-- **حفظ ۱۰۰٪ هویت کالا (Strict Product Preservation):** حفظ کامل ساختار، قالب، بندها، سگک، دوخت، لوگو، جنس رویه و رنگ‌ها بدون هیچ‌گونه توهم (Hallucination) یا بازطراحی ناخواسته.
-- **سبک‌های متنوع استودیو:** ۷ تم حرفه‌ای شامل: 📦 کاتالوگ سفید، 🖤 استودیوی لوکس، ✨ مینیمال آرت، 🌿 لایف‌استایل، 👟 روی مدل، 📢 تبلیغاتی پویا و 🎨 پس‌زمینه سفارشی.
-- **ابعاد و خروجی:** نسبت‌های ۱:۱ (مربعی اینستاگرام و سایت)، ۴:۵ (عمودی پرتره)، ۳:۴ (کاتالوگ) و ۱۶:۹ (بنر).
-- **معماری چند ارائه‌دهنده (Provider-based Architecture):** پشتیبانی از اولویت ۱ Qwen-Image-Edit، اولویت ۲ FLUX Kontext، مدل کاتالوگ SDXL، ارتقای وضوح Real-ESRGAN و شبیه‌ساز محلی در محیط توسعه.
-- **اتصال مستقیم به محصولات:** امکان پیش‌نمایش تعاملی قبل و بعد، تنظیم خروجی به‌عنوان «تصویر اصلی محصول»، «افزودن به گالری تصاویر»، «دانلود تصویر باکیفیت» و «تولید مجدد».
-- **آدرس‌های اختصاصی API:** شامل `/api/ai/studio/generate`, `/api/ai/studio/status`, `/api/ai/studio/attach` با پشتیبانی کامل از Vercel Functions و سرور محلی.
+Migrationهای نسخه‌بندی‌شده در `supabase/migrations/` هستند. Migration عملیاتی `202610030001_live_commerce.sql`، پس از نسخه‌های قبلی، RPCهای سلامت schema، سبد خرید و ثبت اتمیک سفارش/رزرو موجودی را فراهم می‌کند و نمونه‌های کاتالوگ/کوپن/بنر شناخته‌شده را پاک می‌کند. **وجود migration در این مخزن به‌معنی اجرای آن روی پروژهٔ واقعی نیست.** تا اجرای آن و تأیید نسخهٔ `202610030001` توسط برنامه، storefront، پنل و checkout fail-closed می‌مانند.
 
-### بنر هیرو صفحهٔ اصلی (Deep Glass)
-هیروی صفحهٔ اصلی با ترکیب‌بندی «کالای شارپ + پنل شیشه‌ای» پیاده شده است؛ همهٔ استایل‌ها در `stage4.css` و مارک‌آپ آن در `stage4.js` (تابع `home()`) قرار دارد:
-- **اصل طراحی — کل بنر تار نمی‌شود:** فقط پنل متن سمت راست و حلقهٔ نازک پشت آن `backdrop-filter: blur(28px) saturate(165%)` دارند؛ تصویر کالا هیچ فیلتر تاری ندارد و کاملاً واضح و شارپ می‌ماند (`object-position: center`).
-- **پنل گلس‌مورفیسم منحنی (شفافیت حداکثری):** کارت با `border-radius: 46px 46px 46px 150px` و `backdrop-filter: blur(34px) saturate(130%) brightness(1.05)`؛ تینت سفید فقط `0.065 → 0.01` است (تقریباً بی‌رنگ) و عمق صرفاً از لبهٔ درخشان، سایهٔ ملایم و سه بازتاب (هایلایت گوشه، نوار مورب، بازتاب سبز کم‌رنگ) می‌آید. هالهٔ سبز صحنه به پشت کارت منتقل نشده تا رنگ داخل شیشه تقویت نشود.
-- **رینگ شیشه‌ای و هاله:** حلقهٔ بزرگ شیشه‌ای (`lux-hero-ring`) که فقط دور پنل می‌پیچد و کالا را نمی‌پوشاند، به‌همراه یک هالهٔ سبز محو (`lux-hero-glow`).
-- **واترمارک تایپوگرافیک:** متن بزرگ `TOUBA SHOES` با `-webkit-text-stroke`، `direction: ltr` و اندازهٔ `clamp` که همیشه کامل داخل ناحیهٔ شارپ و دور از پنل می‌ماند.
-- **دکمهٔ کپسولی و CTA شیشه‌ای:** دکمهٔ اصلی گرادیانی سبز با سایهٔ نئونی و دکمهٔ ثانویهٔ شیشه‌ای؛ همه با `border-radius: var(--radius-full)`.
-- **ریسپانسیو:** در دسکتاپ کالا سمت چپ و پنل سمت راست؛ زیر ۸۶۰ پیکسل تصویر کالا به‌صورت نوار شارپ بالای بنر می‌آید و پنل شیشه‌ای با هم‌پوشانی (negative margin) پایین آن می‌نشیند تا هیچ‌وقت روی کالا نیفتد. تنظیمات اختصاصی برای ۱۲۸۰ / ۱۱۰۰ / ۸۶۰ / ۶۴۰ پیکسل.
-- **دسترس‌پذیری:** عناصر تزئینی `aria-hidden`، انیمیشن ورود فقط با `prefers-reduced-motion: no-preference` و غیرفعال‌سازی آن با `reduce`.
-- **رفع سرریز افقی هدر:** قواعد هدر فشرده (منوی همبرگری، جست‌وجوی آیکونی، کشوی موبایل) از بریک‌پوینت ۸۶۰ به ۱۱۰۰ منتقل شد تا در عرض‌های تبلت (۹۰۰–۱۰۲۴) هدر از کادر بیرون نزند و کل صفحه افقی اسکرول نشود.
+GitHub Actions برای migrationهای pushشده به `main` اجرا می‌شود؛ اجرای دستی نیازمند تأیید ورودی `confirm` است. برای آن workflow باید GitHub Actions Secrets زیر تنظیم باشند: `SUPABASE_ACCESS_TOKEN`، `SUPABASE_PROJECT_REF` و `SUPABASE_DB_PASSWORD`. گام dry-run را بررسی و نتیجهٔ اجرای migration را در Actions تأیید کنید. در صورت ایجاد schema قبلی، پیش از هرگونه اجرای مجدد از وضعیت و migration history پروژه پشتیبان بگیرید.
 
-## نقش‌های Demo (فقط وقتی Supabase Auth پیکربندی نشده)
-در حالت آفلاین `/login` روی حساب نمونه کلیک کنید:
-- Customer: `09120000001`
-- Admin: `09120000002`
-- Super Admin: `09120000003`
+جزئیات و مسیر راه‌اندازی در [`supabase/README.md`](supabase/README.md) آمده است.
 
-ورود فقط state محلی را تغییر می‌دهد؛ رمز، OTP، session یا احراز هویت واقعی وجود ندارد. Demo Admin به بخش‌های CMS/فروشگاه دسترسی دارد؛ ابزارهای Reset/Clear فقط برای Super Admin نمایش داده می‌شوند.
+## داده، کاتالوگ و پنل
 
-## Architecture / Data Layer
-- `mock/seed-data.js`: داده‌های پایه و یک‌جای Demo؛ فقط اگر Storage خالی باشد Seed می‌شود.
-- `services/data-provider.js`: Provider فروشگاه فعلاً Mock/LocalPersistence است؛ `services/supabase-auth.js` فقط Supabase Auth (email/password + PKCE) را اختیاری متصل می‌کند.
-- `repositories/mock-repository.js`: قرارداد generic و عملیات CRUD/list/get/search/filter برای entityها.
-- `repositories/bootstrap.js`: ساخت کاربران Demo، Home CMS defaults، Repository container و Application services.
-- `services/application-services.js`: Product/Auth/Order/Coupon/Shipping/Payment/Review/Cart services؛ commerce همچنان روی Mock Repository است.
-- `services/cart-functions.js`: عملیات Cart از طریق Cart repository.
-- `stage3.js`: UI/route composition و flowهای demo.
-- `types/domain.js`: JSDoc contracts؛ `prisma/schema.prisma` مدل relational معادل PostgreSQL/Supabase.
-- `repositories/supabase-repository.stub.js`: فعلاً interface آینده؛ import یا اجرا نمی‌شود.
-- `supabase/migrations/202609280001_initial_schema.sql` و migrationهای بعدی: schema/RLS نسخه‌بندی‌شده؛ مالک تأیید کرده اجرای اولیه در Actions سبز شده است. migration جدید `202609280002_active_profile_rls.sql` با push به `main` خودکار اجرا می‌شود.
-- `.env.example`: placeholderهای تنظیم عمومی Supabase، Cloudflare و Gemini؛ فایل واقعی `.env` از git خارج است. فقط URL/کلید public برای Auth به مرورگر می‌رسند؛ کلیدهای AI و هر `service_role` باید سروری بمانند.
+- `services/data-provider.js` فقط state اولیهٔ خالی می‌سازد و داده را از `repositories/supabase-repository.js` می‌گیرد؛ persistence کل state در مرورگر عمداً خاموش است.
+- محصول، دسته، کوپن، تنظیمات، بنر، محتوا، نظر، پیام تماس، مشتری و آمار از ردیف‌های پایگاه داده و RLS خوانده می‌شوند. آمار فروش فقط از سفارش‌هایی محاسبه می‌شود که پرداخت آن‌ها تأیید شده است.
+- سبد مشتری از RPC امن ثبت می‌شود؛ سفارش، مبلغ authoritative، تخفیف، shipping و رزرو موجودی در `create_order_with_payment` اعتبارسنجی می‌شوند. مرورگر اجازهٔ درج مستقیم سفارش یا تغییر وضعیت پرداخت ندارد.
+- فایل‌های تصویر انتخابی/تولیدشده به bucket عمومی `product-images` در Supabase Storage می‌روند و اطلاعات رسانه در جدول DB نگهداری می‌شود. آدرس بیرونی فقط HTTPS پذیرفته می‌شود.
+- پنل مدیریت در موبایل ناوبری کشویی و جدول‌های افقیِ محدودشده دارد؛ storefront نوار پایین و نوار خرید موبایل را جداگانه ارائه می‌کند.
 
-UI از state snapshot محلی استفاده می‌کند و persistence فقط از `DataProvider` عبور می‌کند؛ operations حساس فروش از `DemoServices` و Repositoryها انجام می‌شوند. در مرحله اتصال، composition root و adapter جایگزین می‌شوند؛ در صورت نیاز APIهای کاملاً async می‌توانند همان قرارداد repository را حفظ کنند.
+## Checkout و زرین‌پال
 
-## Demo flowها
-### خرید
-`/shop` → search/filter/sort/pagination → صفحه محصول → انتخاب رنگ و سایز → quick add → Cart → اعمال کوپن `TOUBA10` یا `WELCOME150` → Checkout → Mock Payment success/failure → Tracking. پرداخت موفق موجودی واریانت را فقط یک بار کم می‌کند؛ ناموفق، سفارش/payment failure را نگه می‌دارد، سبد را حفظ می‌کند و موجودی را کم نمی‌کند.
+Checkout فقط برای حساب فعال مشتری است. سفارش ابتدا به‌صورت تراکنشی در Supabase ساخته می‌شود؛ سپس `/api/payment/zarinpal/request` با JWT مشتری، سفارش را سمت سرور به زرین‌پال می‌فرستد. callback و verify سمت سرور انجام می‌شوند و رسید امضاشده فقط پس از verify معتبر است. callback تکراری باید idempotent بماند. هیچ اطلاعات کارت بانکی روی سایت دریافت یا ذخیره نمی‌شود.
 
-### پنل
-`/admin` → Dashboard → Products (مدیریت سایز×رنگ و موجودی مستقل) → Orders (جستجو، فیلتر، جزئیات و status) → Coupons/Reviews → Banners/Homepage/Media/Settings. CMS homepage پس از ذخیره در storefront قابل مشاهده است. Shipping عادی/سریع/رایگان از Settings تنظیم می‌شود.
+تنظیم‌ها فقط سمت سرور (Vercel Environment Variables یا `.env` خارج از Git):
 
-### ماندگاری / Reset
-تمام state با کلید `toubashop-v1` در LocalStorage مرورگر فعلی ذخیره می‌شود. Super Admin در Admin → ابزار دمو می‌تواند Reset به Seed، Seed در Storage خالی، یا Clear Local Data انجام دهد. برای reset دستی همین کلید را از LocalStorage حذف کنید.
+- `ZARINPAL_MODE=sandbox` برای آزمایش.
+- `ZARINPAL_MERCHANT_ID`: Merchant ID واقعی/مجاز ارائه‌دهنده؛ مقدار جعلی نسازید.
+- `ZARINPAL_STATE_SECRET`: راز تصادفی حداقل ۳۲ بایتی برای امضای state و receipt؛ در محیط امن تولید کنید.
 
-## انتشار خودکار تغییرات دیتابیس Supabase
+درخواست Production عمداً مسدود است تا DB واقعی، migration، checkout و Sandbox end-to-end تأیید شوند. فعال‌کردن متغیر Production به‌تنهایی دریافت وجه را مجاز نمی‌کند. مستند رسمی: [API v4](https://www.zarinpal.com/docs/paymentGateway/connectToGateway.html) و [Sandbox](https://next.zarinpal.com/paymentGateway/sandbox.html).
 
-هر تغییر ساختاری را به‌صورت یک فایل SQL جدید و شماره‌دار در `supabase/migrations/` ثبت کنید؛ migrationی را که قبلاً اجرا شده ویرایش نکنید. پس از commit و push به شاخهٔ `main`، GitHub Actions ابتدا `dry-run` می‌گیرد و سپس migrationهای pending را به‌ترتیب روی Supabase اعمال می‌کند. تغییر مستقیم در Supabase Dashboard، ویرایش فایل‌های اپ یا تغییر محلیِ push‌نشده به‌طور خودکار sync نمی‌شود.
+## ابزارهای هوش مصنوعی
 
-پیش از اولین اجرا، در GitHub مخزن → **Settings → Secrets and variables → Actions** این سه Actions Secret را بسازید: `SUPABASE_ACCESS_TOKEN`، `SUPABASE_PROJECT_REF` و `SUPABASE_DB_PASSWORD`. مقادیر را فقط در GitHub Secrets نگه دارید؛ در چت، مخزن، Vercel یا کد مرورگر قرار ندهید. سپس در **Actions → Apply Supabase database migrations → Run workflow**، ورودی `confirm` را فعال کنید تا migration اولیه اجرا شود. اجرای دستی نیازمند تأیید صریح است؛ پس از آن push هر migration تازه به `main` خودکار اجرا می‌شود. جزئیات اولین اجرا و احتیاط برای schemaای که قبلاً دستی ساخته شده در `supabase/README.md` است.
+- **Product AI Studio** تصویر مرجع را در مرورگر با Puter.js و مدل‌های مجاز در دسترس حساب کاربر ویرایش می‌کند؛ هزینه/سهمیه به Puter و مدل انتخابی وابسته است و رایگان/نامحدود تضمین نمی‌شود. مدل Gemini برای استودیوی تصویر ارائه نمی‌شود؛ مدل‌های Cloudflare (در صورت نمایش) فقط از طریق Puter فراخوانی می‌شوند. تصویر خروجی از Supabase Storage و repository محصول ثبت می‌شود.
+- **دستیار جداگانهٔ نگارش توضیحات محصول** قابلیت مستقلی است. کلید اختیاری `GEMINI_API_KEY` فقط سمت سرور استفاده می‌شود؛ هر ادعای فنی متن تولیدشده باید با مشخصات واقعی محصول بررسی شود.
+- نشانگر سازگاری قدیمی `ComfyUI / Qwen-Image-Edit` در کد استودیو حفظ شده است و به‌معنی مسیر تولید مستقل از Puter نیست.
 
-این pipeline فقط schema را مدیریت می‌کند و به‌تنهایی storefront را به Supabase وصل نمی‌کند یا احراز هویت، سفارش، پرداخت و موجودی را Production-ready نمی‌سازد.
+## تست و وضعیت انتشار
 
-## تست‌های آفلاین
-```bash
-node tests/repository-crud.js
-node tests/demo-e2e.js
-```
-تست E2E بدون مرورگر یا شبکه مسیر ساخت محصول و Variant، انتشار و جستجو، Login Demo، افزودن Cart، کوپن، Checkout، پرداخت موفق و ناموفق، کاهش موجودی، تغییر وضعیت سفارش و بارگذاری مجدد از local persistence را بررسی می‌کند.
+`npm test` شامل تست‌های آفلاین repository Supabase، Puter AI Studio، API، Auth، زرین‌پال و fail-closed storefront است. این تست‌ها از stub استفاده می‌کنند و **جایگزین اجرای migration، مرورگر واقعی یا تراکنش Sandbox پذیرنده نیستند**.
 
-## وضعیت اتصال Production
-Auth ایمیلی Supabase در کد آماده و با runtime config فعال می‌شود؛ پس از افزودن URL و public key در Vercel، signup/login، تأیید ایمیل، logout، بازیابی رمز و پروفایل role-checked به Auth/`profiles` وصل می‌شوند. مابقی provider همچنان Mock است: دادهٔ محصولات، سبد، سفارش‌ها، CMS و موجودی مرکزی نشده‌اند. Checkout و پرداخت mock برای کاربر Supabase عمداً بسته است. درگاه «بلوپال» تا ارائهٔ نام دقیق و مستندات رسمی، mock می‌ماند. Production واقعی پس از پیاده‌سازی و تست CRUD مدیر با RLS، RPC تراکنشی سفارش/stock، storage پایدار، SMTP، دامنه/محتوای واقعی، درگاه و end-to-end ممکن می‌شود.
+وضعیت فعلی: migration عملیاتی روی Supabase واقعی از این محیط اجرا/تأیید نشده؛ ورود و ثبت‌نام روی mailbox واقعی، Storage واقعی، مرورگر موبایل و پرداخت Sandbox واقعی نیز بررسی نشده‌اند. تا اتمام این مراحل و بازبینی اطلاعات فروشنده/قیمت/ارسال/موجودی، پروژه را Production-ready یا مجاز برای سفارش/پرداخت واقعی تلقی نکنید. جزئیات در [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).

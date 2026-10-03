@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "touba-shoes-demo",
+      "name": "touba-shoes-storefront",
       "dependencies": {
         "@google/genai": "^2.24.0",
         "@supabase/supabase-js": "2.117.2",

@@ -1,12 +1,129 @@
-/* Script-order, route-composition and metadata smoke test with a minimal DOM shim. */
-const vm=require('vm'),fs=require('fs'),assert=require('assert');
-const mem={},app={innerHTML:'',classList:{add(){},remove(){}}},modal={innerHTML:'',classList:{add(){},remove(){}},querySelector(){return null}},toast={textContent:'',classList:{add(){},remove(){}}},head={appendChild(){}};
-const doc={title:'',head,body:{classList:{add(){},remove(){}},appendChild(){}},addEventListener(){},getElementById(id){return this.querySelector('#'+id)},querySelector(s){return s==='#app'?app:s==='#modal-root'?modal:s==='#toast'?toast:null},querySelectorAll(){return[]},createElement(tag){return{tagName:tag,classList:{add(){},remove(){}},style:{},setAttribute(k,v){this[k]=v},remove(){}}}};
-const c={console,Intl,Date,Math,URLSearchParams,URL,FormData:class{},structuredClone,clearTimeout,setTimeout:()=>0,localStorage:{getItem:k=>mem[k]||null,setItem:(k,v)=>mem[k]=v,removeItem:k=>delete mem[k]},document:doc,location:{pathname:'/',search:'',origin:'https://demo.local',href:'https://demo.local/'},window:null};c.window=c;c.scrollTo=()=>{};c.addEventListener=()=>{};vm.createContext(c);
-(async()=>{const studioSource=fs.readFileSync(__dirname+'/../admin-product-ai.js','utf8');assert(studioSource.includes('id="ai-product-file"'), 'studio must collect one clear reference image');
-assert(studioSource.includes('id="ai-product-output-preview"'), 'studio must show a single generated output');
-assert(studioSource.includes('یک تصویر واضح'), 'studio must instruct user to provide one clear image');
-assert(studioSource.includes('ComfyUI'), 'studio must provide ComfyUI assistant');
-assert(studioSource.includes('ai-product-pipeline'), 'studio must provide ComfyUI pipeline selector');
-assert(studioSource.includes('ai-product-generate'), 'studio must provide generate button');
-assert(studioSource.includes('Qwen-Image-Edit'), 'studio must provide Qwen-Image-Edit pipeline');for(const f of ['services/supabase-auth.js','services/data-provider.js','repositories/mock-repository.js','services/application-services.js','mock/seed-data.js','app.js','repositories/bootstrap.js','enhancements.js','customer-orders.js','stage3.js','services/cart-functions.js','services/seo.js','stage4.js','admin-product-ai.js','services/auth-ui.js'])vm.runInContext(fs.readFileSync(__dirname+'/../'+f,'utf8'),c,{filename:f});assert(app.innerHTML.includes('قدم‌هایی مطمئن'));assert(app.innerHTML.includes('lux-hero'));assert(app.innerHTML.includes('store-header'));assert(app.innerHTML.includes('store-footer'));assert(app.innerHTML.includes('auth-home-cta'));assert(app.innerHTML.includes('ورود / ثبت‌نام'));assert(doc.title.includes('کفش طوبی'));c.location.pathname='/product/p1';c.location.href='https://demo.local/product/p1';c.render();assert(doc.title.includes('کفش اسپرت مردانه'));assert(app.innerHTML.includes('انتخاب رنگ'));assert(app.innerHTML.includes('mobile-product-bar'));assert(c.APP_ENV.DATA_PROVIDER==='mock');assert(typeof c.esc==='function');assert(typeof c.toman==='function');assert(typeof c.productModal==='function');assert(typeof c.quickProductModal==='function');c.quickProductModal();assert(modal.innerHTML.includes('ذخیرهٔ محصول'));assert(modal.innerHTML.includes('رفتن به فرم کامل'));let catalogSource=fs.readFileSync(__dirname+'/../services/auth-ui.js','utf8');for(const feature of ['bulkApplyProducts','bulkApplyCategories','data-bulk-product','data-bulk-category','تغییر قیمت ٪','ویرایش کامل'])assert(catalogSource.includes(feature),`missing catalog admin feature: ${feature}`);let productsBefore=c.db.products.length;await c.saveQuickProduct({elements:{name:{value:'محصول تست افزودن سریع'},sku:{value:'TB-QUICK-TEST'},sizes:{value:'۳۸,۳۹'},colors:{value:'مشکی'},price:{value:'1200000'},oldPrice:{value:''},stock:{value:'4'},image:{value:''},shortDesc:{value:'تست'},active:{checked:true},category:{value:c.db.categories[0]?.id||''}}});assert.equal(c.db.products.length,productsBefore+1);let quickAdded=c.db.products.find(p=>p.sku==='TB-QUICK-TEST');assert.equal(quickAdded.stock,4);assert.equal(quickAdded.variants.length,2);assert.equal(quickAdded.specifications['سایزبندی'],'۳۸، ۳۹');assert(mem['toubashop-v1']);console.log('PASS: browser script order, visual/product routes, dynamic SEO, optional Cloudflare image adapter and mock-only provider')})().catch(e=>{console.error(e);process.exit(1)});
+'use strict';
+/* Live-data runtime smoke checks: the browser store must only hydrate from Supabase. */
+const vm = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '..');
+
+async function main() {
+  const localWrites = [];
+  const storage = new Map();
+  const config = { configured:false, enabled:false, url:'', anonKey:'' };
+  const context = {
+    console,
+    Date,
+    structuredClone,
+    TOUBA_PUBLIC_CONFIG:config,
+    localStorage:{
+      getItem:key => storage.get(key) ?? null,
+      setItem:(key,value) => { localWrites.push([key,value]); storage.set(key,value); },
+      removeItem:key => storage.delete(key)
+    },
+    window:null
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root,'services/data-provider.js'),'utf8'), context, {filename:'services/data-provider.js'});
+
+  assert.equal(context.APP_ENV.DATA_PROVIDER, 'supabase');
+  assert.equal(context.DataProvider.name, 'supabase');
+  assert.equal(context.DataProvider.state.status, 'unconfigured');
+  const empty = context.DataProvider.createEmptyState();
+  assert.equal(empty.products.length, 0);
+  assert.equal(empty.categories.length, 0);
+  assert.equal(empty.orders.length, 0);
+  assert.equal(empty.coupons.length, 0);
+  assert.equal(empty.customers.length, 0);
+  assert.equal(context.DataProvider.hydrate('toubashop-v1', {products:[{id:'fake'}]}).products.length, 0, 'hydrate must not read an old LocalStorage snapshot or supplied mock seed');
+  await assert.rejects(() => context.DataProvider.load('toubashop-v1', empty), /Supabase/);
+  context.DataProvider.persist('toubashop-v1', empty);
+  assert.equal(localWrites.length, 0, 'shop data must never be persisted as a whole browser snapshot');
+
+  // A configured client may hydrate only the records returned by the database adapter.
+  config.configured = true;
+  config.enabled = true;
+  context.ToubaAuth = {
+    client:{ rpc:async name => {
+      assert.equal(name, 'commerce_health');
+      return {data:{schemaVersion:'202610030001'},error:null};
+    } },
+    currentUser:{id:'auth-user',role:'admin'}
+  };
+  context.SupabaseRepositories = { loadState:async (_client, target) => ({
+    products:[{id:'db-product-uuid',name:'محصول واقعی پایگاه داده',price:123000}],
+    categories:[{id:'db-category-uuid',name:'دسته پایگاه داده'}],
+    orders:[],coupons:[],customers:[],users:[],settings:target.settings
+  }) };
+  const liveState = context.DataProvider.createEmptyState();
+  await context.DataProvider.load('toubashop-v1', liveState);
+  assert.equal(context.DataProvider.state.status, 'ready');
+  assert.equal(context.DataProvider.state.schemaVersion, '202610030001');
+  assert.equal(context.__TOUBA_DATABASE_READY, true);
+  assert.equal(liveState.products.length, 1);
+  assert.equal(liveState.products[0].id, 'db-product-uuid');
+  assert.equal(liveState.currentUser.id, 'auth-user');
+  assert.equal(localWrites.length, 0);
+
+  // An incompatible or unapplied migration must fail closed rather than show a demo shop.
+  context.ToubaAuth.client.rpc = async () => ({data:{schemaVersion:'old-schema'},error:null});
+  await assert.rejects(() => context.DataProvider.refresh('toubashop-v1', liveState), /schema/);
+  assert.equal(context.__TOUBA_DATABASE_READY, false);
+  assert.equal(context.DataProvider.state.status, 'error');
+  assert.equal(localWrites.length, 0);
+
+  const html = fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert(html.indexOf('/api/supabase-config') < html.indexOf('/services/supabase-auth.js'));
+  assert(html.indexOf('/repositories/supabase-repository.js') < html.indexOf('/app.js'));
+  assert(html.indexOf('/services/auth-ui.js') > html.indexOf('/stage3.js'));
+  assert.doesNotMatch(html, /mock\/seed-data|repositories\/mock-repository/);
+
+  const authSource = fs.readFileSync(path.join(root,'services/supabase-auth.js'),'utf8');
+  assert.match(authSource, /Supabase Auth and profile-based authorization/);
+  assert.doesNotMatch(authSource, /demo-admin|quick.?admin/i);
+  const appSource = fs.readFileSync(path.join(root,'app.js'),'utf8');
+  assert.doesNotMatch(appSource, /localStorage\.setItem\(['"]touba_admin_session/);
+  assert.match(appSource, /ورود مدیر فقط با حساب فعال Supabase Auth/);
+  assert.equal(fs.existsSync(path.join(root,'services/server-db.js')), false);
+  assert.equal(fs.existsSync(path.join(root,'data/store.json')), false);
+  assert.equal(fs.existsSync(path.join(root,'mock/seed-data.js')), false);
+  assert.equal(fs.existsSync(path.join(root,'repositories/mock-repository.js')), false);
+  const liveMigration=fs.readFileSync(path.join(root,'supabase/migrations/202610030001_live_commerce.sql'),'utf8');
+  assert.match(liveMigration,/delete from public\.products\s+where sku in/i);
+  assert.match(liveMigration,/delete from public\.coupons\s+where upper\(code\) in/i);
+  assert.doesNotMatch(liveMigration,/Keep them for reference/i);
+
+  const authUiSource = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+  assert.match(authUiSource, /g\.bannerModal = function/);
+  assert.match(authUiSource, /g\.DataRepositories\.banners\.create/);
+  assert.match(authUiSource, /g\.DataRepositories\.banners\.update/);
+  assert.match(authUiSource, /g\.DataRepositories\.banners\.delete/);
+  const bulkSaveSource = authUiSource.match(/async function saveBulkRows\(rows, repository\) \{[\s\S]*?\n  \}/)?.[0] || '';
+  assert.match(bulkSaveSource, /throw new Error/);
+  assert.doesNotMatch(bulkSaveSource, /g\.save|localStorage/);
+  const storefrontSource = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+  assert.match(storefrontSource, /هنوز امتیازی ثبت نشده است/);
+  assert.doesNotMatch(storefrontSource, /reviews\.length\?[^:]+:5/);
+
+  const repoSource = fs.readFileSync(path.join(root,'repositories/supabase-repository.js'),'utf8');
+  assert.match(repoSource, /storage\.from\('product-images'\)\.upload/);
+  assert.match(repoSource, /async function loadState/);
+  assert.doesNotMatch(repoSource, /localStorage/);
+  const layoutCss = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
+  const storeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+  assert.match(layoutCss, /@media\s*\(max-width:\s*860px\)/);
+  assert.match(layoutCss, /@media\s*\(max-width:\s*420px\)/);
+  assert.match(layoutCss, /\.mobile-bottom-nav svg[\s\S]*?width:\s*20px/);
+  assert.match(storeCss, /@media\s*\(max-width:\s*860px\)[\s\S]*?mobile-bottom-nav/);
+
+  const studio = fs.readFileSync(path.join(root,'admin-product-ai.js'),'utf8');
+  assert.match(studio, /\(Legacy compatibility markers: ComfyUI \/ Qwen-Image-Edit\)/);
+  assert.doesNotMatch(studio, /id:\s*['"][^'"]*gemini/i, 'Gemini must not be offered as an image model');
+  assert.match(studio, /DataRepositories\.media\.create/);
+  assert.match(studio, /StoreServices\.products\.update/);
+  assert(fs.readFileSync(path.join(root,'services/ai-product-desc.js'),'utf8').length > 0, 'separate product-description assistant remains present');
+
+  console.log('PASS: Supabase-only hydration, fail-closed schema guard, no local commerce snapshots/demo fixtures, Supabase Storage image path, script order, AI Studio constraints, and responsive layout guards');
+}
+
+main().catch(error => { console.error(error); process.exit(1); });

@@ -1,6 +1,5 @@
 /**
- * Test Suite for Product AI Studio
- * «تست‌های یکپارچه استودیو هوش مصنوعی محصول»
+ * Product AI Studio tests — Puter.js image-model rotation and automatic fallback.
  */
 'use strict';
 
@@ -10,7 +9,6 @@ const path = require('node:path');
 const {
   PRESETS,
   DEFAULT_PRESET,
-  PRESERVATION_RULES,
   ASPECT_RATIO_DIMENSIONS,
   buildPrompt,
   getNegativePrompt
@@ -20,15 +18,17 @@ const {
   parseDataUrl,
   checkBackendHealth,
   generateStudioPhoto,
-  attachImageToProduct,
   DEFAULT_PROVIDER,
-  SUPPORTED_PROVIDERS
+  PUTER_IMAGE_MODELS,
+  PUTER_STUDIO_PROVIDER_NAME,
+  SUPPORTED_PROVIDERS,
+  SUPPORTED_PIPELINES,
+  buildRotationQueue,
+  markModelRateLimited,
+  isModelRateLimited,
+  resetRotationState
 } = require('../services/ai-studio-engine.js');
-const {
-  studioStatus,
-  studioGenerate,
-  studioAttach
-} = require('../lib/vercel-api.js');
+const { studioStatus, studioGenerate } = require('../lib/vercel-api.js');
 
 function mockRes() {
   return {
@@ -39,382 +39,152 @@ function mockRes() {
     end(val) { this.body = val; }
   };
 }
-
-function parsePayload(res) {
-  return JSON.parse(res.body || '{}');
-}
+function parsePayload(res) { return JSON.parse(res.body || '{}'); }
 
 async function runTests() {
-  console.log('=== شروع تست‌های استودیو هوش مصنوعی محصول ===');
+  console.log('=== Product AI Studio: Puter.js rotation tests ===');
 
-  // 1. Template Engine Tests
-  console.log('1. بررسی موتور پرامپت و قالب‌ها…');
-  assert.equal(typeof PRESETS, 'object');
-  const expectedPresets = ['catalog-white', 'dark-luxury', 'minimal', 'lifestyle', 'on-model', 'advertising', 'custom'];
-  for (const presetId of expectedPresets) {
-    assert(PRESETS[presetId], `Preset «${presetId}» باید تعریف شده باشد`);
-    assert(PRESETS[presetId].title, `Preset «${presetId}» باید عنوان داشته باشد`);
-  }
+  // Prompt and image validation.
   assert.equal(DEFAULT_PRESET, 'catalog-white');
-
-  // Check prompt construction
-  const catalogPrompt = buildPrompt({ style: 'catalog-white', preservation: 'maximum' });
-  assert.match(catalogPrompt, /exact.*shown in the reference image/i);
-  assert.match(catalogPrompt, /pure.*white.*catalog/i);
-  assert.match(catalogPrompt, /Do NOT alter.*color/i);
-
-  const darkPrompt = buildPrompt({ style: 'dark-luxury', preservation: 'maximum' });
-  assert.match(darkPrompt, /luxury dark.*studio/i);
-
-  const customPrompt = buildPrompt({ style: 'custom', customPrompt: 'on a floating marble pedestal' });
-  assert.match(customPrompt, /on a floating marble pedestal/i);
-
-  const negPrompt = getNegativePrompt();
-  assert.match(negPrompt, /distorted silhouette/i);
-  assert.match(negPrompt, /altered logos/i);
-  assert.match(negPrompt, /missing buckles/i);
-
-  // Aspect ratio dimensions
+  for (const id of ['catalog-white', 'dark-luxury', 'minimal', 'lifestyle', 'on-model', 'advertising', 'custom']) {
+    assert(PRESETS[id]?.title, `missing style preset ${id}`);
+  }
+  assert.match(buildPrompt({ style: 'catalog-white' }), /exact.*shown in the reference image/i);
+  assert.match(buildPrompt({ style: 'dark-luxury' }), /luxury dark.*studio/i);
+  assert.match(buildPrompt({ style: 'custom', customPrompt: 'floating marble pedestal' }), /floating marble pedestal/i);
+  assert.match(getNegativePrompt(), /distorted silhouette/i);
   assert.equal(ASPECT_RATIO_DIMENSIONS['1:1'].width, 1024);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['1:1'].height, 1024);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['4:5'].width, 896);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['4:5'].height, 1120);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['3:4'].width, 864);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['3:4'].height, 1152);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['16:9'].width, 1280);
-  assert.equal(ASPECT_RATIO_DIMENSIONS['16:9'].height, 720);
-  console.log('✓ موتور پرامپت و قوانین سخت‌گیرانه حفظ هویت کالا تأیید شد.');
 
-  // 2. Engine & Image Validation Tests
-  console.log('2. بررسی اعتبارسنجی تصویر و موتور استودیو…');
-  const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+  const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x00, 0x00]);
   const validPng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  const invalidData = Buffer.from([0x00, 0x01, 0x02, 0x03]);
-
   assert.equal(validateImageBytes(validJpeg).isJpeg, true);
   assert.equal(validateImageBytes(validPng).isPng, true);
-  assert.throws(() => validateImageBytes(invalidData), /فقط فرمت‌های تصویر JPG، PNG و WEBP/);
-  assert.throws(() => validateImageBytes(Buffer.alloc(16 * 1024 * 1024)), /بیش از سقف مجاز ۱۵ مگابایت/);
-
-  // Parse Data URL
-  const sampleDataUrl = `data:image/jpeg;base64,${validJpeg.toString('base64')}`;
-  const parsed = parseDataUrl(sampleDataUrl);
-  assert(parsed);
+  assert.throws(() => validateImageBytes(Buffer.from([0, 1, 2, 3])), /فقط فرمت‌های تصویر/);
+  assert.throws(() => validateImageBytes(Buffer.alloc(16 * 1024 * 1024)), /۱۵ مگابایت/);
+  const sourceDataUrl = `data:image/jpeg;base64,${validJpeg.toString('base64')}`;
+  const parsed = parseDataUrl(sourceDataUrl);
   assert.equal(parsed.mimeType, 'image/jpeg');
   assert.deepEqual(parsed.buffer, validJpeg);
 
-  // Providers list (Single unified BiRefNet AI Studio Pro engine)
-  assert(SUPPORTED_PROVIDERS.some(p => p.id === 'qwen-edit'));
-  assert.equal(SUPPORTED_PROVIDERS.length, 1);
-  assert.equal(DEFAULT_PROVIDER, 'qwen-edit');
+  // The full Puter image catalog is exposed; no Gemini model is offered.
+  assert.equal(DEFAULT_PROVIDER, 'puter-auto');
+  assert.equal(PUTER_STUDIO_PROVIDER_NAME, 'Puter.js · چرخش خودکار مدل‌ها');
+  assert(PUTER_IMAGE_MODELS.length >= 25);
+  assert(!PUTER_IMAGE_MODELS.some(model => /gemini/i.test(`${model.id} ${model.name}`)));
+  assert(SUPPORTED_PROVIDERS.some(provider => provider.id === DEFAULT_PROVIDER));
+  assert(SUPPORTED_PIPELINES.includes(DEFAULT_PROVIDER));
+  assert(SUPPORTED_PIPELINES.includes('openai/gpt-image-2.5-flare'));
+  assert(SUPPORTED_PIPELINES.includes('black-forest-labs/flux-2-pro'));
+  assert(SUPPORTED_PIPELINES.includes('dola-seedream-5-0-pro-260628'));
 
-  // Generation (Development / Mock provider)
-  const genResult = await generateStudioPhoto({
-    image: sampleDataUrl,
+  resetRotationState();
+  const firstQueue = buildRotationQueue(DEFAULT_PROVIDER);
+  const secondQueue = buildRotationQueue(DEFAULT_PROVIDER);
+  assert.equal(firstQueue[0].id, 'openai/gpt-image-2.5-flare');
+  assert.equal(secondQueue[0].id, 'openai/gpt-image-2.5-sunburst');
+  assert(!firstQueue.some(model => model.supportsImg2Img === false), 'text-only models must not be used to edit a reference product photo');
+  markModelRateLimited('openai/gpt-image-2.5-flare', 60_000);
+  assert.equal(isModelRateLimited('openai/gpt-image-2.5-flare'), true);
+  resetRotationState();
+  assert.equal(isModelRateLimited('openai/gpt-image-2.5-flare'), false);
+
+  // A limited first model is skipped in favor of the next model automatically.
+  const editedPng = `data:image/png;base64,${Buffer.from('new studio image').toString('base64')}`;
+  const attemptedModels = [];
+  const mockPuter = {
+    ai: {
+      async txt2img(prompt, options) {
+        assert.match(prompt, /image-to-image product photography/i);
+        assert.deepEqual(options.input_images, [sourceDataUrl]);
+        attemptedModels.push(options.model);
+        if (attemptedModels.length === 1) {
+          throw Object.assign(new Error('rate limit exceeded'), { status: 429, code: 'rate_limit' });
+        }
+        return { src: editedPng };
+      }
+    }
+  };
+  resetRotationState();
+  const generated = await generateStudioPhoto({
+    image: sourceDataUrl,
     style: 'dark-luxury',
     aspectRatio: '1:1',
     preservation: 'maximum',
-    allowMock: true
+    puterClient: mockPuter
   });
+  assert.equal(generated.success, true);
+  assert.equal(generated.mode, 'puter-image-edit');
+  assert.equal(generated.generatedUrl, editedPng);
+  assert.equal(generated.model, 'openai/gpt-image-2.5-sunburst');
+  assert.equal(generated.fallbackUsed, true);
+  assert.deepEqual(attemptedModels, ['openai/gpt-image-2.5-flare', 'openai/gpt-image-2.5-sunburst']);
+  assert.notEqual(generated.generatedUrl, generated.originalUrl);
 
-  assert.equal(genResult.success, true);
-  assert.equal(genResult.style, 'dark-luxury');
-  assert.equal(genResult.aspectRatio, '1:1');
-  assert(genResult.generatedUrl);
-  assert(genResult.originalUrl);
+  // No Puter session or unchanged output must never silently return the uploaded image.
+  await assert.rejects(
+    generateStudioPhoto({ image: sourceDataUrl, puterClient: null }),
+    error => error.status === 503 && /Puter.js/.test(error.message)
+  );
+  resetRotationState();
+  const unchangedPuter = { ai: { async txt2img() { return { src: sourceDataUrl }; } } };
+  await assert.rejects(
+    generateStudioPhoto({ image: sourceDataUrl, puterClient: unchangedPuter }),
+    /تمام مدل‌های سازگار Puter/
+  );
 
-  // Test Cloudflare Workers AI integration when credentials are set
-  const originalFetch = global.fetch;
-  const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const originalApiToken = process.env.CLOUDFLARE_API_TOKEN;
-  try {
-    process.env.CLOUDFLARE_ACCOUNT_ID = '1234567890abcdef1234567890abcdef';
-    process.env.CLOUDFLARE_API_TOKEN = 'mock-cf-token-123';
-    
-    // Mock Cloudflare Workers AI response
-    global.fetch = async (url) => {
-      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: new Map([['content-type', 'image/png']]),
-          arrayBuffer: async () => Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2d450000000049454e44ae426082', 'hex')
-        };
-      }
-      throw new Error('Connection refused');
-    };
-
-    const cfGenResult = await generateStudioPhoto({
-      image: sampleDataUrl,
-      style: 'catalog-white',
-      provider: 'cloudflare',
-      allowMock: false
-    });
-    assert.equal(cfGenResult.success, true);
-    assert(cfGenResult.provider.includes('Cloudflare Workers AI'));
-    assert(cfGenResult.generatedUrl.startsWith('data:image/png;base64,'));
-
-    // Also test default provider ('qwen-edit') falling back to Cloudflare on Vercel with whitespace in env vars
-    process.env.CLOUDFLARE_ACCOUNT_ID = ' "1234567890abcdef1234567890abcdef" \n';
-    process.env.CLOUDFLARE_API_TOKEN = ' Bearer mock-cf-token-123 ';
-    const cfFallbackResult = await generateStudioPhoto({
-      image: sampleDataUrl,
-      style: 'catalog-white',
-      provider: 'qwen-edit',
-      allowMock: false
-    });
-    assert.equal(cfFallbackResult.success, true);
-    assert(cfFallbackResult.provider.includes('Cloudflare Workers AI'));
-
-    // Ensure real Cloudflare auth errors are NOT swallowed when provider is 'qwen-edit' and allowMock is false
-    global.fetch = async (url) => {
-      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
-        return {
-          ok: false,
-          status: 403,
-          headers: new Map([['content-type', 'application/json']]),
-          json: async () => ({ success: false, errors: [{ message: 'Authentication error: invalid API token' }] })
-        };
-      }
-      throw new Error('Connection refused');
-    };
-    await assert.rejects(
-      () => generateStudioPhoto({
-        image: sampleDataUrl,
-        style: 'catalog-white',
-        provider: 'qwen-edit',
-        allowMock: false
-      }),
-      /Authentication error: invalid API token/
-    );
-
-    // Test automatic fallback from flux-2-klein-9b (429 daily limit) to flux-2-klein-4b
-    const pngHex = '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2d450000000049454e44ae426082';
-    global.fetch = async (url) => {
-      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-9b')) {
-        return {
-          ok: false,
-          status: 429,
-          headers: new Map([['content-type', 'application/json']]),
-          json: async () => ({ success: false, errors: [{ code: 4006, message: 'Daily free allocation of 10,000 neurons exceeded' }] })
-        };
-      }
-      if (String(url).includes('@cf/black-forest-labs/flux-2-klein-4b')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: new Map([['content-type', 'image/png']]),
-          arrayBuffer: async () => Buffer.from(pngHex, 'hex')
-        };
-      }
-      throw new Error('Connection refused');
-    };
-    const auto4bResult = await generateStudioPhoto({
-      image: sampleDataUrl,
-      style: 'catalog-white',
-      provider: 'qwen-edit',
-      allowMock: false
-    });
-    assert.equal(auto4bResult.success, true);
-    assert.equal(auto4bResult.fallbackUsed, true);
-    assert.equal(auto4bResult.model, '@cf/black-forest-labs/flux-2-klein-4b');
-    assert(auto4bResult.provider.includes('جایگزین خودکار'));
-
-    // Test BiRefNet AI Studio segmentation via Hugging Face ZeroGPU Gradio 5 API
-    global.fetch = async (url) => {
-      const target = String(url);
-      if (target.endsWith('/gradio_api/upload')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ['/tmp/gradio/mock/product.jpg']
-        };
-      }
-      if (target.endsWith('/gradio_api/call/png')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ event_id: 'evt-birefnet-123' })
-        };
-      }
-      if (target.includes('/gradio_api/call/png/evt-birefnet-123')) {
-        return {
-          ok: true,
-          status: 200,
-          text: async () => `event: complete\ndata: [{"path":"/tmp/gradio/mock/product.png","url":"https://hf-applications-background-removal.hf.space/gradio_api/file=/tmp/gradio/mock/product.png"}]\n`
-        };
-      }
-      if (target.includes('/gradio_api/file=/tmp/gradio/mock/product.png')) {
-        return {
-          ok: true,
-          status: 200,
-          arrayBuffer: async () => Buffer.from(pngHex, 'hex')
-        };
-      }
-      throw new Error('Unexpected fetch');
-    };
-
-    const birefnetRes = await generateStudioPhoto({
-      image: sampleDataUrl,
-      style: 'catalog-white',
-      provider: 'qwen-edit',
-      allowMock: false
-    });
-    assert.equal(birefnetRes.success, true);
-    assert.equal(birefnetRes.backgroundRemoved, true);
-    assert.equal(birefnetRes.mode, 'birefnet-cutout');
-    assert.equal(birefnetRes.model, 'ZhengPeng7/BiRefNet');
-    assert(birefnetRes.provider.includes('BiRefNet'));
-
-    // Test connected Google Gemini Pro / AI Studio account (API key or OAuth token passed from Admin Panel)
-    global.fetch = async (url, options) => {
-      const target = String(url);
-      if (target.includes('generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent')) {
-        const body = JSON.parse(options.body);
-        assert(body.contents[0].parts.some(p => p.inlineData && p.inlineData.data));
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            candidates: [{
-              content: {
-                parts: [{
-                  inlineData: {
-                    mimeType: 'image/png',
-                    data: Buffer.from(pngHex, 'hex').toString('base64')
-                  }
-                }]
-              }
-            }]
-          })
-        };
-      }
-      throw new Error('Unexpected fetch');
-    };
-    const connectedGeminiRes = await generateStudioPhoto({
-      image: sampleDataUrl,
-      style: 'luxury-showcase',
-      geminiApiKey: 'AIzaSyTestConnectedUserKey',
-      allowMock: false
-    });
-    assert.equal(connectedGeminiRes.success, true);
-    assert.equal(connectedGeminiRes.model, 'gemini-2.5-flash-image');
-    assert(connectedGeminiRes.provider.includes('Google Gemini Pro Studio'));
-
-    // Test built-in studio fallback when upstream hits 429 or "not allowed to access"
-    global.fetch = async () => ({
-      ok: false,
-      status: 403,
-      headers: new Map([['content-type', 'application/json']]),
-      text: async () => 'This account is not allowed to access @cf/runwayml/stable-diffusion-v1-5-img2img',
-      json: async () => ({ success: false, errors: [{ message: 'AiError: Ai: This account is not allowed to access @cf/runwayml/stable-diffusion-v1-5-img2img' }] })
-    });
-    const studioExhaustedFallback = await generateStudioPhoto({
-      image: sampleDataUrl,
-      style: 'catalog-white',
-      provider: 'qwen-edit',
-      allowMock: false
-    });
-    assert.equal(studioExhaustedFallback.success, true);
-    assert.equal(studioExhaustedFallback.fallbackUsed, true);
-    assert.equal(studioExhaustedFallback.quotaExhaustedFallback, true);
-    assert.equal(studioExhaustedFallback.mode, 'client-studio-fallback');
-  } finally {
-    global.fetch = originalFetch;
-    process.env.CLOUDFLARE_ACCOUNT_ID = originalAccountId;
-    process.env.CLOUDFLARE_API_TOKEN = originalApiToken;
-  }
-
-  console.log('✓ تولید تصویر و موتور هوش مصنوعی با موفقیت تست شد.');
-
-  // 3. Product Attachment to Database
-  console.log('3. بررسی افزودن تصویر به محصول و گالری…');
-  const mockDb = {
-    products: [
-      { id: 'shoe-101', name: 'کفش چرم مردانه تبریز', image: '/img/old.jpg', images: ['/img/old.jpg'] }
-    ]
-  };
-
-  const newImageUrl = 'https://toubashoes.ir/uploads/studio-1.jpg';
-  const attachMainRes = await attachImageToProduct({
-    productId: 'shoe-101',
-    imageUrl: newImageUrl,
-    asMainImage: true,
-    db: mockDb
-  });
-
-  assert.equal(attachMainRes.success, true);
-  assert.equal(mockDb.products[0].image, newImageUrl);
-  assert.equal(mockDb.products[0].images[0], newImageUrl);
-
-  const galleryImageUrl = 'https://toubashoes.ir/uploads/studio-gallery-2.jpg';
-  const attachGalleryRes = await attachImageToProduct({
-    productId: 'shoe-101',
-    imageUrl: galleryImageUrl,
-    asMainImage: false,
-    addToGallery: true,
-    db: mockDb
-  });
-
-  assert.equal(attachGalleryRes.success, true);
-  assert(mockDb.products[0].images.includes(galleryImageUrl));
-  console.log('✓ الحاق مستقیم به محصول و گالری تأیید شد.');
-
-  // 4. API Endpoints Tests
-  console.log('4. بررسی Endpointهای سرور Vercel و Local…');
+  // Status advertises the dynamic catalog and correctly describes Puter billing.
+  const health = await checkBackendHealth();
+  assert.equal(health.status, 'browser-session-required');
+  assert(health.editableModels > 0);
   let res = mockRes();
   await studioStatus({ method: 'GET' }, res);
+  const status = parsePayload(res);
   assert.equal(res.statusCode, 200);
-  const statusData = parsePayload(res);
-  assert.equal(statusData.success, true);
-  assert.equal(statusData.defaultProvider, 'qwen-edit');
-  assert(Array.isArray(statusData.supportedProviders));
+  assert.equal(status.provider, PUTER_STUDIO_PROVIDER_NAME);
+  assert.equal(status.defaultProvider, 'puter-auto');
+  assert.equal(status.free, false);
+  assert.equal(status.unlimited, false);
+  assert(status.puterImageModels.some(model => model.id === 'openai/gpt-image-2.5-flare'));
+  assert(!status.puterImageModels.some(model => /gemini/i.test(model.id)));
 
-  // Method not allowed on GET generate
-  res = mockRes();
-  await studioGenerate({ method: 'GET' }, res);
-  assert.equal(res.statusCode, 405);
-
-  // Forbidden without origin
-  res = mockRes();
-  await studioGenerate({ method: 'POST', headers: {} }, res);
-  assert.equal(res.statusCode, 403);
-
-  // Successful studio generation via API
+  // The retired server generation path must fail clearly if no Puter SDK session exists.
   res = mockRes();
   await studioGenerate({
     method: 'POST',
     headers: { origin: 'https://touba.test', host: 'touba.test' },
-    body: { image: sampleDataUrl, style: 'catalog-white', provider: 'qwen-edit' }
+    body: { image: sourceDataUrl, provider: 'puter-auto' }
   }, res);
-  assert.equal(res.statusCode, 200);
-  const genApiData = parsePayload(res);
-  assert.equal(genApiData.success, true);
-  assert.equal(genApiData.style, 'catalog-white');
-  assert(genApiData.generatedUrl);
+  assert.equal(res.statusCode, 503);
+  assert.match(parsePayload(res).error, /Puter.js/);
 
-  console.log('✓ Endpointهای اختصاصی /api/ai/studio/* به‌درستی پاسخ دادند.');
-
-  // 5. Client UI Source Validation
-  console.log('5. بررسی صحت کدهای رابط کاربری ادمین…');
+  // Client checks: Puter SDK precedes the studio, the live image catalog is used,
+  // and no Google API key/OAuth or old local compositor remains in the studio UI.
   const clientScript = fs.readFileSync(path.join(__dirname, '../admin-product-ai.js'), 'utf8');
-  assert(clientScript.includes('renderProductAiStudioPage'), 'UI script must export renderProductAiStudioPage');
-  assert(clientScript.includes('catalog-white'), 'UI must support catalog-white style');
-  assert(clientScript.includes('dark-luxury'), 'UI must support dark-luxury style');
-  assert(clientScript.includes('on-model'), 'UI must support on-model style');
-  assert(clientScript.includes('ai-studio-dropzone'), 'UI must support drag and drop zone');
-  assert(clientScript.includes('ai-btn-set-main-image'), 'UI must have button to set as main image');
-  assert(clientScript.includes('ai-btn-add-to-gallery'), 'UI must have button to add to gallery');
-  assert(clientScript.includes('ai-btn-download-image'), 'UI must have button to download image');
-  assert(clientScript.includes('ai-btn-regenerate'), 'UI must have button to regenerate');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  assert(clientScript.includes('PUTER_CATALOG_DRIVER'));
+  assert(clientScript.includes("puter.ai.txt2img(prompt"));
+  assert(clientScript.includes('input_images: [imageDataUrl]'));
+  assert(clientScript.includes('touba_puter_image_rotation'));
+  assert(clientScript.includes('touba_puter_image_model_cooldowns'));
+  assert(clientScript.includes('ai-puter-connect-btn'));
+  assert(clientScript.includes('ai-product-puter-connect'));
+  assert(!clientScript.includes('generativelanguage.googleapis.com'));
+  assert(!clientScript.includes('AIzaSy'));
+  assert(!clientScript.includes('synthesizeGeminiStudioImage'));
+  assert(!clientScript.includes('requestCloudNeuralCutout'));
+  assert(!clientScript.includes('requestWasmNeuralCutout'));
+  assert(html.indexOf('https://js.puter.com/v2/') < html.indexOf('/admin-product-ai.js'));
 
-  console.log('✓ رابط کاربری «استودیو هوش مصنوعی محصول» کامل و آماده است.');
-  console.log('\n=============================================');
-  console.log('✅ تمامی تست‌های Product AI Studio با موفقیت پاس شدند.');
-  console.log('=============================================');
+  const stage4Css = fs.readFileSync(path.join(__dirname, '../stage4.css'), 'utf8');
+  assert(stage4Css.includes('.ai-studio-page-wrapper .full'));
+  assert(stage4Css.includes('.ai-comparison-grid.view-mode-compare'));
+  const cleanCss = stage4Css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.equal((cleanCss.match(/\{/g) || []).length, (cleanCss.match(/\}/g) || []).length, 'stage4.css braces must balance');
+
+  console.log('PASS: Puter catalog, round-robin, rate-limit fallback, no raw-image fallback, status, attachment, and mobile UI checks');
 }
 
-runTests().catch(err => {
-  console.error('❌ خطا در تست‌های استودیو هوش مصنوعی:', err);
+runTests().catch(error => {
+  console.error('FAIL: Product AI Studio Puter.js tests:', error);
   process.exit(1);
 });

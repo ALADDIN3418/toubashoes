@@ -1,0 +1,2 @@
+'use strict';
+module.exports = require('../../../lib/zarinpal.js').status;
