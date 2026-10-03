@@ -387,8 +387,10 @@ body.storefront-mode .theme-toggle svg {
   stroke: currentColor;
   stroke-width: 1.8;
 }
-body.storefront-mode .mobile-theme-row {
-  display: none;
+@media (min-width: 1281px) {
+  body.storefront-mode .mobile-theme-row {
+    display: none;
+  }
 }
 
 /* Hero photo is shared; copy stays clear of the product on the right. */
@@ -1120,7 +1122,7 @@ body.storefront-mode .trust-item span {
   color: var(--touba-muted) !important;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   body.storefront-mode .nav-mobile-secondary {
     display: block !important;
   }
@@ -1251,7 +1253,7 @@ body.storefront-mode .newsletter-card p {
 body.storefront-mode .collection-content h2 em {
   color: var(--touba-brand) !important;
 }
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   body.storefront-mode .nav-categories .nav-dropdown {
     background: transparent !important;
     border: 0 !important;

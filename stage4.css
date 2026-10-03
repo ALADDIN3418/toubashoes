@@ -236,7 +236,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
 }
 .store-brand {
   display: inline-flex;
@@ -273,7 +273,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(14px, 2.2vw, 32px);
+  gap: clamp(12px, 1.4vw, 22px);
   margin: 0 auto;
   color: #cbd5e1;
   font-size: 13px;
@@ -355,7 +355,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .store-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 .store-search {
   height: 40px;
@@ -2430,8 +2430,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: none;
 }
 
-/* Tablet & mobile header: compact nav applies up to 1100px so the header never overflows */
-@media (max-width: 1100px) {
+/* Tablet, small laptop & mobile header: compact nav applies up to 1280px so the header never overflows */
+@media (max-width: 1280px) {
   .mobile-nav-backdrop {
     display: block;
     position: fixed;
@@ -2946,7 +2946,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline: none !important;
   color: #ffffff;
   font-size: 12.5px;
-  width: 130px;
+  width: 110px;
   padding: 0 6px;
 }
 .minimal-search input::placeholder {
@@ -6726,3 +6726,209 @@ html, body, #app, main {
     line-height: 1.35;
   }
 }
+
+/* ==========================================================================
+   Shared site chrome — skip link, header controls and the mobile tab bar.
+   Deliberately NOT scoped to body.storefront-mode so every route (storefront,
+   auth pages and /admin) renders the same polished navigation on mobile and
+   desktop.
+   ========================================================================== */
+
+/* Skip link stays off-screen until it receives keyboard focus. */
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  top: 8px;
+  inset-inline-start: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--green-emerald, #10b981);
+  color: #06281c;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.18s ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* The hamburger is a compact-width control only — never on the full bar. */
+.mobile-menu-toggle.minimal-toggle {
+  display: none;
+}
+/* styles.css ships a generic `.bar` rule for admin charts; neutralize it so
+   the hamburger keeps its slim 2px strokes in every theme. */
+.mobile-menu-toggle .bar {
+  min-height: 0 !important;
+  height: 2px !important;
+  width: 20px !important;
+  background: #ffffff !important;
+  border-radius: 2px;
+}
+
+/* Theme switch: rounded pill that matches the header action buttons. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5ebe7;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #ffffff;
+}
+.theme-toggle:active {
+  transform: scale(0.96);
+}
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--green-emerald, #10b981);
+  outline-offset: 2px;
+}
+
+/* Drawer-only pieces must never leak into the wide inline navigation. */
+.store-nav > a.nav-mobile-secondary,
+.nav-divider-mobile,
+.store-nav > .mobile-drawer-user,
+.mobile-theme-row {
+  display: none;
+}
+
+/* Bottom tab bar is mobile-only by default. */
+.mobile-bottom-nav {
+  display: none;
+}
+
+/* Compact header (hamburger + dropdown drawer) up to 1280px. */
+@media (max-width: 1280px) {
+  .mobile-menu-toggle.minimal-toggle {
+    display: flex;
+  }
+  .store-nav > a.nav-mobile-secondary {
+    display: block;
+  }
+  .store-nav > .nav-divider-mobile {
+    display: block;
+  }
+  .store-nav > .mobile-drawer-user {
+    display: flex;
+  }
+  .store-nav > .mobile-theme-row,
+  .mobile-theme-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 4px 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .mobile-theme-row .theme-toggle {
+    min-width: 112px;
+  }
+  /* Account and theme live in the drawer on compact widths — keep it calm. */
+  .minimal-actions .theme-toggle,
+  .minimal-actions .account-action {
+    display: none !important;
+  }
+}
+
+/* Between 1281–1400px the labelled theme pill crowds the actions: icon only. */
+@media (min-width: 1281px) and (max-width: 1400px) {
+  .minimal-actions .theme-toggle {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .minimal-actions .theme-toggle .theme-toggle-text {
+    display: none;
+  }
+}
+
+/* Mobile destination bar — a polished glass tab bar on every route. */
+@media (max-width: 860px) {
+  body {
+    padding-bottom: calc(var(--touba-nav-height, 64px) + env(safe-area-inset-bottom));
+  }
+  .mobile-bottom-nav {
+    position: fixed;
+    z-index: 58;
+    inset-inline: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: calc(var(--touba-nav-height, 64px) + env(safe-area-inset-bottom));
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: rgba(9, 16, 12, 0.94);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+  }
+  .mobile-bottom-nav a {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px 2px;
+    border-radius: 12px;
+    color: #94a3a9;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    transition: color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+  }
+  .mobile-bottom-nav a:hover {
+    color: #cbd5e1;
+  }
+  .mobile-bottom-nav a:active {
+    transform: scale(0.94);
+  }
+  .mobile-bottom-nav a.active,
+  .mobile-bottom-nav a[aria-current="page"] {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.12);
+  }
+  .mobile-bottom-nav a.active svg,
+  .mobile-bottom-nav a[aria-current="page"] svg {
+    stroke-width: 2.2;
+  }
+  .mobile-bottom-nav a.active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 3px;
+    border-radius: 0 0 4px 4px;
+    background: #34d399;
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  }
+}
+
