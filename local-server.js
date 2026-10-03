@@ -89,7 +89,10 @@ const server = http.createServer(async (req, res) => {
   try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }
   catch { return json(res, 400, { error:'آدرس درخواست معتبر نیست.' }); }
 
-  if (pathname.toLowerCase() === '/18887070.txt' || pathname.toLowerCase() === '/18887070.txt/') {
+  if (
+    pathname.toLowerCase() === '/20838126.txt' || pathname.toLowerCase() === '/20838126.txt/' ||
+    pathname.toLowerCase() === '/18887070.txt' || pathname.toLowerCase() === '/18887070.txt/'
+  ) {
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
       'Content-Length': 0,
