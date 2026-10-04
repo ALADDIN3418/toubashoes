@@ -175,7 +175,7 @@
     homepage: 'چیدمان صفحه اصلی',
     banners: 'بنرها و اسلایدرها',
     media: 'کتابخانه رسانه',
-    payments: 'درگاه پرداخت زرین‌پال',
+    payments: 'پرداخت بله‌پی (کیف‌پول بله)',
     settings: 'تنظیمات کلی فروشگاه',
     demo: 'پایگاه داده و همگام‌سازی'
   };
@@ -227,7 +227,7 @@
       title: 'تنظیمات و زیرساخت',
       icon: '⚙️',
       items: [
-        { key: 'payments', label: 'درگاه پرداخت زرین‌پال', icon: '💳' },
+        { key: 'payments', label: 'درگاه پرداخت بله‌پی', icon: '💳' },
         { key: 'settings', label: 'تنظیمات کلی فروشگاه', icon: '⚙' },
         { key: 'demo', label: 'پایگاه داده و همگام‌سازی', icon: '🗄' }
       ]
@@ -462,15 +462,15 @@
     } catch(error) { showActionError(error,'ذخیرهٔ تنظیمات فروشگاه کامل نشد.'); }
   };
 
-  g.checkZarinpalStatus = async function () {
-    g.toast('در حال بررسی پیکربندی سرور و Supabase…');
+  g.checkBalePayStatus = async function () {
+    g.toast('در حال بررسی پیکربندی سرور، Supabase و بازوی بله…');
     try {
-      const response=await fetch('/api/payment/zarinpal/status',{cache:'no-store'}),data=await response.json();
-      if(data?.configured&&data.paymentEnabled)g.toast('درگاه زرین‌پال در حالت sandbox آمادهٔ آزمون است؛ Production هنوز غیرفعال است.');
-      else if(data?.configured)g.toast('پیکربندی سروری آماده است، اما دریافت وجه واقعی عمداً غیرفعال است.');
-      else g.toast('پیکربندی سروری Supabase یا زرین‌پال کامل نیست.');
+      const response=await fetch('/api/payment/balepay/status',{cache:'no-store'}),data=await response.json();
+      if(data?.configured&&data.paymentEnabled)g.toast(`بله‌پی در حالت ${data.mode==='sandbox'?'آزمایشی (توکن کیف‌پول آزمایشی)':'عملیاتی'} آماده است.`);
+      else if(data?.configured)g.toast('توکن‌های بازو تنظیم شده‌اند، اما دریافت وجه واقعی هنوز با BALEPAY_ENABLE_LIVE_PAYMENTS قفل است.');
+      else g.toast('پیکربندی سروری Supabase یا توکن‌های بازوی بله کامل نیست.');
       return data;
-    } catch { g.toast('وضعیت زرین‌پال دریافت نشد؛ API سایت را بررسی کنید.');return null; }
+    } catch { g.toast('وضعیت بله‌پی دریافت نشد؛ API سایت را بررسی کنید.');return null; }
   };
 
   g.mediaAddModal = function () {
@@ -727,41 +727,45 @@
       }
 
       if (section === 'payments') {
-        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'zarinpal');
-        let paymentStatus = { configured:false, mode:'sandbox', callbackPath:'/api/payment/zarinpal/callback', liveCheckoutSafe:false };
+        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'balepay');
+        let paymentStatus = { configured:false, mode:'sandbox', webhookPath:'/api/payment/balepay/webhook', receiptPath:'/api/payment/balepay/receipt', miniAppUrl:'', providerTokenKind:'missing', liveCheckoutSafe:false };
         try {
-          const response = await fetch('/api/payment/zarinpal/status', { cache:'no-store' });
+          const response = await fetch('/api/payment/balepay/status', { cache:'no-store' });
           if (response.ok) paymentStatus = { ...paymentStatus, ...(await response.json()) };
         } catch { /* status API may be unavailable when server payment settings are absent */ }
-        const callbackUrl = `${g.location?.origin || ''}${paymentStatus.callbackPath || '/api/payment/zarinpal/callback'}`;
+        const webhookUrl = `${g.location?.origin || ''}${paymentStatus.webhookPath || '/api/payment/balepay/webhook'}`;
         const modeLabel = paymentStatus.mode === 'production' ? 'عملیاتی' : 'Sandbox';
         const paymentEnabled = Boolean(paymentStatus.paymentEnabled);
         target.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr;gap:24px;max-width:960px">
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-              <div><h2 style="font-size:18px;margin:0;color:#0f172a">درگاه پرداخت زرین‌پال</h2><small style="color:#64748b">درخواست و تأیید تراکنش فقط روی سرور انجام می‌شود.</small></div>
-              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? `● آمادهٔ آزمایش · ${modeLabel}` : paymentStatus.configured ? '● پیکربندی شده · دریافت وجه غیرفعال' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
+              <div><h2 style="font-size:18px;margin:0;color:#0f172a">Bale Pay · پرداخت کیف‌پول بله</h2><small style="color:#64748b">صورتحساب با createInvoiceLink ساخته و فقط با inquireTransaction روی سرور تأیید می‌شود.</small></div>
+              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? `● ${modeLabel === 'عملیاتی' ? 'دریافت وجه فعال' : 'آمادهٔ آزمون'} · ${modeLabel}` : paymentStatus.configured ? '● پیکربندی شده · دریافت وجه واقعی قفل است' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
             </div>
             <div class="form-grid">
               <div class="field"><label>محیط</label><input readonly value="${esc(modeLabel)}"></div>
-              <div class="field"><label>وضعیت</label><input readonly value="${paymentEnabled ? 'آمادهٔ پرداخت آزمایشی sandbox' : paymentStatus.configured ? 'درگاه تنظیم شده؛ دریافت وجه غیرفعال' : 'پیکربندی نشده'}"></div>
-              <div class="field full"><label>Callback URL (برای مشاهده)</label><input readonly value="${esc(callbackUrl)}" dir="ltr"></div>
+              <div class="field"><label>نوع توکن کیف‌پول</label><input readonly value="${esc(paymentStatus.providerTokenKind === 'test' ? 'توکن آزمایشی' : paymentStatus.providerTokenKind === 'live' ? 'توکن عملیاتی' : 'تنظیم نشده')}"></div>
+              <div class="field"><label>مینی‌اپ بازو</label><input readonly value="${esc(paymentStatus.miniAppUrl || 'BALEPAY_BOT_USERNAME تنظیم نشده')}"></div>
+              <div class="field"><label>وضعیت پرداخت</label><input readonly value="${paymentEnabled ? (modeLabel === 'عملیاتی' ? 'دریافت وجه واقعی فعال' : 'آمادهٔ پرداخت آزمایشی sandbox') : paymentStatus.configured ? 'توکن‌ها تنظیم شده؛ دریافت وجه قفل' : 'پیکربندی نشده'}"></div>
+              <div class="field full"><label>Webhook URL برای ثبت در @botfather / setWebhook</label><input readonly value="${esc(webhookUrl)}" dir="ltr"></div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkZarinpalStatus()">بررسی پیکربندی</button></div>
+            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBalePayStatus()">بررسی پیکربندی</button></div>
           </div>
           <div class="panel" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:16px;padding:22px">
             <h3 style="margin:0 0 10px">تنظیم امن در Vercel → Settings → Environment Variables</h3>
             <ul style="margin:0;padding-right:22px;line-height:1.9;color:#334155">
-              <li><code>ZARINPAL_MERCHANT_ID</code> — شناسهٔ ۳۶ کاراکتری پذیرندهٔ زرین‌پال.</li>
-              <li><code>ZARINPAL_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای state و رسید callback.</li>
-              <li><code>ZARINPAL_MODE</code> — ابتدا <code>sandbox</code>؛ پس از فعال‌سازی پذیرنده، <code>production</code>.</li>
+              <li><code>BALEPAY_BOT_TOKEN</code> — توکن بازو از <code>@botfather</code> (فرمت <code>123456:abcd…</code>).</li>
+              <li><code>BALEPAY_PROVIDER_TOKEN</code> — توکن پرداخت کیف‌پول؛ برای آزمون <code>WALLET-TEST-1111111111111111</code>.</li>
+              <li><code>BALEPAY_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای payload صورتحساب و رسید.</li>
+              <li><code>BALEPAY_BOT_USERNAME</code> — نام کاربری بازو برای پیوند مینی‌اپ <code>ble.ir/&lt;username&gt;</code>.</li>
+              <li><code>BALEPAY_MODE</code> — ابتدا <code>sandbox</code>؛ سپس <code>production</code> به‌همراه <code>BALEPAY_ENABLE_LIVE_PAYMENTS=true</code>.</li>
             </ul>
-            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. سفارش و موجودی اکنون از Supabase خوانده می‌شوند؛ بااین‌حال دریافت وجه Production تا تنظیم و آزمون عملی پذیرنده و تأیید callback و reconciliation غیرفعال می‌ماند.</p>
+            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. سفارش و موجودی از Supabase خوانده می‌شوند و دریافت وجه واقعی تا تنظیم <code>BALEPAY_ENABLE_LIVE_PAYMENTS=true</code> و آزمون end-to-end کیف‌پول بله عمداً قفل است. تا ثبت Webhook بازو، پرداخت‌های موفق به‌صورت خودکار به سفارش متصل نمی‌شوند.</p>
           </div>
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
-            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های پایگاه داده (${paymentsList.length})</h3>
-            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','کد مرجع / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'zarinpal' ? 'زرین‌پال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
+            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های کیف‌پول بله (${paymentsList.length})</h3>
+            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','شناسه تراکنش / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'balepay' ? 'بله‌پی' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
           </div>
         </div>`;
         return;
@@ -924,7 +928,7 @@
     updateContactMessageStatus,
     bulkApplyProducts,
     bulkApplyCategories,
-    checkZarinpalStatus:g.checkZarinpalStatus,
+    checkBalePayStatus:g.checkBalePayStatus,
     selectAllCatalogRows,
     updateCatalogSelectionCount,
     switchAdminSection,

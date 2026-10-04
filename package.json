@@ -2,17 +2,18 @@
   "name": "touba-shoes-storefront",
   "version": "0.4.0",
   "private": true,
-  "description": "Persian RTL shoe storefront with Supabase auth and server-side ZarinPal sandbox checkout",
+  "description": "Persian RTL shoe storefront with Supabase auth and server-side Bale Pay (Bale wallet) checkout",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "node local-server.js",
     "start": "node local-server.js",
+    "balepay:webhook": "node scripts/balepay-cli.js webhook:status",
     "start:comfy": "uvicorn comfy-automation-api.app.main:app --host 0.0.0.0 --port 8000",
     "build": "node scripts/check.js && node scripts/build-vercel.js",
     "lint": "node scripts/check.js",
-    "test": "node tests/supabase-commerce.js && node tests/ai-studio.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/zarinpal.js && node tests/runtime-smoke.js"
+    "test": "node tests/supabase-commerce.js && node tests/ai-studio.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/balepay.js && node tests/runtime-smoke.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

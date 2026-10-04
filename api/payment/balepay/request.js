@@ -1,4 +1,4 @@
 'use strict';
-const handler = require('../../../lib/zarinpal.js').request;
+const handler = require('../../../lib/balepay.js').request;
 module.exports = handler;
 module.exports.config = { api:{ bodyParser:{ sizeLimit:'32kb' } } };

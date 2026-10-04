@@ -13,7 +13,7 @@ Migration عملیاتی `202610030001_live_commerce.sql` در مخزن موجو
 - `SUPABASE_URL` — Project URL.
 - `SUPABASE_PUBLISHABLE_KEY` — public/publishable key؛ اگر پروژه فقط کلید legacy را دارد از `SUPABASE_ANON_KEY` استفاده کنید.
 
-این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token و secretهای زرین‌پال را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
+این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token، توکن بازوی بله و `BALEPAY_STATE_SECRET` را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
 
 در Supabase → Authentication:
 
@@ -66,12 +66,16 @@ Workflow قبل از apply، `supabase db push --dry-run` اجرا می‌کند
 
 تست‌های repository در این پروژه Supabase را با stub شبیه‌سازی می‌کنند و مدرک اجرای واقعی migration نیستند.
 
-## زرین‌پال
+## بله‌پی (پرداخت کیف‌پول بله)
+
+`supabase/migrations/202610040001_balepay_provider.sql` درگاه را به `provider = 'balepay'` تغییر می‌دهد و اگر حتی یک ردیف پرداخت از درگاه قبلی باقی مانده باشد، عمداً fail-closed خطا می‌دهد؛ پیش از اجرا آن ردیف‌ها را مغایره‌گیری کنید. این migration توکن یا کلیدی ذخیره نمی‌کند و `payments.authority` را برای شناسهٔ صورتحساب بله (`blp_<32hex>`) و `provider_reference` را برای شناسهٔ تراکنش کیف‌پول به‌کار می‌گیرد.
 
 تنظیم Sandbox فقط در Environment Variables سرور یا `.env` محلیِ خارج از Git:
 
-- `ZARINPAL_MODE=sandbox`
-- `ZARINPAL_MERCHANT_ID` — Merchant ID مجاز و واقعیِ sandbox/پذیرنده.
-- `ZARINPAL_STATE_SECRET` — راز تصادفی حداقل ۳۲ بایتی.
+- `BALEPAY_MODE=sandbox`
+- `BALEPAY_BOT_TOKEN` — توکن بازو از `@botfather`.
+- `BALEPAY_PROVIDER_TOKEN` — `WALLET-TEST-1111111111111111` برای آزمون.
+- `BALEPAY_STATE_SECRET` — راز تصادفی حداقل ۳۲ بایتی.
+- `BALEPAY_BOT_USERNAME` — برای پیوند مینی‌اپ.
 
-تست‌های `npm test` پاسخ‌های ZarinPal را stub می‌کنند؛ برای go-live باید callback و verify رسمی روی Sandbox واقعی، مبلغ ریالی، تکرار callback، لغو سفارش و تطبیق رسید end-to-end آزمایش شوند. Production mode عمداً fail-closed است و تا ارزیابی نهایی DB، امنیت، موجودی و پرداخت باز نمی‌شود.
+تست‌های `npm test` پاسخ‌های `tapi.bale.ai` را stub می‌کنند؛ برای go-live باید بازکردن `openInvoice` با توکن آزمایشی، پاسخ pre-checkout زیر ۱۰ ثانیه، تکرار همان آپدیت، لغو سفارش، انقضای `expire_stale_balepay_checkouts` و تطبیق `inquireTransaction` با مبلغ ریالی به‌صورت end-to-end آزمایش شوند. دریافت وجه واقعی با `BALEPAY_ENABLE_LIVE_PAYMENTS` قفل است و تا ارزیابی نهایی DB، امنیت، موجودی و پرداخت باز نمی‌شود.

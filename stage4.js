@@ -327,7 +327,7 @@ function cartPage(){
         </a>
 
         <div class="cart-security-badge">
-          ${uiIcon('shield')} پرداخت امن از طریق درگاه رسمی زرین‌پال
+          ${uiIcon('shield')} پرداخت امن با کیف‌پول رسمی بله (بله‌پی)
         </div>
       </aside>
     </div>
@@ -413,7 +413,7 @@ function home(){
     <div class="container trust-grid lux-cream-trust-grid">
       <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1"/></svg>
-        <div><b>پرداخت امن</b><span>در درگاه معتبر زرین‌پال</span></div>
+        <div><b>پرداخت امن</b><span>از طریق کیف‌پول تأییدشدهٔ بله</span></div>
       </div>
       <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M4 13h3v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 1-2Zm16 0h-3v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-1-2Z"/></svg>
@@ -895,22 +895,22 @@ function modernCheckout() {
 
         <div class="panel checkout-panel" style="margin-top:18px">
           <div class="panel-head-row">
-            <h3>درگاه پرداخت اینترنتی</h3>
-            <span class="panel-step-badge">زرین‌پال · شاپرک</span>
+            <h3>پرداخت آنلاین</h3>
+            <span class="panel-step-badge">Bale Pay · کیف‌پول بله</span>
           </div>
           <div class="checkout-payment-methods">
             <label class="payment-method-card active-method">
               <div class="pm-head">
-                <input type="radio" name="paymentMethod" value="zarinpal" checked required>
+                <input type="radio" name="paymentMethod" value="balepay" checked required>
                 <div>
-                  <b>درگاه پرداخت زرین‌پال</b>
-                  <small>پرداخت با کارت‌های عضو شبکهٔ شتاب؛ پس از ثبت سفارش به صفحهٔ امن زرین‌پال منتقل می‌شوید.</small>
+                  <b>پرداخت از طریق کیف‌پول بله (بله‌پی)</b>
+                  <small>پس از ثبت سفارش، صورتحساب در صفحهٔ امن کیف‌پول بله باز می‌شود و مبلغ بلافاصله به کیف‌پول فروشگاه واریز می‌گردد.</small>
                 </div>
               </div>
-              <span class="pm-logo">ZarinPal</span>
+              <span class="pm-logo">Bale Pay</span>
             </label>
           </div>
-          <small class="muted">شماره کارت و رمز بانکی فقط در صفحهٔ رسمی زرین‌پال وارد می‌شود.</small>
+          <small class="muted">شماره کارت و رمز بانکی هرگز در این سایت وارد نمی‌شود؛ پرداخت درون اپلیکیشن بله تأیید می‌گردد. برای دیدن این دکمه باید فروشگاه را در بله (مینی‌اپ) باز کنید.</small>
         </div>
 
       </section>

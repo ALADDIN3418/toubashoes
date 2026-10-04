@@ -18,7 +18,7 @@ const MODEL = DEFAULT_PIPELINE;
 const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
-const zarinpal = require('./lib/zarinpal.js');
+const balepay = require('./lib/balepay.js');
 
 function loadLocalEnv() {
   try {
@@ -126,22 +126,22 @@ const server = http.createServer(async (req, res) => {
     return json(res, 410, { error:'مسیرهای ذخیره‌سازی JSON و ورود/سفارش نمایشی غیرفعال شده‌اند؛ از Supabase Auth و RPCهای امن فروشگاه استفاده کنید.' });
   }
 
-  if (pathname === '/api/payment/zarinpal/status') return zarinpal.status(req, res);
+  if (pathname === '/api/payment/balepay/status') return balepay.status(req, res);
 
-  if (pathname === '/api/payment/zarinpal/request') {
-    if (req.method !== 'POST') return zarinpal.request(req, res);
+  if (pathname === '/api/payment/balepay/request' || pathname === '/api/payment/balepay/receipt') {
+    const handler = pathname.endsWith('/request') ? balepay.request : balepay.receipt;
+    if (req.method !== 'POST') return handler(req, res);
     try { req.body = await readBody(req, 32 * 1024); }
     catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
-    return zarinpal.request(req, res);
+    return handler(req, res);
   }
 
-  if (pathname === '/api/payment/zarinpal/callback') return zarinpal.callback(req, res);
-
-  if (pathname === '/api/payment/zarinpal/receipt') {
-    if (req.method !== 'POST') return zarinpal.receipt(req, res);
-    try { req.body = await readBody(req, 32 * 1024); }
-    catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
-    return zarinpal.receipt(req, res);
+  // بازوی بله آپدیت‌های پرداخت را به این مسیر ارسال می‌کند؛ بدون Origin و بدون کوکی است.
+  if (pathname === '/api/payment/balepay/webhook') {
+    if (req.method !== 'POST') return balepay.webhook(req, res);
+    try { req.body = await readBody(req, 256 * 1024); }
+    catch (err) { return json(res, Number(err.status) || 400, { ok:false, error:err.message }); }
+    return balepay.webhook(req, res);
   }
 
   if ((pathname === '/api/ai/status' || pathname === '/api/ai/studio/status') && req.method === 'GET') {
