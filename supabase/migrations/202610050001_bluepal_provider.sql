@@ -1,14 +1,49 @@
--- Bale Pay (بله‌پی): replaces the retired ZarinPal gateway with Bale wallet payments.
--- Apply after 202610030001_live_commerce.sql. No bot tokens or secrets live in SQL.
+-- BluePal (بلو پال): replaces the retired gateway layer with the BluePal redirect gateway
+-- (POST /v1/payments/request, then GET /v1/payments/verify/{track_id} as the only finaliser).
+-- Apply after 202610030001_live_commerce.sql. No API keys or secrets live in SQL.
 begin;
 
--- Fail closed: rows created by the retired gateway must be reconciled by hand
--- instead of being silently relabelled as wallet transactions.
+-- A pending row that never reached the previous provider is closed out and its reservations are
+-- released. Anything with money attached must be reconciled by hand first, because the provider
+-- CHECK constraint added below is validated against every existing row.
 do $$
+declare
+  v_row record;
+  v_line record;
 begin
-  if exists (select 1 from public.payments where provider is distinct from 'balepay') then
-    raise exception 'payments contains rows from the retired gateway; export or reconcile them before switching to Bale Pay';
+  if exists (select 1 from public.payments where provider not in ('zarinpal','balepay','bluepal')) then
+    raise exception 'payments contains an unknown provider; reconcile it before switching to BluePal';
   end if;
+  if exists (select 1 from public.payments where provider in ('zarinpal','balepay') and status <> 'pending') then
+    raise exception 'payments contains settled rows from the retired gateway; export or refund them before switching to BluePal';
+  end if;
+  for v_row in
+    select p.order_id from public.payments p
+     join public.orders o on o.id = p.order_id
+     where p.provider in ('zarinpal','balepay') and p.status = 'pending'
+     for update of p skip locked
+  loop
+    for v_line in
+      select variant_id, quantity from public.order_items
+       where order_id = v_row.order_id and variant_id is not null
+    loop
+      update public.product_variants set stock = stock + v_line.quantity where id = v_line.variant_id;
+    end loop;
+    update public.payments
+       set provider = 'bluepal', status = 'failed', provider_code = 'GATEWAY_RETIRED',
+           failure_reason = 'Retired gateway checkout was abandoned before any payment was verified',
+           callback_payload = coalesce(callback_payload,'{}'::jsonb) || jsonb_build_object('migration','bluepal','at',now())
+     where order_id = v_row.order_id and status = 'pending';
+    update public.orders
+       set status = 'cancelled',
+           status_history = status_history || jsonb_build_array(
+             jsonb_build_object('status','cancelled','at',now(),'source','bluepal_migration'))
+     where id = v_row.order_id and status = 'pending_payment';
+    update public.coupons c
+       set usage_count = greatest(c.usage_count - 1, 0)
+      from public.orders o
+     where o.id = v_row.order_id and c.id = o.coupon_id;
+  end loop;
 end
 $$;
 
@@ -20,14 +55,16 @@ alter table public.payments
   drop constraint if exists payments_provider_zarinpal_check;
 
 alter table public.payments
-  add constraint payments_provider_balepay_check check (provider = 'balepay');
+  drop constraint if exists payments_provider_balepay_check;
 
-comment on column public.payments.authority is 'Bale invoice reference: blp_<32 hex> derived from the order id and the server secret.';
-comment on column public.payments.provider_reference is 'Bale wallet transaction id (pre_checkout_query.id / telegram_payment_charge_id).';
-comment on column public.payments.provider_code is 'Last inquireTransaction status or a synthetic failure code.';
+alter table public.payments
+  add constraint payments_provider_bluepal_check check (provider = 'bluepal');
 
+comment on column public.payments.authority is 'BluePal track_id returned by POST /v1/payments/request and used by GET /v1/payments/verify/{track_id}.';
+comment on column public.payments.provider_reference is 'Bank reference id returned by the BluePal verification, when the gateway provides one.';
+comment on column public.payments.provider_code is 'Last BluePal result code (100, 102, 105, 201, 202, 404, 429) or a synthetic failure code.';
+comment on column public.payments.callback_payload is 'Gateway metadata: payment_url, callback token, amount reported by BluePal and the attempt history.';
 
--- Checkout creates the order and its wallet payment row in one transaction.
 create or replace function public.create_order_with_payment(
   p_items jsonb,
   p_address jsonb,
@@ -106,10 +143,13 @@ begin
   if v_existing is not null then return v_existing; end if;
 
   -- Expired pending checkouts release reserved inventory and coupon capacity exactly once.
+  -- Only rows whose gateway request never produced a track_id are swept here; a checkout that
+  -- already has a track_id may still be paid at the bank and belongs to the verify/expiry path.
   for v_expired in
     select o.id, o.coupon_id from public.orders o
      join public.payments p on p.order_id = o.id
      where o.status = 'pending_payment' and p.status = 'pending' and p.authority is null
+       and p.provider = 'bluepal'
        and o.created_at < now() - interval '30 minutes'
      for update of o skip locked
   loop
@@ -120,7 +160,7 @@ begin
        where id = v_expired_line.variant_id;
     end loop;
     update public.payments set status = 'failed', provider_code = 'EXPIRED', failure_reason = 'Checkout expired',
-      callback_payload = jsonb_build_object('outcome','expired','at',now())
+      callback_payload = callback_payload || jsonb_build_object('outcome','expired','source','bluepal','at',now())
      where order_id = v_expired.id and status = 'pending';
     update public.orders set status = 'cancelled', status_history = status_history || jsonb_build_array(
       jsonb_build_object('status','cancelled','at',now(),'source','expiry'))
@@ -220,7 +260,7 @@ begin
   from jsonb_array_elements(v_lines) line;
 
   insert into public.payments(order_id, provider, status, amount_toman)
-  values (v_order_id, 'balepay', 'pending', v_total)
+  values (v_order_id, 'bluepal', 'pending', v_total)
   returning id into v_payment_id;
 
   insert into public.carts(user_id) values (v_user_id) on conflict (user_id) do nothing;
@@ -232,7 +272,8 @@ revoke all on function public.create_order_with_payment(jsonb,jsonb,text,text,te
 grant execute on function public.create_order_with_payment(jsonb,jsonb,text,text,text) to authenticated;
 
 
--- Customers may abandon an invoice link; releasing the order stays possible until Bale reports a transaction.
+-- Customers may abandon the hosted bank page; releasing the order stays possible until BluePal
+-- confirms the transaction, but never while a gateway attempt is still fresh.
 create or replace function public.cancel_pending_order(p_order_id uuid)
 returns jsonb
 language plpgsql security definer
@@ -254,12 +295,16 @@ begin
   if v_order.status <> 'pending_payment' or v_payment.status <> 'pending' then
     return jsonb_build_object('success',false,'cancelled',false,'reason','not_pending');
   end if;
-  -- A Bale invoice link is cheap to create and often abandoned, so an attached
-  -- authority alone must not freeze the order. Once Bale reports a transaction
-  -- id (pre-checkout), money may already be in flight and only the settlement
-  -- path is allowed to close the payment.
+  -- A verified BluePal payment means the money moved; only settlement/refund closes it.
   if v_payment.provider_reference is not null then
-    return jsonb_build_object('success',false,'cancelled',false,'reason','bale_transaction_recorded');
+    return jsonb_build_object('success',false,'cancelled',false,'reason','gateway_transaction_recorded');
+  end if;
+  -- Verification happens when the customer comes back, so a very recent track_id may be paid at
+  -- the bank this second. Quarantine it briefly instead of releasing stock that is already sold;
+  -- expire_stale_bluepal_checkouts closes it afterwards.
+  if v_payment.authority is not null
+     and greatest(v_payment.created_at, v_payment.updated_at) > v_at - interval '10 minutes' then
+    return jsonb_build_object('success',false,'cancelled',false,'reason','gateway_verification_pending');
   end if;
   for v_line in
     select variant_id, quantity from public.order_items where order_id = v_order.id and variant_id is not null
@@ -271,7 +316,7 @@ begin
   end if;
   update public.payments set status = 'failed', provider_code = 'CHECKOUT_ABORTED',
     failure_reason = 'Payment request was not started',
-    callback_payload = jsonb_build_object('outcome','cancelled','source','checkout','provider','balepay','at',v_at)
+    callback_payload = callback_payload || jsonb_build_object('outcome','cancelled','source','checkout','provider','bluepal','at',v_at)
    where id = v_payment.id;
   update public.orders set status = 'cancelled',
     status_history = status_history || jsonb_build_array(
@@ -284,13 +329,16 @@ revoke all on function public.cancel_pending_order(uuid) from public, anon;
 grant execute on function public.cancel_pending_order(uuid) to authenticated;
 
 
--- One entry point for both lifecycle steps: the storefront attaches the invoice
--- authority before opening the wallet, and the inbound Bale update attaches the
--- wallet transaction id (pre_checkout_query.id == telegram_payment_charge_id).
-create or replace function public.attach_balepay_invoice(
+-- The storefront records the BluePal track_id (plus the hosted payment page) before sending the
+-- customer to the bank. Retrying after a failed attempt is allowed: the pending row keeps its
+-- history and simply points at the newest track_id.
+create or replace function public.attach_bluepal_payment(
   p_order_id uuid,
-  p_authority text default null,
-  p_transaction_id text default null
+  p_track_id text,
+  p_payment_url text default null,
+  p_callback_token text default null,
+  p_gateway_amount bigint default null,
+  p_last_code text default null
 )
 returns jsonb
 language plpgsql security definer
@@ -299,44 +347,55 @@ as $$
 declare
   v_payment public.payments%rowtype;
   v_order public.orders%rowtype;
+  v_history jsonb;
 begin
   if (select auth.role()) <> 'service_role' then
     raise exception using errcode = '42501', message = 'service role required';
   end if;
-  if p_authority is null and p_transaction_id is null then
-    raise exception using errcode = '22023', message = 'nothing to attach';
+  if p_track_id is null or p_track_id !~ '^[A-Za-z0-9_-]{6,64}$' then
+    raise exception using errcode = '22023', message = 'invalid BluePal track id';
   end if;
-  if p_authority is not null and p_authority !~ '^blp_[0-9a-f]{32}$' then
-    raise exception using errcode = '22023', message = 'invalid Bale invoice authority';
+  if p_payment_url is not null and left(p_payment_url, 8) <> 'https://' then
+    raise exception using errcode = '22023', message = 'invalid BluePal payment url';
   end if;
-  if p_transaction_id is not null and p_transaction_id !~ '^[A-Za-z0-9_-]{6,128}$' then
-    raise exception using errcode = '22023', message = 'invalid Bale transaction id';
+  if p_gateway_amount is not null and p_gateway_amount < 0 then
+    raise exception using errcode = '22023', message = 'invalid gateway amount';
   end if;
   select * into v_order from public.orders where id = p_order_id for update;
   select * into v_payment from public.payments where order_id = p_order_id for update;
-  if not found or v_order.id is null or v_payment.provider <> 'balepay' or v_payment.status <> 'pending' or v_order.status <> 'pending_payment' then
+  if not found or v_order.id is null or v_payment.provider <> 'bluepal'
+     or v_payment.status <> 'pending' or v_order.status <> 'pending_payment' then
     raise exception using errcode = 'P0002', message = 'pending payment not found';
   end if;
-  if p_authority is not null and v_payment.authority is not null and v_payment.authority <> p_authority then
-    raise exception using errcode = '23505', message = 'payment already has a different authority';
-  end if;
-  if v_payment.authority is null and p_authority is null then
-    raise exception using errcode = '22023', message = 'Bale invoice authority must be attached first';
+  if v_payment.authority is not null and v_payment.authority <> p_track_id then
+    v_history := coalesce(v_payment.callback_payload->'attempts','[]'::jsonb) || jsonb_build_array(
+      jsonb_build_object('trackId', v_payment.authority, 'at', v_payment.updated_at,
+                         'replacedBy', p_track_id, 'code', v_payment.provider_code));
+  else
+    v_history := coalesce(v_payment.callback_payload->'attempts','[]'::jsonb);
   end if;
   update public.payments
-     set authority = coalesce(authority, p_authority),
-         provider_reference = coalesce(nullif(p_transaction_id,''), provider_reference)
+     set authority = p_track_id,
+         provider_code = left(coalesce(nullif(p_last_code,''), provider_code, 'requested'),32),
+         callback_payload = jsonb_build_object(
+           'provider', 'bluepal',
+           'trackId', p_track_id,
+           'paymentUrl', nullif(p_payment_url,''),
+           'callbackToken', nullif(p_callback_token,''),
+           'gatewayAmountToman', p_gateway_amount,
+           'attempts', v_history,
+           'attachedAt', now()),
+         updated_at = now()
    where id = v_payment.id;
   return jsonb_build_object('orderId', p_order_id, 'paymentId', v_payment.id,
-    'authority', coalesce(v_payment.authority, p_authority),
-    'transactionId', coalesce(nullif(p_transaction_id,''), v_payment.provider_reference));
+    'authority', p_track_id, 'reused', v_payment.authority is not null and v_payment.authority = p_track_id);
 end;
 $$;
-revoke all on function public.attach_balepay_invoice(uuid,text,text) from public, anon, authenticated;
-grant execute on function public.attach_balepay_invoice(uuid,text,text) to service_role;
+revoke all on function public.attach_bluepal_payment(uuid,text,text,text,bigint,text) from public, anon, authenticated;
+grant execute on function public.attach_bluepal_payment(uuid,text,text,text,bigint,text) to service_role;
 
 
-create or replace function public.settle_balepay_payment(
+create or replace function public.settle_bluepal_payment(
   p_order_id uuid,
   p_authority text,
   p_outcome text,
@@ -365,20 +424,22 @@ begin
   select * into v_order from public.orders where id = p_order_id for update;
   if not found then raise exception using errcode = 'P0002', message = 'order not found'; end if;
   select * into v_payment from public.payments where order_id = p_order_id for update;
-  if not found or v_payment.provider <> 'balepay' then raise exception using errcode = 'P0002', message = 'Bale Pay payment not found'; end if;
+  if not found or v_payment.provider <> 'bluepal' then raise exception using errcode = 'P0002', message = 'BluePal payment not found'; end if;
   if v_payment.amount_toman <> p_amount_toman or v_order.total_toman <> p_amount_toman then
     raise exception using errcode = '22023', message = 'payment amount does not match the stored order';
   end if;
+  -- The track id the caller wants to settle must be the one we asked BluePal for.
   if v_payment.authority is not null and coalesce(p_authority,'') <> v_payment.authority then
-    raise exception using errcode = '42501', message = 'payment authority does not match';
+    raise exception using errcode = '42501', message = 'payment track id does not match';
   end if;
   if v_payment.authority is null and p_outcome = 'paid' then
-    raise exception using errcode = '42501', message = 'Bale invoice has not been attached';
+    raise exception using errcode = '42501', message = 'BluePal payment request has not been recorded';
   end if;
-  -- A settled Bale payment is only final once the provider transaction is known;
-  -- that id is captured from the pre-checkout update or the successful payment.
-  if p_outcome = 'paid' and coalesce(nullif(p_reference_id,''), v_payment.provider_reference) is null then
-    raise exception using errcode = '42501', message = 'Bale transaction id is required to mark a payment as paid';
+  -- Nothing is ever marked paid without a traceable identifier: the bank reference returned by
+  -- GET verify, or failing that the track_id itself.
+  if p_outcome = 'paid' and coalesce(nullif(p_reference_id,''), v_payment.provider_reference,
+                                     nullif(p_authority,''), v_payment.authority) is null then
+    raise exception using errcode = '42501', message = 'a BluePal track id or bank reference is required to mark a payment as paid';
   end if;
   if v_payment.status = 'verified' then
     if p_outcome = 'paid' and v_payment.authority = p_authority then
@@ -392,16 +453,19 @@ begin
     end if;
     raise exception using errcode = '23505', message = 'failed payment cannot be re-used';
   end if;
-  if v_payment.status <> 'pending' then raise exception using errcode = '23505', message = 'payment is not pending'; end if;
+  if v_payment.status not in ('pending','manual') then
+    raise exception using errcode = '23505', message = 'payment is not awaiting settlement';
+  end if;
 
   if p_outcome = 'paid' then
     update public.payments set status = 'verified',
       provider_reference = coalesce(nullif(p_reference_id,''), v_payment.provider_reference, p_authority),
-      verified_at = v_at, provider_code = left(coalesce(p_provider_code,'paid'),32),
-      callback_payload = coalesce(p_callback_payload,'{}'::jsonb)
+      verified_at = v_at, provider_code = left(coalesce(p_provider_code,'100'),32),
+      callback_payload = coalesce(v_payment.callback_payload,'{}'::jsonb) || coalesce(p_callback_payload,'{}'::jsonb)
+        || jsonb_build_object('settledAt', v_at, 'trackId', coalesce(nullif(p_authority,''), v_payment.authority))
      where id = v_payment.id;
     update public.orders set status = 'paid', status_history = status_history || jsonb_build_array(
-      jsonb_build_object('status','paid','at',v_at,'source','balepay')) where id = v_order.id;
+      jsonb_build_object('status','paid','at',v_at,'source','bluepal')) where id = v_order.id;
     select id into v_cart_id from public.carts where user_id = v_order.user_id;
     if v_cart_id is not null then
       for v_line in select variant_id, quantity from public.order_items where order_id = v_order.id and variant_id is not null loop
@@ -423,21 +487,24 @@ begin
       update public.coupons set usage_count = greatest(usage_count - 1, 0) where id = v_order.coupon_id;
     end if;
     update public.orders set status = 'cancelled', status_history = status_history || jsonb_build_array(
-      jsonb_build_object('status','cancelled','at',v_at,'source','balepay','outcome',p_outcome)) where id = v_order.id;
+      jsonb_build_object('status','cancelled','at',v_at,'source','bluepal','outcome',p_outcome)) where id = v_order.id;
   end if;
-  update public.payments set status = 'failed', provider_code = left(coalesce(p_provider_code,''),32),
-    failure_reason = left(p_outcome,64), callback_payload = coalesce(p_callback_payload,'{}'::jsonb)
+  update public.payments set status = 'failed', provider_code = left(coalesce(p_provider_code,'202'),32),
+    failure_reason = left(p_outcome,64),
+    callback_payload = coalesce(v_payment.callback_payload,'{}'::jsonb) || coalesce(p_callback_payload,'{}'::jsonb)
+      || jsonb_build_object('settledAt', v_at)
    where id = v_payment.id;
   return jsonb_build_object('success',true,'idempotent',false,'orderId',p_order_id,'outcome',p_outcome);
 end;
 $$;
-revoke all on function public.settle_balepay_payment(uuid,text,text,bigint,text,text,jsonb) from public, anon, authenticated;
-grant execute on function public.settle_balepay_payment(uuid,text,text,bigint,text,text,jsonb) to service_role;
+revoke all on function public.settle_bluepal_payment(uuid,text,text,bigint,text,text,jsonb) from public, anon, authenticated;
+grant execute on function public.settle_bluepal_payment(uuid,text,text,bigint,text,text,jsonb) to service_role;
 
 
--- Customers usually pay within minutes; anything still untouched after the grace
--- period returns its reservations so abandoned invoices cannot hold stock forever.
-create or replace function public.expire_stale_balepay_checkouts(p_grace_minutes integer default 360)
+-- Customers usually pay within minutes. Anything whose track_id was never verified after the grace
+-- period returns its reservations, so abandoned bank pages cannot hold stock forever. A payment
+-- that BluePal already confirmed is never swept here; settle_bluepal_payment closes that one.
+create or replace function public.expire_stale_bluepal_checkouts(p_grace_minutes integer default 180)
 returns jsonb
 language plpgsql security definer
 set search_path = ''
@@ -454,9 +521,9 @@ begin
   for v_expired in
     select o.id, o.coupon_id from public.orders o
      join public.payments p on p.order_id = o.id
-     where o.status = 'pending_payment' and p.status = 'pending' and p.provider = 'balepay'
+     where o.status = 'pending_payment' and p.status = 'pending' and p.provider = 'bluepal'
        and p.provider_reference is null
-       and o.created_at < now() - make_interval(mins => v_grace)
+       and greatest(p.created_at, p.updated_at) < now() - make_interval(mins => v_grace)
      for update of o skip locked
   loop
     for v_line in
@@ -465,8 +532,8 @@ begin
     loop
       update public.product_variants set stock = stock + v_line.quantity where id = v_line.variant_id;
     end loop;
-    update public.payments set status = 'failed', provider_code = 'EXPIRED', failure_reason = 'Bale invoice expired before payment',
-      callback_payload = jsonb_build_object('outcome','expired','source','balepay','at',now())
+    update public.payments set status = 'failed', provider_code = 'EXPIRED', failure_reason = 'BluePal payment was never verified',
+      callback_payload = coalesce(callback_payload,'{}'::jsonb) || jsonb_build_object('outcome','expired','source','bluepal','at',now())
      where order_id = v_expired.id and status = 'pending';
     update public.orders set status = 'cancelled', status_history = status_history || jsonb_build_array(
       jsonb_build_object('status','cancelled','at',now(),'source','expiry'))
@@ -479,11 +546,11 @@ begin
   return jsonb_build_object('success',true,'expired',v_count,'graceMinutes',v_grace);
 end;
 $$;
-revoke all on function public.expire_stale_balepay_checkouts(integer) from public, anon;
-grant execute on function public.expire_stale_balepay_checkouts(integer) to authenticated, service_role;
+revoke all on function public.expire_stale_bluepal_checkouts(integer) from public, anon;
+grant execute on function public.expire_stale_bluepal_checkouts(integer) to authenticated, service_role;
 
 
--- Fulfilment transitions stay server-authoritative for the wallet gateway too.
+-- Fulfilment transitions stay server-authoritative for the bank gateway too.
 create or replace function public.admin_update_order_status(p_order_id uuid, p_status text, p_tracking_code text default null)
 returns jsonb
 language plpgsql security definer
@@ -520,19 +587,19 @@ begin
     end if;
     select * into v_payment from public.payments where order_id = v_order.id for update;
     if not found or v_payment.status <> 'pending' or v_payment.provider_reference is not null then
-      raise exception using errcode = '22023', message = 'orders with a recorded Bale transaction must be reconciled through inquireTransaction before cancellation';
+      raise exception using errcode = '22023', message = 'orders with a verified BluePal payment must be refunded through the BluePal panel before cancellation';
     end if;
     for v_line in select variant_id, quantity from public.order_items where order_id = v_order.id and variant_id is not null loop
       update public.product_variants set stock = stock + v_line.quantity where id = v_line.variant_id;
     end loop;
     update public.payments set status = 'failed', provider_code = 'ADMIN_CANCELLED', failure_reason = 'Cancelled by admin',
-      callback_payload = jsonb_build_object('outcome','cancelled','source','admin','at',v_at)
+      callback_payload = coalesce(callback_payload,'{}'::jsonb) || jsonb_build_object('outcome','cancelled','source','admin','at',v_at)
       where order_id = v_order.id and status = 'pending';
     if v_order.coupon_id is not null then update public.coupons set usage_count = greatest(usage_count - 1,0) where id = v_order.coupon_id; end if;
   elsif v_next = 'paid' then
     select * into v_payment from public.payments where order_id = v_order.id for update;
     if v_order.status <> 'paid' or not found or v_payment.status <> 'verified' then
-      raise exception using errcode = '42501', message = 'payment status can only be confirmed by the verified provider callback';
+      raise exception using errcode = '42501', message = 'payment status can only be confirmed by the BluePal verify call';
     end if;
   elsif v_next = 'processing' and v_order.status not in ('paid','processing') then
     raise exception using errcode = '22023', message = 'order must be paid before fulfillment';
@@ -553,7 +620,11 @@ revoke all on function public.admin_update_order_status(uuid,text,text) from pub
 grant execute on function public.admin_update_order_status(uuid,text,text) to authenticated;
 
 
--- Retired gateway entry points.
+-- Retired gateway entry points: the old messenger bridge and the ZarinPal helpers must not survive
+-- as callable, unmaintained code paths.
+drop function if exists public.attach_balepay_invoice(uuid,text,text);
+drop function if exists public.settle_balepay_payment(uuid,text,text,bigint,text,text,jsonb);
+drop function if exists public.expire_stale_balepay_checkouts(integer);
 drop function if exists public.attach_zarinpal_authority(uuid,text);
 drop function if exists public.settle_zarinpal_payment(uuid,text,text,bigint,text,text,jsonb);
 

@@ -1,4 +1,4 @@
-/* Storefront composition: Supabase Auth, database-backed CMS, and secure Bale Pay (کیف‌پول بله) checkout. */
+/* Storefront composition: Supabase Auth, database-backed CMS, and secure BluePal (بلو پال) checkout. */
 function header(){let storeName=db.settings.storeName||'کفش طوبی';return `<div class="top"><header class="header container"><button class="hamburger mobile-menu" onclick="document.querySelector('.nav').classList.toggle('open')" aria-label="بازکردن منو">☰</button><a class="brand" href="/"><span class="brand-mark">❧</span><span>${esc(storeName)}</span></a><nav class="nav"><a href="/">خانه</a><a href="/shop">فروشگاه</a><a href="/shop?category=men">دسته‌بندی‌ها</a><a href="/about">درباره ما</a><a href="/contact">تماس</a></nav><div class="header-tools"><form class="searchbox" onsubmit="event.preventDefault();go('/search?q='+encodeURIComponent(this.q.value))"><input name="q" placeholder="جستجو در محصولات" aria-label="جستجوی محصولات"><button aria-label="جستجو" style="background:none;color:#a6c75e">⌕</button></form><a class="icon-btn account-icon" href="${db.currentUser?.role==='admin'||db.currentUser?.role==='super_admin'?'/admin':'/account'}" aria-label="حساب کاربری">♙</a><a class="icon-btn" href="/cart" aria-label="سبد خرید">🛒<span class="count">${cartCount()}</span></a></div></header></div>`}
 function footer(){let cms=db.settings.homepage||{};return `<footer class="footer"><div class="container"><div class="footer-grid"><div><a class="brand" href="/"><span class="brand-mark">❧</span>${esc(db.settings.storeName||'کفش طوبی')}</a><p>قدم‌هایی مطمئن، با کفش طوبی.</p></div><div><h3>دسترسی سریع</h3><a href="/shop">فروشگاه</a><a href="/about">درباره ما</a><a href="/contact">تماس با ما</a><a href="/tracking">پیگیری سفارش</a></div><div><h3>راهنمای خرید</h3><a href="/terms">قوانین</a><a href="/privacy">حریم خصوصی</a><a href="/account/orders">سفارش‌های من</a></div><div><h3>ارتباط با ما</h3><p>${esc(db.settings.phone||'')}</p><p>info@toubashoes.ir</p><p>${esc(db.settings.address||'')}</p><p>شبکه‌های اجتماعی</p></div></div><div class="copyright">${esc(cms.footerText||'تمامی حقوق برای فروشگاه کفش طوبی محفوظ است. © ۱۴۰۵')}</div></div></footer>`}
 const ST3_STATUS={NEW:'جدید',CONFIRMED:'تأیید شده',PROCESSING:'در حال آماده‌سازی',SHIPPED:'ارسال شده',DELIVERED:'تحویل داده شده',CANCELLED:'لغو شده'};
@@ -30,7 +30,7 @@ async function bannerToggle(id){let b=db.banners.find(x=>x.id===id);if(b){await 
 function reviewsAdmin(){return `<div class="admin-title-row"><h1>مدیریت نظرات</h1><span>${db.reviews.length} دیدگاه</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>مشتری</th><th>محصول</th><th>امتیاز</th><th>دیدگاه</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>${db.reviews.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.product)}</td><td>★ ${r.rating}</td><td>${esc(r.text)}</td><td>${esc(r.status)}</td><td><button class="action" onclick="reviewStatus('${r.id}','تأیید شده')">تأیید</button> <button class="action" onclick="reviewStatus('${r.id}','رد شده')">رد</button> <button class="action danger" onclick="deleteEntity('reviews','${r.id}')">حذف</button></td></tr>`).join('')}</tbody></table></div>`}
 function mediaAdmin(){return `<div class="admin-title-row"><h1>رسانه‌ها</h1><button class="btn small" onclick="mediaAddModal()">＋ افزودن آدرس تصویر</button></div><div class="media-grid">${db.media.map(m=>`<div class="panel"><img src="${esc(m.url)}" onerror="this.src='/product-shoes.jpg'" alt="${esc(m.alt||'تصویر رسانه')}" loading="lazy"><p>${esc(m.alt||m.url)}</p><code>${esc(m.url)}</code><div><button class="action" onclick="copyMedia('${esc(m.url)}')">کپی URL</button> <button class="action danger" onclick="deleteEntity('media','${m.id}')">حذف</button></div></div>`).join('')}</div>`}
 function mediaAddModal(){showModal(`<form onsubmit="event.preventDefault();addMediaRecord(this)"><div class="field"><label>انتخاب فایل تصویر (حداکثر ۱ مگابایت، ذخیره محلی)</label><input name="file" type="file" accept="image/*"></div><div class="field"><label>یا آدرس فایل محلی</label><input name="url" placeholder="/hero-shoe.jpg"></div><div class="field"><label>متن جایگزین تصویر</label><input name="alt"></div><button class="btn">افزودن رسانه</button></form>`)}async function addMediaRecord(f){let url=f.elements.url.value.trim(),file=f.elements.file.files?.[0];if(file){if(!file.type.startsWith('image/')){toast('فقط فایل تصویر پذیرفته می‌شود');return}if(file.size>1024*1024){toast('حجم تصویر باید کمتر از ۱ مگابایت باشد');return}url=await new Promise((resolve,reject)=>{let reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file)})}if(!url){toast('یک فایل یا مسیر تصویر انتخاب کنید');return}if(!isLocalAsset(url)){toast('حالت آفلاین فقط تصویر محلی را می‌پذیرد؛ درخواست خارجی ارسال نمی‌شود');return}await DataRepositories.media.create({id:st3Id('media'),url,alt:f.elements.alt.value.trim(),createdAt:new Date().toISOString()});closeModal();render();toast('رسانه محلی اضافه شد')}function copyMedia(url){navigator.clipboard?.writeText(url);toast('آدرس تصویر کپی شد')}
-function settingsAdmin(){let s=db.settings,ship=s.shippingOptions||{};return `<div class="admin-title-row"><h1>تنظیمات فروشگاه</h1><button class="btn small" onclick="saveSiteSettings()">ذخیره تنظیمات</button></div><div class="panel"><div class="form-grid"><div class="field"><label>نام فروشگاه</label><input id="set-store-name" value="${esc(s.storeName||'کفش طوبی')}"></div><div class="field"><label>شماره تماس</label><input id="set-phone" value="${esc(s.phone)}"></div><div class="field full"><label>آدرس</label><input id="set-address" value="${esc(s.address)}"></div><div class="field"><label>هزینه ارسال عادی (تومان)</label><input id="ship-normal" type="number" value="${ship.normal??s.shipping}"></div><div class="field"><label>هزینه ارسال سریع</label><input id="ship-express" type="number" value="${ship.express??160000}"></div><div class="field"><label>حداقل ارسال رایگان</label><input id="ship-freefrom" type="number" value="${ship.freeFrom??s.freeShipping}"></div><div class="field"><label>درگاه پرداخت</label><input disabled value="بله‌پی · کیف‌پول بله (پیکربندی امن در متغیرهای سرور)"></div><div class="field full"><label>SEO توضیحات پیش‌فرض</label><textarea id="set-seo">${esc(s.metaDescription||'خرید آنلاین کفش طوبی')}</textarea></div></div></div>`}
+function settingsAdmin(){let s=db.settings,ship=s.shippingOptions||{};return `<div class="admin-title-row"><h1>تنظیمات فروشگاه</h1><button class="btn small" onclick="saveSiteSettings()">ذخیره تنظیمات</button></div><div class="panel"><div class="form-grid"><div class="field"><label>نام فروشگاه</label><input id="set-store-name" value="${esc(s.storeName||'کفش طوبی')}"></div><div class="field"><label>شماره تماس</label><input id="set-phone" value="${esc(s.phone)}"></div><div class="field full"><label>آدرس</label><input id="set-address" value="${esc(s.address)}"></div><div class="field"><label>هزینه ارسال عادی (تومان)</label><input id="ship-normal" type="number" value="${ship.normal??s.shipping}"></div><div class="field"><label>هزینه ارسال سریع</label><input id="ship-express" type="number" value="${ship.express??160000}"></div><div class="field"><label>حداقل ارسال رایگان</label><input id="ship-freefrom" type="number" value="${ship.freeFrom??s.freeShipping}"></div><div class="field"><label>درگاه پرداخت</label><input disabled value="بلو پال · درگاه بانکی (پیکربندی امن در متغیرهای سرور)"></div><div class="field full"><label>SEO توضیحات پیش‌فرض</label><textarea id="set-seo">${esc(s.metaDescription||'خرید آنلاین کفش طوبی')}</textarea></div></div></div>`}
 async function saveSiteSettings(){db.settings.storeName=$('#set-store-name').value;db.settings.phone=$('#set-phone').value;db.settings.address=$('#set-address').value;db.settings.shipping=Number($('#ship-normal').value)||0;db.settings.freeShipping=Number($('#ship-freefrom').value)||0;db.settings.shippingOptions={normal:Number($('#ship-normal').value)||0,express:Number($('#ship-express').value)||0,freeFrom:Number($('#ship-freefrom').value)||0};db.settings.metaDescription=$('#set-seo').value;StoreServices.shipping.settings=db.settings;for(let key of ['storeName','phone','address','shipping','freeShipping','shippingOptions','metaDescription'])await DataRepositories.siteSettings.update(key,{value:db.settings[key]});save();render();toast('تنظیمات ذخیره شد')}
 function demoAdmin(){const state=DataProvider?.state||{},ready=state.status==='ready';return `<div class="admin-title-row"><h1>وضعیت پایگاه داده</h1><span class="badge ${ready?'green':'red'}">${ready?'متصل به Supabase':'نیازمند بررسی'}</span></div><div class="notice">تمام داده‌های ویترین و عملیات فروش از پایگاه دادهٔ Supabase خوانده و با RLS کنترل می‌شوند. ذخیره‌سازی Demo و snapshot مرورگر غیرفعال است.</div><div class="stats"><div class="stat-card"><span>محصولات پایگاه داده</span><b>${db.products.length.toLocaleString('fa-IR')}</b></div><div class="stat-card"><span>سفارش‌های قابل‌دسترسی</span><b>${db.orders.length.toLocaleString('fa-IR')}</b></div><div class="stat-card"><span>نسخهٔ schema</span><b style="font-size:13px">${esc(state.schemaVersion||'—')}</b></div><div class="stat-card"><span>آخرین همگام‌سازی</span><b style="font-size:13px">${esc(state.loadedAt||'—')}</b></div></div><div class="panel"><h3>نگهداری امن</h3><p>برای به‌روزرسانی داده‌ها از دکمهٔ «به‌روزرسانی» استفاده کنید. عملیات مدیریتی مستقیماً از repositoryهای Supabase و RPCهای دارای کنترل نقش انجام می‌شوند.</p><button class="btn outline small" onclick="DataProvider.refresh(STORE,db).then(()=>render()).catch(e=>toast(e.message))">دریافت دوباره از پایگاه داده</button></div>`}
 function resetDemoData(){toast('دادهٔ نمایشی غیرفعال است؛ برای پاک‌سازی از پنل امن پایگاه داده اقدام کنید.')}
@@ -47,7 +47,7 @@ function couponValid(c,subtotal){if(!c||!c.active)return false;let parts=new Int
 async function applyCoupon(){let code=$('#coupon-code')?.value.trim(),subtotal=db.cart.reduce((n,x)=>n+(product(x.id)?.price||0)*x.qty,0),result=await StoreServices.coupons.validate(code,subtotal);if(!result.valid){toast(result.reason);return}db.coupon={code:result.coupon.code,discount:result.discount};save();render();toast('کد تخفیف اعمال شد')}
 async function applyCheckoutCoupon(){let code=$('#checkout-coupon').value.trim(),subtotal=db.cart.reduce((n,x)=>n+(product(x.id)?.price||0)*x.qty,0),result=await StoreServices.coupons.validate(code,subtotal);if(!result.valid){toast(result.reason);return}db.coupon={code:result.coupon.code,discount:result.discount};save();render();toast('کد تخفیف اعمال شد')}
 function checkoutTotals(method='normal'){let base=getCartTotals(),shipping=StoreServices.shipping.quote(method,base.subtotal);return{...base,shipping,total:base.subtotal-base.discount+shipping}}
-function checkout(){if(!db.cart.length){go('/cart');return ''}if(!db.currentUser||db.currentUser.authProvider!=='supabase'){return `${header()}<main class="page container"><section class="auth-card" style="max-width:640px;text-align:center"><h1>برای ثبت سفارش وارد شوید</h1><p>ثبت سفارش، حفظ سبد خرید و پیگیری پرداخت به حساب معتبر و فعال مشتری نیاز دارد.</p><a class="btn" href="/login">ورود به حساب مشتری</a> <a class="btn outline" href="/login?mode=signup">ساخت حساب</a></section></main>${footer()}`}if(db.currentUser.role!=='customer'){return `${header()}<main class="page container"><div class="notice">برای ثبت سفارش با حساب مشتری وارد شوید.</div><a class="btn" href="/account">بازگشت به حساب</a></main>${footer()}`}let tot=checkoutTotals('normal'),options=StoreServices.shipping.options(tot.subtotal);return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required minlength="3" name="name" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><select required name="province"><option value="">انتخاب استان</option>${['تهران','البرز','اصفهان','فارس','خراسان رضوی','گیلان','مازندران','آذربایجان شرقی'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>شهر *</label><input required minlength="2" name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required minlength="10" name="address"></textarea></div><div class="field"><label>کد پستی *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal"></div><div class="field"><label>توضیحات</label><input name="note"></div></div><div class="detail-row"><b>روش ارسال</b>${options.map(x=>`<label class="shipping-option"><input type="radio" name="shippingMethod" value="${x.id}" ${x.id==='normal'?'checked':''} ${x.available?'':'disabled'} onchange="refreshCheckoutTotals()"> ${x.name} ${x.id==='free'&&!x.available?'(با خرید بیشتر فعال می‌شود)':`— ${x.cost?toman(x.cost):'رایگان'}`}</label>`).join('')}</div><div class="detail-row"><b>روش پرداخت</b><label class="shipping-option"><input type="radio" name="paymentMethod" value="balepay" checked required> پرداخت امن از طریق کیف‌پول رسمی بله</label></div></section><aside class="cart-summary" id="checkout-summary"><h3>خلاصه سفارش (${db.cart.length} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div id="checkout-totals"><div class="summary-line"><span>جمع محصولات</span><b>${toman(tot.subtotal)}</b></div>${tot.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(tot.discount)}</b></div>`:''}<div class="summary-line"><span>ارسال</span><b id="ship-total">${toman(tot.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(tot.total)}</b></div></div><button class="btn" style="width:100%;margin-top:12px">پرداخت با کیف‌پول بله</button><small class="muted">مبلغ در صفحهٔ رسمی کیف‌پول بله پرداخت می‌شود؛ شماره کارت و رمز بانکی هرگز در این سایت وارد نمی‌شود.</small></aside></form></main>${footer()}`}
+function checkout(){if(!db.cart.length){go('/cart');return ''}if(!db.currentUser||db.currentUser.authProvider!=='supabase'){return `${header()}<main class="page container"><section class="auth-card" style="max-width:640px;text-align:center"><h1>برای ثبت سفارش وارد شوید</h1><p>ثبت سفارش، حفظ سبد خرید و پیگیری پرداخت به حساب معتبر و فعال مشتری نیاز دارد.</p><a class="btn" href="/login">ورود به حساب مشتری</a> <a class="btn outline" href="/login?mode=signup">ساخت حساب</a></section></main>${footer()}`}if(db.currentUser.role!=='customer'){return `${header()}<main class="page container"><div class="notice">برای ثبت سفارش با حساب مشتری وارد شوید.</div><a class="btn" href="/account">بازگشت به حساب</a></main>${footer()}`}let tot=checkoutTotals('normal'),options=StoreServices.shipping.options(tot.subtotal);return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required minlength="3" name="name" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><select required name="province"><option value="">انتخاب استان</option>${['تهران','البرز','اصفهان','فارس','خراسان رضوی','گیلان','مازندران','آذربایجان شرقی'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>شهر *</label><input required minlength="2" name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required minlength="10" name="address"></textarea></div><div class="field"><label>کد پستی *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal"></div><div class="field"><label>توضیحات</label><input name="note"></div></div><div class="detail-row"><b>روش ارسال</b>${options.map(x=>`<label class="shipping-option"><input type="radio" name="shippingMethod" value="${x.id}" ${x.id==='normal'?'checked':''} ${x.available?'':'disabled'} onchange="refreshCheckoutTotals()"> ${x.name} ${x.id==='free'&&!x.available?'(با خرید بیشتر فعال می‌شود)':`— ${x.cost?toman(x.cost):'رایگان'}`}</label>`).join('')}</div><div class="detail-row"><b>روش پرداخت</b><label class="shipping-option"><input type="radio" name="paymentMethod" value="bluepal" checked required> پرداخت آنلاین بانکی از طریق بلو پال</label></div></section><aside class="cart-summary" id="checkout-summary"><h3>خلاصه سفارش (${db.cart.length} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div id="checkout-totals"><div class="summary-line"><span>جمع محصولات</span><b>${toman(tot.subtotal)}</b></div>${tot.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(tot.discount)}</b></div>`:''}<div class="summary-line"><span>ارسال</span><b id="ship-total">${toman(tot.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(tot.total)}</b></div></div><button class="btn" style="width:100%;margin-top:12px">پرداخت امن بلو پال</button><small class="muted">مبلغ در صفحهٔ بانکی بلو پال پرداخت می‌شود؛ شماره کارت و رمز بانکی هرگز در این سایت وارد نمی‌شود.</small></aside></form></main>${footer()}`}
 function refreshCheckoutTotals(){let method=document.querySelector('[name="shippingMethod"]:checked')?.value||'normal';try{let t=checkoutTotals(method);$('#ship-total').textContent=t.shipping?toman(t.shipping):'رایگان';$('#checkout-totals').querySelector('.total b').textContent=toman(t.total)}catch(e){toast(e.message)}}
 function checkoutIdempotencyKey(){
   if(!window.__checkoutIdempotencyKey){
@@ -66,7 +66,7 @@ function bindForms(){
     const fd=new FormData(form),phone=st3Num(fd.get('phone')),postal=st3Num(fd.get('postal'));
     if(!/^09\d{9}$/.test(phone)){toast('شماره موبایل معتبر نیست');return}
     if(!/^\d{10}$/.test(postal)){toast('کد پستی باید ۱۰ رقم باشد');return}
-    if((fd.get('paymentMethod')||'balepay')!=='balepay'){toast('تنها پرداخت با کیف‌پول بله برای این فروشگاه فعال است');return}
+    if((fd.get('paymentMethod')||'bluepal')!=='bluepal'){toast('تنها پرداخت بانکی بلو پال برای این فروشگاه فعال است');return}
     const submitButton=form.querySelector?.('button[type="submit"]');if(submitButton)submitButton.disabled=true;
     let orderId='';
     try{
@@ -85,27 +85,13 @@ function bindForms(){
       if(!orderId)throw new Error('پایگاه داده شناسهٔ سفارش برنگرداند.');
       window.__checkoutOrderId=orderId;
       await DataProvider.refresh(STORE,db);
-      if(!window.ToubaBalePay)throw new Error('پل پرداخت بله بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
-      const gateway=await ToubaBalePay.requestGateway(orderId);
+      if(!window.ToubaBluePal)throw new Error('پل پرداخت بلو پال بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
+      // سرور فاکتور را در بلو پال ثبت می‌کند (track_id) و پیوند صفحهٔ بانک را می‌دهد.
+      const gateway=await ToubaBluePal.requestGateway(orderId);
       window.__checkoutIdempotencyKey=null;
-      await ToubaBalePay.ensureSdk();
-      if(ToubaBalePay.supportsOpenInvoice()){
-        // مینی‌اپ بله: صفحهٔ پرداخت کیف‌پول داخل همان پنجره باز می‌شود.
-        ToubaBalePay.boot();
-        const invoiceResult=await ToubaBalePay.openInvoice(gateway.invoice);
-        if(invoiceResult.status==='cancelled')toast('صفحهٔ پرداخت بله بسته شد؛ سفارش شما تا ۶ ساعت رزرو می‌ماند');
-        else if(invoiceResult.status==='failed')toast('پرداخت در کیف‌پول بله انجام نشد؛ دوباره تلاش کنید');
-        window.location.href=`/payment/result/${encodeURIComponent(orderId)}`;
-        return;
-      }
-      if(gateway.paymentUrl){
-        // اگر بله شناسهٔ صورتحساب را به‌صورت پیوند HTTPS برگرداند، همان مسیر درگاه باز می‌شود.
-        if(!/^https:\/\//i.test(String(gateway.paymentUrl)))throw new Error('نشانی صورتحساب بله معتبر نیست.');
-        window.location.href=gateway.paymentUrl;
-        return;
-      }
-      const handoff=gateway.miniAppUrl?`<a class="btn" href="${esc(gateway.miniAppUrl)}" target="_blank" rel="noopener">باز کردن پرداخت در بله</a> <a class="btn outline" href="/payment/result/${encodeURIComponent(orderId)}" onclick="closeModal()">بررسی وضعیت پرداخت</a>`:'<small class="muted">پیکربندی مینی‌اپ بله کامل نیست؛ با پشتیبانی فروشگاه تماس بگیرید.</small>';
-      showModal(`<h3>پرداخت با کیف‌پول بله</h3><p>صورتحساب سفارش شما ساخته شد. برای پرداخت، فروشگاه را در پیام‌رسان بله باز کنید تا صفحهٔ کیف‌پول به‌صورت امن نمایش داده شود.</p><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${handoff}</div>`);
+      if(!gateway.paymentUrl)throw new Error('درگاه بلو پال نشانی صفحهٔ پرداخت را برنگرداند.');
+      ToubaBluePal.openPayment(gateway);
+      return;
     }catch(error){
       if(orderId){
         try{
@@ -115,46 +101,54 @@ function bindForms(){
         }catch(cancelError){console.warn('Pending checkout will expire automatically:',cancelError?.message||cancelError)}
       }
       if(submitButton)submitButton.disabled=false;
-      toast(`شروع پرداخت بله‌پی انجام نشد: ${error.message||'خطای نامشخص'}`);
+      toast(`آغاز پرداخت بلو پال انجام نشد: ${error.message||'خطای نامشخص'}`);
     }
   };
   if(path()==='/shop'||path()==='/search'||path().startsWith('/category/')){const select=$('#shop-sort');if(select)select.value=shopState.sort;renderShopResults()}
   const resultMatch=/^\/payment\/result\/([^/]+)$/.exec(path());
   if(resultMatch){
     const orderId=decodeURIComponent(resultMatch[1]);
-    const receiptKey=ToubaBalePay?.receiptFor(orderId)||`poll:${orderId}`;
-    if(window.__balepayReceiptKey!==receiptKey){
-      window.__balepayReceiptKey=receiptKey;
-      window.__balepayReceiptPromise=processBalePayReceipt(orderId);
+    const receiptKey=ToubaBluePal?.receiptFor(orderId)||`poll:${orderId}`;
+    if(window.__bluepalReceiptKey!==receiptKey){
+      window.__bluepalReceiptKey=receiptKey;
+      window.__bluepalReceiptPromise=processBluePalReceipt(orderId);
     }
+    // کاربر از صفحهٔ بانک برگشته است؛ نشانگر «سفارش باز» پاک می‌شود.
+    ToubaBluePal?.clearPending(orderId);
   }
 }
 
-// ادامهٔ پرداخت وقتی فروشگاه به‌عنوان مینی‌اپ بله با پارامتر startapp باز می‌شود.
-async function resumeBalePayCheckout(orderId){
+// تلاش دوباره: همان سفارشِ باز با کد پیگیری تازه به صفحهٔ بانک می‌رود.
+async function resumeBluePalPayment(orderId){
   const user=db.currentUser;
   if(!user||user.authProvider!=='supabase'||user.role!=='customer')return false;
   const order=db.orders.find(x=>String(x.id)===String(orderId));
   if(!order||order.paymentStatus!=='PENDING')return false;
-  const gateway=await ToubaBalePay.requestGateway(orderId);
-  await ToubaBalePay.openInvoice(gateway.invoice);
-  go(`/payment/result/${encodeURIComponent(orderId)}`);
+  await ToubaBluePal.retryPayment(orderId);
   return true;
 }
 
-async function processBalePayReceipt(orderId,receiptToken){
-  const statusElement=$('#payment-receipt-status');
-  if(statusElement)statusElement.textContent='در حال دریافت وضعیت پایدار سفارش از پایگاه داده…';
+async function retryBluePalPayment(orderId){
   try{
-    const result=await ToubaBalePay.pollSettlement(orderId,{
-      receipt:receiptToken||ToubaBalePay.receiptFor(orderId),
-      attempts:4,
-      intervalMs:4000,
+    const target=orderId||ToubaBluePal.pendingOrderId();
+    if(!target){toast('سفارش بازی برای پرداخت پیدا نشد.');return}
+    await resumeBluePalPayment(target);
+  }catch(error){toast(error.message||'آغاز دوبارهٔ پرداخت انجام نشد.')}
+}
+
+async function processBluePalReceipt(orderId,receiptToken){
+  const statusElement=$('#payment-receipt-status');
+  if(statusElement)statusElement.textContent='در حال تأیید تراکنش نزد درگاه بلو پال…';
+  try{
+    const result=await ToubaBluePal.pollSettlement(orderId,{
+      receipt:receiptToken||ToubaBluePal.receiptFor(orderId),
+      attempts:5,
+      intervalMs:5000,
       onTick:(row,tick)=>{
         if(!statusElement)return;
-        statusElement.textContent=row&&row.waitingForWebhook
-          ?`در انتظار رویداد بازوی بله برای نهایی‌سازی پرداخت… (تلاش ${tick+1})`
-          :`هنوز در انتظار تأیید کیف‌پول بله… (تلاش ${tick+1})`;
+        statusElement.textContent=row&&row.waitingForVerify
+          ?`در انتظار تأیید نهایی از بانک؛ کد پیگیری ${esc(row.trackId||'—')} (تلاش ${tick+1})`
+          :`هنوز در انتظار تأیید درگاه بلو پال… (تلاش ${tick+1})`;
       }
     });
     if(!result)throw new Error('وضعیت پرداخت از سرور دریافت نشد؛ دوباره تلاش کنید.');
@@ -162,13 +156,13 @@ async function processBalePayReceipt(orderId,receiptToken){
     const order=db.orders.find(x=>String(x.id)===String(orderId));
     if(!order||Number(result.amountToman)!==Number(order.total))throw new Error('مبلغ وضعیت پرداخت با سفارش پایدار مطابقت ندارد.');
     if(result.outcome==='pending'){
-      if(statusElement)statusElement.textContent='بله هنوز وضعیت نهایی تراکنش را تأیید نکرده است؛ پس از رویداد بازو، سفارش خودکار تأیید می‌شود. چند لحظهٔ دیگر «بررسی دوباره» را بزنید.';
+      if(statusElement)statusElement.textContent='بلو پال هنوز این تراکنش را تأیید نکرده است؛ اگر مبلغی از کارت کسر شده و تراکنش تأیید نشود، بانک حداکثر تا ۷۲ ساعت آن را بازمی‌گرداند. چند لحظهٔ دیگر «بررسی دوبارهٔ پرداخت» را بزنید.';
       return{success:false,pending:true,order};
     }
     if(result.outcome==='paid')db.coupon=null;
-    ToubaBalePay.forgetReceipt(orderId);
+    ToubaBluePal.forgetReceipt(orderId);
     if(window.history?.replaceState&&window.location?.pathname&&window.location?.search)window.history.replaceState({},'',window.location.pathname);
-    window.__balepayReceiptKey='';
+    window.__bluepalReceiptKey='';
     render();
     return{success:result.outcome==='paid',order,outcome:result.outcome};
   }catch(error){
@@ -177,20 +171,20 @@ async function processBalePayReceipt(orderId,receiptToken){
   }
 }
 
-function retryBalePayReceipt(){
+function retryBluePalReceipt(){
   const resultMatch=/^\/payment\/result\/([^/]+)$/.exec(path());
   if(!resultMatch)return;
   const orderId=decodeURIComponent(resultMatch[1]);
-  window.__balepayReceiptKey='';
-  window.__balepayReceiptPromise=processBalePayReceipt(orderId,ToubaBalePay.receiptFor(orderId));
+  window.__bluepalReceiptKey='';
+  window.__bluepalReceiptPromise=processBluePalReceipt(orderId,ToubaBluePal.receiptFor(orderId));
 }
 function paymentResult(orderId){
   const order=db.orders.find(x=>String(x.id)===String(orderId));
   if(!order)return notFound();
   const paid=order.paymentStatus==='PAID',pending=order.paymentStatus==='PENDING',cancelled=order.paymentOutcome==='CANCELLED';
-  const title=paid?'پرداخت با موفقیت انجام شد':pending?'در انتظار تأیید کیف‌پول بله':cancelled?'پرداخت لغو شد':'پرداخت ناموفق بود';
+  const title=paid?'پرداخت با موفقیت انجام شد':pending?'در انتظار تأیید درگاه بلو پال':cancelled?'پرداخت لغو شد':'پرداخت ناموفق بود';
   const icon=paid?'✓':pending?'…':'×';
-  return `${header()}<main class="page container" style="max-width:680px;margin:30px auto"><div class="auth-card" style="text-align:center;padding:32px 24px;border-radius:18px"><div class="payment-result-icon ${paid?'success':pending?'pending':'failure'}">${icon}</div><h1 style="margin:16px 0 8px;font-size:22px">${title}</h1><div style="margin-bottom:20px"><span class="badge" style="background:#eef4ff;color:#1647a1;border:1px solid #bfdbfe;font-size:12px;padding:4px 12px;border-radius:8px">Bale Pay · کیف‌پول رسمی بله</span></div><div class="summary-line"><span>شماره سفارش:</span><b>${esc(order.number)}</b></div><div class="summary-line"><span>کد رهگیری فروشگاه:</span><b>${esc(order.trackingCode)}</b></div>${order.paymentRef?`<div class="summary-line"><span>شماره پیگیری تراکنش بله:</span><code>${esc(order.paymentRef)}</code></div>`:''}<div class="summary-line"><span>مبلغ سفارش:</span><b>${toman(order.total)}</b></div><div class="summary-line"><span>وضعیت:</span><b>${paid?'پرداخت‌شده':pending?'در انتظار تأیید':cancelled?'لغوشده':'ناموفق'}</b></div>${pending?'<p id="payment-receipt-status" class="notice">در حال تأیید تراکنش در کیف‌پول بله…</p><button class="btn outline" type="button" onclick="retryBalePayReceipt()">بررسی دوبارهٔ پرداخت</button>':''}${!paid&&!pending?'<div class="notice error-notice" style="margin:16px 0">پرداخت تأیید نشد؛ سبد خرید شما برای تلاش دوباره حفظ شده است.</div>':''}<div style="display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap"><a class="btn" href="/tracking">پیگیری سفارش</a>${paid?'<a class="btn outline" href="/shop">ادامه خرید</a>':'<a class="btn outline" href="/checkout">تلاش دوباره برای پرداخت</a>'}</div></div></main>${footer()}`;
+  return `${header()}<main class="page container" style="max-width:680px;margin:30px auto"><div class="auth-card" style="text-align:center;padding:32px 24px;border-radius:18px"><div class="payment-result-icon ${paid?'success':pending?'pending':'failure'}">${icon}</div><h1 style="margin:16px 0 8px;font-size:22px">${title}</h1><div style="margin-bottom:20px"><span class="badge" style="background:#eef4ff;color:#1647a1;border:1px solid #bfdbfe;font-size:12px;padding:4px 12px;border-radius:8px">BluePal · درگاه بلو پال</span></div><div class="summary-line"><span>شماره سفارش:</span><b>${esc(order.number)}</b></div><div class="summary-line"><span>کد رهگیری فروشگاه:</span><b>${esc(order.trackingCode)}</b></div>${order.paymentRef?`<div class="summary-line"><span>شماره مرجع بانک:</span><code>${esc(order.paymentRef)}</code></div>`:''}${order.authority?`<div class="summary-line"><span>کد پیگیری بلو پال:</span><code>${esc(order.authority)}</code></div>`:''}<div class="summary-line"><span>مبلغ سفارش:</span><b>${toman(order.total)}</b></div><div class="summary-line"><span>وضعیت:</span><b>${paid?'پرداخت‌شده':pending?'در انتظار تأیید':cancelled?'لغوشده':'ناموفق'}</b></div>${pending?'<p id="payment-receipt-status" class="notice">در حال تأیید تراکنش نزد درگاه بلو پال…</p><button class="btn outline" type="button" onclick="retryBluePalReceipt()">بررسی دوبارهٔ پرداخت</button> <button class="btn outline" type="button" onclick="retryBluePalPayment()">ادامهٔ پرداخت در صفحهٔ بانک</button>':''}${!paid&&!pending?'<div class="notice error-notice" style="margin:16px 0">پرداخت تأیید نشد؛ مبلغی به حساب فروشگاه وارد نشده است و سبد خرید شما برای تلاش دوباره حفظ شده است.</div>':''}<div style="display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap"><a class="btn" href="/tracking">پیگیری سفارش</a>${paid?'<a class="btn outline" href="/shop">ادامه خرید</a>':'<a class="btn outline" href="/checkout">تلاش دوباره برای پرداخت</a>'}</div></div></main>${footer()}`;
 }
 
 function tracking(){return `${header()}<main class="page container"><form class="auth-card" onsubmit="event.preventDefault();trackOrder(this)"><h1>پیگیری سفارش</h1><p>شماره سفارش و موبایل ثبت‌شده را وارد کنید.</p><div class="field"><label>شماره سفارش</label><input name="number" required placeholder="TB-..."></div><div class="field"><label>شماره موبایل</label><input name="phone" required pattern="[0-9۰-۹٠-٩]{11}" placeholder="09123456789"></div><button class="btn">پیگیری سفارش</button><div id="tracking-result"></div></form></main>${footer()}`}
@@ -210,14 +204,8 @@ async function couponToggle(code){let c=db.coupons.find(x=>x.code===code);if(c){
 function orderDetails(id){let o=db.orders.find(x=>x.id===id);if(!o)return;showModal(`<h2>سفارش ${esc(o.number||o.id)}</h2><div class="notice">مشتری: ${esc(o.customer)} · ${esc(o.phone)}<br>نشانی: ${esc(o.province||'')}، ${esc(o.city||'')}، ${esc(o.address||'')} · ${esc(o.postal||'—')}<br>تاریخ: ${esc(o.date||'')}<br>کد پیگیری: <b>${esc(o.trackingCode||'—')}</b></div><h3>اقلام سفارش</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>محصول</th><th>واریانت</th><th>قیمت واحد</th><th>تعداد</th><th>جمع</th></tr></thead><tbody>${(o.itemsList||[]).map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.variantLabel||`سایز ${i.size}، ${i.color}`)}</td><td>${toman(i.unitPrice)}</td><td>${i.quantity}</td><td>${toman(i.unitPrice*i.quantity)}</td></tr>`).join('')}</tbody></table></div><div class="summary-line"><span>جمع اقلام</span><b>${toman(o.subtotal??o.total)}</b></div><div class="summary-line"><span>تخفیف</span><b>− ${toman(o.discount)}</b></div><div class="summary-line"><span>هزینه ارسال</span><b>${toman(o.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(o.total)}</b></div><p>وضعیت: ${ST3_STATUS[o.status]||o.status} · پرداخت: ${o.paymentStatus==='PAID'?'پرداخت شده':o.paymentStatus==='FAILED'?'ناموفق':'در انتظار پرداخت'}</p>`)}
 async function orderStatus(id,status){try{await StoreServices.orders.update(id,{status});await DataProvider.refresh(STORE,db);render();toast('وضعیت سفارش در پایگاه داده ذخیره شد')}catch(error){toast(error.message||'به‌روزرسانی وضعیت سفارش انجام نشد.')}}
 function render(){document.body.classList.remove('admin-body');let p=path(),html;if(p==='/')html=(typeof window.home==='function'?window.home():home());else if(p==='/shop'||p==='/search')html=(typeof window.shop==='function'?window.shop():shop());else if(p.startsWith('/category/')){let slug=decodeURIComponent(p.split('/')[2]),c=db.categories.find(x=>x.id===slug||x.slug===slug||x.name===slug);html=(typeof window.shop==='function'?window.shop(c?c.id:slug):(c?shop(c.id):shop()))}else if(p.startsWith('/product/'))html=(typeof window.detail==='function'?window.detail(decodeURIComponent(p.split('/')[2])):detail(decodeURIComponent(p.split('/')[2])));else if(p==='/cart')html=(typeof window.cartPage==='function'?window.cartPage():cartPage());else if(p==='/checkout')html=(typeof window.checkout==='function'?window.checkout():checkout());else if(p==='/login')html=login();else if(p==='/account')html=account();else if(p==='/account/orders')html=ordersPage();else if(p==='/tracking')html=(typeof window.tracking==='function'?window.tracking():tracking());else if(p.startsWith('/payment/result/'))html=paymentResult(decodeURIComponent(p.split('/')[3]));else if(p==='/about'||p==='/contact'||p==='/terms'||p==='/privacy')html=(typeof window.contentPage==='function'?window.contentPage(p.slice(1)):contentPage(p.slice(1)));else if(p==='/admin'||p.startsWith('/admin/')){document.body.classList.remove('admin-body');html=admin()}else html=notFound();$('#app').innerHTML=html;bindForms();window.scrollTo(0,0)}
-window.__stage3AdminSection=adminSection;window.__stage3BindForms=bindForms;window.__stage3Render=render;window.processBalePayReceipt=processBalePayReceipt;window.retryBalePayReceipt=retryBalePayReceipt;window.resumeBalePayCheckout=resumeBalePayCheckout;
+window.__stage3AdminSection=adminSection;window.__stage3BindForms=bindForms;window.__stage3Render=render;window.processBluePalReceipt=processBluePalReceipt;window.retryBluePalReceipt=retryBluePalReceipt;window.retryBluePalPayment=retryBluePalPayment;window.resumeBluePalPayment=resumeBluePalPayment;
 
-// اگر فروشگاه داخل بله باز شود، SDK مینی‌اپ را آماده و پرداخت نیمه‌تمام را ادامه می‌دهیم.
-if(typeof window!=='undefined'&&window.ToubaBalePay){
-  ToubaBalePay.ensureSdk(2500).then(app=>{
-    if(!app)return;
-    ToubaBalePay.boot();
-    ToubaBalePay.resumePendingCheckout(orderId=>resumeBalePayCheckout(orderId));
-  });
-}
+// بازگشت از بانک: /api/payment/bluepal/callback مشتری را به همین مسیر /payment/result/<id>
+// هدایت می‌کند و تأیید نهایی سمت سرور با GET /v1/payments/verify/{track_id} انجام شده است.
 if(typeof window!=="undefined"&&!document.querySelector?.('script[src*="stage4.js"]')){render();}

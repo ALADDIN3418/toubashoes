@@ -13,7 +13,7 @@ Migration عملیاتی `202610030001_live_commerce.sql` در مخزن موجو
 - `SUPABASE_URL` — Project URL.
 - `SUPABASE_PUBLISHABLE_KEY` — public/publishable key؛ اگر پروژه فقط کلید legacy را دارد از `SUPABASE_ANON_KEY` استفاده کنید.
 
-این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token، توکن بازوی بله و `BALEPAY_STATE_SECRET` را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
+این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token، کلید API بلو پال و `BLUEPAL_STATE_SECRET` را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
 
 در Supabase → Authentication:
 
@@ -66,16 +66,32 @@ Workflow قبل از apply، `supabase db push --dry-run` اجرا می‌کند
 
 تست‌های repository در این پروژه Supabase را با stub شبیه‌سازی می‌کنند و مدرک اجرای واقعی migration نیستند.
 
-## بله‌پی (پرداخت کیف‌پول بله)
+## بلو پال (BluePal · درگاه پرداخت بانکی)
 
-`supabase/migrations/202610040001_balepay_provider.sql` درگاه را به `provider = 'balepay'` تغییر می‌دهد و اگر حتی یک ردیف پرداخت از درگاه قبلی باقی مانده باشد، عمداً fail-closed خطا می‌دهد؛ پیش از اجرا آن ردیف‌ها را مغایره‌گیری کنید. این migration توکن یا کلیدی ذخیره نمی‌کند و `payments.authority` را برای شناسهٔ صورتحساب بله (`blp_<32hex>`) و `provider_reference` را برای شناسهٔ تراکنش کیف‌پول به‌کار می‌گیرد.
+`supabase/migrations/202610050001_bluepal_provider.sql` ستون `payments.provider` را روی مقدار
+تنها `bluepal` قفل می‌کند (و default را حذف می‌کند تا هیچ ردیف mock ساخته نشود)، سه RPC زیر را
+می‌سازد و RPCهای درگاه‌های قبلی را `drop` می‌کند:
 
-تنظیم Sandbox فقط در Environment Variables سرور یا `.env` محلیِ خارج از Git:
+- `attach_bluepal_payment(p_order_id, p_track_id, p_payment_url, p_callback_token, p_gateway_amount, p_last_code)` — فقط `service_role`؛ کد پیگیری و نشانی صفحهٔ بانک را روی ردیف `pending` می‌گذارد و تلاش دوباره پس از پرداخت ناموفق مجاز است (تاریخچه در `callback_payload.attempts`).
+- `settle_bluepal_payment(p_order_id, p_authority, p_outcome, p_amount_toman, p_reference_id, p_provider_code, p_callback_payload)` — تنها راه `verified` شدن؛ مبلغ را با `orders.total_toman` دوباره مقایسه می‌کند، تسویه یک‌مصرف است (بازپخش یک `verified` فقط `idempotent:true` می‌دهد) و در صورت موفقیت موجودی سبد را کم و سفارش را `paid` می‌کند.
+- `expire_stale_bluepal_checkouts(p_grace_minutes default 180)` — چک‌اوت‌های رهاشده را بعد از مهلت، با بازگرداندن رزرو موجودی و ظرفیت کوپن می‌بندد.
 
-- `BALEPAY_MODE=sandbox`
-- `BALEPAY_BOT_TOKEN` — توکن بازو از `@botfather`.
-- `BALEPAY_PROVIDER_TOKEN` — `WALLET-TEST-1111111111111111` برای آزمون.
-- `BALEPAY_STATE_SECRET` — راز تصادفی حداقل ۳۲ بایتی.
-- `BALEPAY_BOT_USERNAME` — برای پیوند مینی‌اپ.
+همراه آن: `create_order_with_payment` (کف مبلغ ۱۰۰۰ تومان، رزرو اتمیک موجودی، `provider = 'bluepal'`)،
+`cancel_pending_order` (تا ۱۰ دقیقه پس از ساخت `track_id` با `gateway_verification_pending` رد می‌شود)
+و `admin_update_order_status` که `PAID` را فقط برای پرداخت `verified` می‌پذیرد.
 
-تست‌های `npm test` پاسخ‌های `tapi.bale.ai` را stub می‌کنند؛ برای go-live باید بازکردن `openInvoice` با توکن آزمایشی، پاسخ pre-checkout زیر ۱۰ ثانیه، تکرار همان آپدیت، لغو سفارش، انقضای `expire_stale_balepay_checkouts` و تطبیق `inquireTransaction` با مبلغ ریالی به‌صورت end-to-end آزمایش شوند. دریافت وجه واقعی با `BALEPAY_ENABLE_LIVE_PAYMENTS` قفل است و تا ارزیابی نهایی DB، امنیت، موجودی و پرداخت باز نمی‌شود.
+ردیف‌های `pending` درگاه قبلی هنگام اجرای migration بسته می‌شوند (رزروها آزاد، `provider_code =
+'GATEWAY_RETIRED'`)؛ اگر ردیف تأییدشده‌ای از درگاه قبلی وجود داشته باشد migration عمداً متوقف
+می‌شود تا قبل از افزودن قفل `provider`، تکلیفش دستی روشن شود.
+
+متغیرهای لازم سمت سرور (هیچ‌کدام در SQL نیستند):
+
+- `BLUEPAL_MODE=sandbox` (آزمون) یا `production`
+- `BLUEPAL_API_KEY` — `sk_test_…` / `sk_live_…`
+- `BLUEPAL_MERCHANT_ID` — شناسه پذیرنده
+- `BLUEPAL_STATE_SECRET` — راز تصادفی ≥۳۲ بایت
+- `BLUEPAL_ENABLE_LIVE_PAYMENTS=true` — قفل دریافت وجه واقعی
+
+تست‌های `npm test` پاسخ‌های `www.bluepal.ir` را stub می‌کنند؛ برای go-live باید اجرای migration،
+پرداخت موفق با کارت آزمایشی `5022 2910 0000 0008` و سپس یک تراکنش واقعی کوچک روی دامنهٔ
+production انجام و با پنل بلو پال مقابله شود. راهنمای کامل: [`BLUEPAL_OPERATIONS.md`](../BLUEPAL_OPERATIONS.md).

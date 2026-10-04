@@ -4,9 +4,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
-    "api/payment/balepay/request.js": { "maxDuration": 30 },
-    "api/payment/balepay/webhook.js": { "maxDuration": 30 },
-    "api/payment/balepay/receipt.js": { "maxDuration": 30 },
+    "api/payment/bluepal/request.js": { "maxDuration": 30 },
+    "api/payment/bluepal/receipt.js": { "maxDuration": 30 },
+    "api/payment/bluepal/callback.js": { "maxDuration": 30 },
+    "api/payment/bluepal/notify.js": { "maxDuration": 30 },
     "api/ai/product-photo.js": { "maxDuration": 120 },
     "api/ai/studio/generate.js": { "maxDuration": 120 },
     "api/ai/describe.js": { "maxDuration": 60 }

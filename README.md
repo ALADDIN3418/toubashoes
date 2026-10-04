@@ -24,7 +24,7 @@
 
 ### Migrationهای پایگاه داده
 
-Migrationهای نسخه‌بندی‌شده در `supabase/migrations/` هستند. Migration عملیاتی `202610030001_live_commerce.sql`، پس از نسخه‌های قبلی، RPCهای سلامت schema، سبد خرید و ثبت اتمیک سفارش/رزرو موجودی را فراهم می‌کند و نمونه‌های کاتالوگ/کوپن/بنر شناخته‌شده را پاک می‌کند. Migration `202610040001_balepay_provider.sql` درگاه پرداخت را به بله‌پی تغییر می‌دهد (`provider = 'balepay'`، `attach_balepay_invoice`، `settle_balepay_payment`، `expire_stale_balepay_checkouts`) و تا اجرای آن، payout ها fail-closed می‌مانند. **وجود migration در این مخزن به‌معنی اجرای آن روی پروژهٔ واقعی نیست.** تا اجرای آن و تأیید نسخهٔ `202610030001` توسط برنامه، storefront، پنل و checkout fail-closed می‌مانند.
+Migrationهای نسخه‌بندی‌شده در `supabase/migrations/` هستند. Migration عملیاتی `202610030001_live_commerce.sql`، پس از نسخه‌های قبلی، RPCهای سلامت schema، سبد خرید و ثبت اتمیک سفارش/رزرو موجودی را فراهم می‌کند و نمونه‌های کاتالوگ/کوپن/بنر شناخته‌شده را پاک می‌کند. Migration `202610050001_bluepal_provider.sql` درگاه پرداخت را به **بلو پال** تغییر می‌دهد (`provider = 'bluepal'`، `attach_bluepal_payment`، `settle_bluepal_payment`، `expire_stale_bluepal_checkouts`؛ ضمناً RPCهای درگاه‌های بازنشسته را `drop` می‌کند) و تا اجرای آن، payout ها fail-closed می‌مانند. **وجود migration در این مخزن به‌معنی اجرای آن روی پروژهٔ واقعی نیست.** تا اجرای آن و تأیید نسخهٔ `202610030001` توسط برنامه، storefront، پنل و checkout fail-closed می‌مانند.
 
 GitHub Actions برای migrationهای pushشده به `main` اجرا می‌شود؛ اجرای دستی نیازمند تأیید ورودی `confirm` است. برای آن workflow باید GitHub Actions Secrets زیر تنظیم باشند: `SUPABASE_ACCESS_TOKEN`، `SUPABASE_PROJECT_REF` و `SUPABASE_DB_PASSWORD`. گام dry-run را بررسی و نتیجهٔ اجرای migration را در Actions تأیید کنید. در صورت ایجاد schema قبلی، پیش از هرگونه اجرای مجدد از وضعیت و migration history پروژه پشتیبان بگیرید.
 
@@ -38,26 +38,35 @@ GitHub Actions برای migrationهای pushشده به `main` اجرا می‌�
 - فایل‌های تصویر انتخابی/تولیدشده به bucket عمومی `product-images` در Supabase Storage می‌روند و اطلاعات رسانه در جدول DB نگهداری می‌شود. آدرس بیرونی فقط HTTPS پذیرفته می‌شود.
 - پنل مدیریت در موبایل ناوبری کشویی و جدول‌های افقیِ محدودشده دارد؛ storefront نوار پایین و نوار خرید موبایل را جداگانه ارائه می‌کند.
 
-## Checkout و بله‌پی (پرداخت کیف‌پول بله)
+## Checkout و بلو پال (BluePal · درگاه بانکی)
 
-درگاه زرین‌پال حذف و با **بله‌پی** (پرداخت کیف‌پول بله از طریق API بازو) جایگزین شده است. Checkout فقط برای حساب فعال مشتری است؛ سفارش به‌صورت تراکنشی در Supabase ساخته می‌شود و سپس `/api/payment/balepay/request` با JWT مشتری، مبلغ authoritative را از همان رکورد سفارش می‌خواند و با متد رسمی `createInvoiceLink` صورتحساب کیف‌پول را می‌سازد. کلاینت صورتحساب را با `Bale.WebApp.openInvoice()` باز می‌کند؛ نتیجهٔ کلاینت هیچ‌وقت مبنای تأیید نیست و سفارش فقط پس از استعلام `inquireTransaction` و رویداد `successful_payment` به `paid` می‌رسد. وب‌هوک `/api/payment/balepay/webhook` آپدیت‌های `pre_checkout_query` و `successful_payment` را idempotent پردازش می‌کند و `/api/payment/balepay/receipt` وضعیت پایدار را به صفحهٔ نتیجه می‌دهد. شماره کارت، CVV و رمز پویا هرگز از سایت عبور نمی‌کند.
+درگاه **بله‌پی** (و پیش‌تر زرین‌پال) به‌طور کامل حذف شده و **بلو پال** جای آن را گرفته است: درگاه
+دو‌مرحله‌ایِ redirect بانکی. Checkout فقط برای حساب فعال مشتری است؛ سفارش به‌صورت تراکنشی در
+Supabase ساخته می‌شود، سپس `/api/payment/bluepal/request` مبلغ authoritative را از همان رکورد
+سفارش می‌خواند و با `POST /v1/payments/request` (مبلغ: عدد صحیح **تومان**) کد پیگیری
+(`track_id`) و `payment_url` را می‌گیرد. مرورگر کامل به `payment_url` هدایت می‌شود؛ نتیجهٔ
+بازگشت مشتری هیچ‌وقت مبنای تأیید نیست و سفارش فقط پس از `GET /v1/payments/verify/{track_id}`
+روی سرور (کد `100` یا `201`) به `paid` می‌رسد. مسیر `/api/payment/bluepal/callback` همان
+verify را اجرا و مشتری را به `/payment/result/<uuid>` می‌فرستد، `/api/payment/bluepal/receipt`
+وضعیت و رسید امضاشده را به صفحهٔ نتیجه می‌دهد، و `/api/payment/bluepal/notify` (اعلان اختیاری
+پنل) تنها یک سرنخ است و هرگز بدون verify چیزی ثبت نمی‌کند. شماره کارت، CVV و رمز پویا هرگز از
+سایت عبور نمی‌کند و هیچ SDK بیرونی در صفحه بارگذاری نمی‌شود.
 
 تنظیم‌ها فقط سمت سرور (Vercel Environment Variables یا `.env` خارج از Git):
 
-- `BALEPAY_MODE=sandbox` برای آزمون با توکن آزمایشی کیف‌پول `WALLET-TEST-1111111111111111`.
-- `BALEPAY_BOT_TOKEN`: توکن بازو از `@botfather`؛ هرگز در مرورگر یا Git قرار ندهید.
-- `BALEPAY_PROVIDER_TOKEN`: توکن پرداخت کیف‌پول همان بازو.
-- `BALEPAY_STATE_SECRET`: راز تصادفی حداقل ۳۲ بایتی برای امضای `payload` صورتحساب و رسید.
-- `BALEPAY_BOT_USERNAME`: نام کاربری بازو برای پیوند مینی‌اپ `ble.ir/<username>`.
-- `BALEPAY_WEBHOOK_SECRET` و `BALEPAY_REQUIRE_WEBHOOK_SECRET`: هدر `x-balepay-secret` وب‌هوک (اختیاری، برای Production توصیه می‌شود).
-- `BALEPAY_ENABLE_LIVE_PAYMENTS=true`: تنها کلیدی که در `production` دریافت وجه واقعی را باز می‌کند؛ تنظیم‌کردن `BALEPAY_MODE` به‌تنهایی وجه را مجاز نمی‌کند.
+- `BLUEPAL_MODE=sandbox` برای آزمون با کلید `sk_test_…` (کارت‌های آزمایشی در راهنما).
+- `BLUEPAL_API_KEY`: کلید API پنل بلو پال؛ هرگز در مرورگر یا Git قرار ندهید.
+- `BLUEPAL_MERCHANT_ID`: شناسه پذیرنده (`merchant_id`) از همان پنل.
+- `BLUEPAL_STATE_SECRET`: راز تصادفی حداقل ۳۲ بایتی برای امضای رسید و `sig` آدرس بازگشت.
+- `BLUEPAL_WEBHOOK_SECRET` و `BLUEPAL_REQUIRE_WEBHOOK_SIGNATURE=true`: هدر امضای اعلان (اختیاری؛ مستندات عمومی بلو پال قالب امضا را اعلام نکرده است).
+- `BLUEPAL_ENABLE_LIVE_PAYMENTS=true`: تنها کلیدی که در `production` دریافت وجه واقعی را باز می‌کند؛ تنظیم‌کردن `BLUEPAL_MODE` به‌تنهایی وجه را مجاز نمی‌کند.
 
-مستند رسمی: [بخش پرداخت docs.bale.ai](https://docs.bale.ai/#%D9%BE%D8%B1%D8%AF%D8%A7%D8%AE%D8%AA) و [مستندات مینی‌اپ](https://docs.bale.ai/miniapp). راهنمای گام‌به‌گام راه‌اندازی و آزمون: [`BALEPAY_OPERATIONS.md`](BALEPAY_OPERATIONS.md).
+مستند رسمی: [مستندات توسعه‌دهندهٔ بلو پال](https://www.bluepal.ir/developers). راهنمای گام‌به‌گام راه‌اندازی، آزمون و عیب‌یابی: [`BLUEPAL_OPERATIONS.md`](BLUEPAL_OPERATIONS.md).
 
 ### متغیرهای محیطی Vercel
 
-الگوی کامل همهٔ کلیدهایی که کد می‌خواند در `vercel.env.example` است (بله‌پی، Supabase، `GEMINI_API_KEY`، `PORT`).
-مقدار رازها در Git خالی نگه داشته می‌شود و آزمون `node tests/balepay.js` مطمئن می‌شود هیچ کلید مصرفی از الگوها جا نمانده باشد.
+الگوی کامل همهٔ کلیدهایی که کد می‌خواند در `vercel.env.example` است (۱۳ کلید `BLUEPAL_*`، Supabase، `GEMINI_API_KEY`، `PORT`).
+مقدار رازها در Git خالی نگه داشته می‌شود و آزمون `node tests/bluepal.js` مطمئن می‌شود هیچ کلید مصرفی از الگوها جا نمانده باشد.
 
 ```bash
 cp vercel.env.example vercel.env.local      # فقط مقدارهای خالی را پر کنید (این فایل در Git نیست)
@@ -68,8 +77,8 @@ npm run vercel:env:list -- --project <name>                             # تأی
 
 `scripts/vercel-env.js` از REST API ورسل (`POST /v10/projects/<id>/env?upsert=true`) استفاده می‌کند؛
 متغیرهای موجود را به‌روزرسانی می‌کند، هرگز مقدارها را لاگ نمی‌کند، و با `--secret-type=sensitive`
-رازها را write-only می‌سازد. پس از اعمال، یک **Redeploy** لازم است. راه دستی (کپی هر ۱۵ ردیف در
-داشبورد) در بخش ۳ `BALEPAY_OPERATIONS.md` آمده است.
+رازها را write-only می‌سازد. پس از اعمال، یک **Redeploy** لازم است. راه دستی (کپی ۱۹ ردیف در
+داشبورد) در بخش ۳ `BLUEPAL_OPERATIONS.md` آمده است.
 
 ## ابزارهای هوش مصنوعی
 
@@ -79,6 +88,6 @@ npm run vercel:env:list -- --project <name>                             # تأی
 
 ## تست و وضعیت انتشار
 
-`npm test` شامل تست‌های آفلاین repository Supabase، Puter AI Studio، API، Auth، بله‌پی (payload صورتحساب، pre-checkout، settle با inquireTransaction) و fail-closed storefront است. این تست‌ها از stub استفاده می‌کنند و **جایگزین اجرای migration، مرورگر واقعی یا تراکنش Sandbox پذیرنده نیستند**.
+`npm test` شامل تست‌های آفلاین repository Supabase، Puter AI Studio، API، Auth، بلو پال (قرارداد request/verify، نگاشت کدها، تسویه یک‌مصرف، رسید امضاشده، مهاجرت SQL و سیم‌کشی storefront) و fail-closed storefront است. این تست‌ها از stub استفاده می‌کنند و **جایگزین اجرای migration، مرورگر واقعی یا تراکنش Sandbox پذیرنده نیستند**.
 
 وضعیت فعلی: migration عملیاتی روی Supabase واقعی از این محیط اجرا/تأیید نشده؛ ورود و ثبت‌نام روی mailbox واقعی، Storage واقعی، مرورگر موبایل و پرداخت Sandbox واقعی نیز بررسی نشده‌اند. تا اتمام این مراحل و بازبینی اطلاعات فروشنده/قیمت/ارسال/موجودی، پروژه را Production-ready یا مجاز برای سفارش/پرداخت واقعی تلقی نکنید. جزئیات در [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).

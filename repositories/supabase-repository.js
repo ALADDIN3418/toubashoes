@@ -237,7 +237,7 @@
     return {
       id:row.id,number:row.number,userId:row.user_id,customer:a.recipient||'',phone:a.phone||'',province:a.province||'',city:a.city||'',address:a.address||'',postal:a.postal_code||'',note:a.note||'',
       shippingMethod:row.shipping_method,itemsList:lines,items:lines.reduce((n,x)=>n+x.quantity,0),subtotal:Number(row.subtotal_toman),shipping:Number(row.shipping_toman),discount:Number(row.discount_toman),total:Number(row.total_toman),
-      couponCode:row.coupon_code_snapshot||'',status,paymentStatus,paymentOutcome:payment?.callback_payload?.outcome||'',paymentMethod:'balepay',paymentRef:payment?.status==='verified'?(payment.provider_reference||''):'',authority:payment?.authority||'',paymentId:payment?.id||'',
+      couponCode:row.coupon_code_snapshot||'',status,paymentStatus,paymentOutcome:payment?.callback_payload?.outcome||'',paymentMethod:'bluepal',paymentRef:payment?.status==='verified'?(payment.provider_reference||''):'',authority:payment?.authority||'',paymentId:payment?.id||'',
       trackingCode:row.tracking_code||'',createdAt:row.created_at,date:dateLabel(row.created_at),timeline:Array.isArray(row.status_history)?row.status_history:[],inventoryDeducted:true,inventoryRestocked:payment?.status==='failed'
     };
   }
