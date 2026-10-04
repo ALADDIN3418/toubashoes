@@ -54,6 +54,23 @@ GitHub Actions برای migrationهای pushشده به `main` اجرا می‌�
 
 مستند رسمی: [بخش پرداخت docs.bale.ai](https://docs.bale.ai/#%D9%BE%D8%B1%D8%AF%D8%A7%D8%AE%D8%AA) و [مستندات مینی‌اپ](https://docs.bale.ai/miniapp). راهنمای گام‌به‌گام راه‌اندازی و آزمون: [`BALEPAY_OPERATIONS.md`](BALEPAY_OPERATIONS.md).
 
+### متغیرهای محیطی Vercel
+
+الگوی کامل همهٔ کلیدهایی که کد می‌خواند در `vercel.env.example` است (بله‌پی، Supabase، `GEMINI_API_KEY`، `PORT`).
+مقدار رازها در Git خالی نگه داشته می‌شود و آزمون `node tests/balepay.js` مطمئن می‌شود هیچ کلید مصرفی از الگوها جا نمانده باشد.
+
+```bash
+cp vercel.env.example vercel.env.local      # فقط مقدارهای خالی را پر کنید (این فایل در Git نیست)
+VERCEL_TOKEN=vcp_xxx npm run vercel:env -- --project <name> --dry-run   # پیش‌نمایش، بدون نوشتن
+VERCEL_TOKEN=vcp_xxx npm run vercel:env -- --project <name>             # ساخت/به‌روزرسانی با upsert
+npm run vercel:env:list -- --project <name>                             # تأیید؛ مقدار رازها چاپ نمی‌شود
+```
+
+`scripts/vercel-env.js` از REST API ورسل (`POST /v10/projects/<id>/env?upsert=true`) استفاده می‌کند؛
+متغیرهای موجود را به‌روزرسانی می‌کند، هرگز مقدارها را لاگ نمی‌کند، و با `--secret-type=sensitive`
+رازها را write-only می‌سازد. پس از اعمال، یک **Redeploy** لازم است. راه دستی (کپی هر ۱۵ ردیف در
+داشبورد) در بخش ۳ `BALEPAY_OPERATIONS.md` آمده است.
+
 ## ابزارهای هوش مصنوعی
 
 - **Product AI Studio** تصویر مرجع را در مرورگر با Puter.js و مدل‌های مجاز در دسترس حساب کاربر ویرایش می‌کند؛ هزینه/سهمیه به Puter و مدل انتخابی وابسته است و رایگان/نامحدود تضمین نمی‌شود. مدل Gemini برای استودیوی تصویر ارائه نمی‌شود؛ مدل‌های Cloudflare (در صورت نمایش) فقط از طریق Puter فراخوانی می‌شوند. تصویر خروجی از Supabase Storage و repository محصول ثبت می‌شود.

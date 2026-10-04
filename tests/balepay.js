@@ -313,7 +313,48 @@ function makeFetch(state,baleHandlers){
     for(const key of envKeys){if(savedEnv[key]===undefined)delete process.env[key];else process.env[key]=savedEnv[key]}
     if(savedFetch===undefined)delete global.fetch;else global.fetch=savedFetch;
   }
-  console.log('PASS: Bale Pay createInvoiceLink payload, pre-checkout answer, inquireTransaction-only settlement, webhook/receipt handlers, sandbox guards and production gate');
+  /* ── ۹) الگوهای متغیر محیطی هر کلیدی را که کد می‌خواند مستند می‌کنند ─────── */
+{
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const rootDir = path.join(__dirname, '..');
+  const scanned = [];
+  for (const dir of ['lib', 'services', 'api', 'scripts']) {
+    for (const entry of fs.readdirSync(path.join(rootDir, dir), { recursive: true })) {
+      const relative = String(entry);
+      if (relative.endsWith('.js')) scanned.push(path.join(rootDir, dir, relative));
+    }
+  }
+  scanned.push(path.join(rootDir, 'local-server.js'));
+  const used = new Set();
+  for (const file of scanned) {
+    for (const match of fs.readFileSync(file, 'utf8').matchAll(/\b(?:process\.)?env\.([A-Z][A-Z0-9_]*)\b/g)) used.add(match[1]);
+  }
+  // متغیرهای پلتفرم/ابزاری را کاربر در Vercel تعریف نمی‌کند
+  const platformKeys = new Set(['VERCEL', 'NODE_ENV', 'VERCEL_TOKEN', 'VERCEL_API_TOKEN', 'VERCEL_API_BASE', 'VERCEL_PROJECT']);
+  const required = [...used].filter(key => !platformKeys.has(key)).sort();
+  const template = file => {
+    const text = fs.readFileSync(path.join(rootDir, file), 'utf8');
+    return new Map(text.split(/\r?\n/)
+      .map(line => /^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/.exec(line))
+      .filter(Boolean)
+      .map(match => [match[1], match[2].trim()]));
+  };
+  for (const file of ['.env.example', 'vercel.env.example']) {
+    const keys = template(file);
+    assert.deepEqual(required.filter(key => !keys.has(key)), [], `${file} باید همهٔ متغیرهای مصرفی کد را داشته باشد؛ کم دارد: ${required.filter(key => !keys.has(key)).join(', ')}`);
+    // این کلیدها راز هستند: الگو باید آن‌ها را توضیح دهد ولی هرگز مقدار واقعی نباید داشته باشد
+    for (const key of ['BALEPAY_BOT_TOKEN', 'BALEPAY_PROVIDER_TOKEN', 'BALEPAY_STATE_SECRET', 'BALEPAY_WEBHOOK_SECRET', 'SUPABASE_SERVICE_ROLE_KEY', 'GEMINI_API_KEY']) {
+      if (keys.has(key)) assert.equal(keys.get(key), '', `${file}:${key} نباید مقدار واقعی در Git داشته باشد`);
+    }
+  }
+  const gatewayKeys = map => [...map.keys()].filter(key => /^(BALEPAY|SUPABASE)_/.test(key)).sort();
+  assert.deepEqual(gatewayKeys(template('vercel.env.example')), gatewayKeys(template('.env.example')), 'فهرست کلیدهای بله‌پی/Supabase در .env.example و vercel.env.example باید یکسان باشد');
+  assert.ok(required.includes('BALEPAY_STATE_SECRET') && required.includes('BALEPAY_PROVIDER_TOKEN') && required.includes('SUPABASE_SERVICE_ROLE_KEY'), 'پویش کلیدها باید رازهای درگاه و Supabase را ببیند');
+}
+
+console.log('PASS: Bale Pay createInvoiceLink payload, pre-checkout answer, inquireTransaction-only settlement, webhook/receipt handlers, sandbox guards, production gate and env templates');
+
 })().catch(error=>{console.error(error);process.exit(1)});
 
 function productionMiniApp(){

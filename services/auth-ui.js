@@ -760,6 +760,9 @@
               <li><code>BALEPAY_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای payload صورتحساب و رسید.</li>
               <li><code>BALEPAY_BOT_USERNAME</code> — نام کاربری بازو برای پیوند مینی‌اپ <code>ble.ir/&lt;username&gt;</code>.</li>
               <li><code>BALEPAY_MODE</code> — ابتدا <code>sandbox</code>؛ سپس <code>production</code> به‌همراه <code>BALEPAY_ENABLE_LIVE_PAYMENTS=true</code>.</li>
+              <li><code>BALEPAY_WEBHOOK_SECRET</code> و <code>BALEPAY_REQUIRE_WEBHOOK_SECRET=true</code> — هدر <code>x-balepay-secret</code> که هنگام ثبت Webhook برگردانده می‌شود.</li>
+              <li><code>SUPABASE_URL</code> و <code>SUPABASE_SERVICE_ROLE_KEY</code> — بدون آن‌ها پرداخت به سفارش متصل نمی‌شود؛ <code>SUPABASE_PUBLISHABLE_KEY</code> برای مرورگر است.</li>
+              <li>فهرست کامل در <code>vercel.env.example</code> است؛ با <code>npm run vercel:env -- --project &lt;name&gt;</code> یک‌جا روی Vercel اعمال می‌شود (بدون چاپ مقدارها).</li>
             </ul>
             <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. سفارش و موجودی از Supabase خوانده می‌شوند و دریافت وجه واقعی تا تنظیم <code>BALEPAY_ENABLE_LIVE_PAYMENTS=true</code> و آزمون end-to-end کیف‌پول بله عمداً قفل است. تا ثبت Webhook بازو، پرداخت‌های موفق به‌صورت خودکار به سفارش متصل نمی‌شوند.</p>
           </div>

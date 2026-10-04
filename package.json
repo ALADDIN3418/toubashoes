@@ -10,6 +10,8 @@
     "dev": "node local-server.js",
     "start": "node local-server.js",
     "balepay:webhook": "node scripts/balepay-cli.js webhook:status",
+    "vercel:env": "node scripts/vercel-env.js",
+    "vercel:env:list": "node scripts/vercel-env.js --list",
     "start:comfy": "uvicorn comfy-automation-api.app.main:app --host 0.0.0.0 --port 8000",
     "build": "node scripts/check.js && node scripts/build-vercel.js",
     "lint": "node scripts/check.js",

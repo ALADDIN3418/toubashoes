@@ -75,23 +75,60 @@ select proname from pg_proc where proname in ('attach_balepay_invoice','settle_b
 
 ---
 
-## ۳) متغیرهای محیطی
+## ۳) متغیرهای محیطی (همه‌چیز در یک جا)
 
-در Vercel → Settings → Environment Variables (و به‌طور موازی در `.env` محلی؛ `.env` در Git نیست):
+فهرست کامل، آمادهٔ کپی/چسباندن: **`vercel.env.example`** (الگوی Git) و
+**`vercel.env.local`** (همان فایل با مقدارهای شما؛ به‌دلیل `*.env.local` در `.gitignore` هرگز commit نمی‌شود).
+آزمون `node tests/balepay.js` نگهبانی می‌کند که هر کلیدی که کد می‌خواند در این دو الگو باشد؛ پس اگر کلید تازه‌ای اضافه کردید و آن را مستند نکردید، CI قرمز می‌شود.
 
-| متغیر | مقدار | توضیح |
-|---|---|---|
-| `BALEPAY_MODE` | `sandbox` → سپس `production` | حالت جاری |
-| `BALEPAY_BOT_TOKEN` | توکن بازو | فقط سمت سرور؛ هرگز به مرورگر داده نشود |
-| `BALEPAY_PROVIDER_TOKEN` | `WALLET-TEST-1111111111111111` → توکن واقعی | توکن پرداخت کیف‌پول |
-| `BALEPAY_STATE_SECRET` | یک رشتهٔ تصادفی ≥۳۲ کاراکتر؛ مثلاً خروجی `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` | امضای payload صورتحساب و رسید |
-| `BALEPAY_BOT_USERNAME` | `touba_shoes_bot` | ساخت پیوند مینی‌اپ |
-| `BALEPAY_WEBHOOK_SECRET` | یک مقدار تصادفی دیگر ≥۱۶ کاراکتر | در صورت تنظیم، در `setWebhook` ارسال و با هدر `x-balepay-secret` بررسی می‌شود |
-| `BALEPAY_REQUIRE_WEBHOOK_SECRET` | `true`/`false` | اگر `true` باشد، وب‌هوک بدون هدر درست پاسخ ۴۰۱ می‌گیرد |
-| `BALEPAY_ENABLE_LIVE_PAYMENTS` | فقط در production و پس از تأیید آزمون‌ها: `true` | کلید بازکردن دریافت وجه واقعی |
-| `BALEPAY_API_BASE` | معمولاً لازم نیست | پیش‌فرض `https://tapi.bale.ai` |
+| متغیر | نوع در Vercel | مقدار | توضیح |
+|---|---|---|---|
+| `BALEPAY_MODE` | Config | `sandbox` → سپس `production` | حالت جاری |
+| `BALEPAY_BOT_TOKEN` | **Secret** | توکن بازو از @botfather | فقط سمت سرور؛ هرگز به مرورگر داده نشود |
+| `BALEPAY_PROVIDER_TOKEN` | **Secret** | `WALLET-TEST-1111111111111111` → توکن واقعی | توکن پرداخت کیف‌پول همان بازو |
+| `BALEPAY_STATE_SECRET` | **Secret** | تصادفی ≥۳۲ کاراکتر | امضای payload صورتحساب و رسید |
+| `BALEPAY_BOT_USERNAME` | Config | `touba_shoes_bot` | ساخت پیوند مینی‌اپ `https://ble.ir/<username>` |
+| `BALEPAY_PUBLIC_ORIGIN` | Config | `https://<دامنهٔ فروشگاه>` | فقط برای ساخت خودکار آدرس وب‌هوک در CLI |
+| `BALEPAY_WEBHOOK_SECRET` | **Secret** | تصادفی ≥۱۶ کاراکتر | بررسی هدر `x-balepay-secret` در وب‌هوک |
+| `BALEPAY_REQUIRE_WEBHOOK_SECRET` | Config | `false` تا `true` | اگر `true` باشد، وب‌هوکِ بدون هدر درست ۴۰۱ می‌گیرد |
+| `BALEPAY_ENABLE_LIVE_PAYMENTS` | Config | تا تأیید آزمون‌ها `false` | کلید بازکردن دریافت وجه واقعی |
+| `BALEPAY_API_BASE` | Config | خالی (پیش‌فرض `https://tapi.bale.ai`) | فقط برای عیب‌یابی |
+| `SUPABASE_URL` | Config | `https://<ref>.supabase.co` | REST و احراز هویت |
+| `SUPABASE_PUBLISHABLE_KEY` | Config | public/publishable key | در `api/supabase-config.js` به مرورگر داده می‌شود |
+| `SUPABASE_ANON_KEY` | Config | در پروژه‌های قدیمی | نام دیگر کلید عمومی |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Secret** | service_role | نوشتن سفارش/پرداخت؛ فقط سمت سرور |
+| `GEMINI_API_KEY` | **Secret** | در صورت استفاده از دستیار توضیحات | اختیاری |
 
-پس از هر تغییر، حتماً **Redeploy** کنید. هیچ‌کدام از این مقادیر در API عمومی یا پنل ادمین نمایش داده نمی‌شوند (فقط `providerTokenKind` و وضعیت پیکربندی).
+`BALEPAY_STATE_SECRET` را این‌طور بسازید و در هر محیط (Vercel و `.env` محلی) یکسان بگذارید تا رسیدهای صادرشده بازنشانی نشوند:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+### ۳.۱) اعمال روی Vercel با یک دستور
+
+```bash
+cp vercel.env.example vercel.env.local      # مقدارهای خالی را پر کنید
+npm run vercel:env -- --project <نام-پروژه> --dry-run   # پیش‌نمایش؛ چیزی نوشته نمی‌شود
+VERCEL_TOKEN=vcp_xxx npm run vercel:env -- --project <نام-پروژه>
+npm run vercel:env:list -- --project <نام-پروژه>        # تأیید: فقط نام کلیدها و نوعشان
+```
+
+`scripts/vercel-env.js` از REST API ورسل (`POST /v10/projects/<id>/env?upsert=true`) استفاده می‌کند،
+بنابراین اگر کلیدی از قبل موجود باشد **به‌روزرسانی** می‌شود؛ فقط `production/preview/development` را هدف
+می‌گیرد (با `--targets` عوض می‌شود)؛ و مقدارها را هرگز چاپ یا لاگ نمی‌کند. با `--secret-type=sensitive`
+کلیدهای راز به‌صورت write-only ساخته می‌شوند (بعد از ذخیره قابل خواندن نخواهند بود). برای تیم:
+`--team <team-slug>`. توکن را از Vercel → Account Settings → Tokens بگیرید و آن را در فایل نینویزید.
+
+### ۳.۲) راه دستی (اگر ترجیح می‌دهید)
+
+Vercel → پروژه → Settings → Environment Variables → *Add New*: برای هر ردیف بالا **Key** را کپی کنید،
+مقدار را Paste کنید، نوع را روی **Secret** (برای ردیف‌های bold) یا **Config** بگذارید و هر سه Environment
+(Production/Preview/Development) را تیک بزنید. سپس **Deployments → ⋯ → Redeploy**.
+
+پس از هر تغییر، حتماً **Redeploy** کنید. هیچ‌کدام از این مقادیر در API عمومی یا پنل ادمین نمایش داده
+نمی‌شوند (فقط `providerTokenKind` و وضعیت پیکربندی). با
+`node scripts/vercel-env.js --check --project <name>` می‌توانید مطمئن شوید هیچ کلیدی جا نمانده است.
 
 ---
 
@@ -167,9 +204,23 @@ from public.payments p join public.orders o on o.id = p.order_id
 where p.provider='balepay' and p.status='pending' and p.created_at < now() - interval '15 minutes';
 ```
 
+### ۷.۱) همان تغییرها بدون باز کردن داشبورد
+
+```bash
+sed -i 's/^BALEPAY_MODE=.*/BALEPAY_MODE=production/; s/^BALEPAY_ENABLE_LIVE_PAYMENTS=.*/BALEPAY_ENABLE_LIVE_PAYMENTS=true/' vercel.env.local
+printf 'BALEPAY_PROVIDER_TOKEN=<توکن واقعی کیف‌پول>
+' >> vercel.env.local   # خط تازه بر تکراری اولویت دارد
+VERCEL_TOKEN=vcp_xxx npm run vercel:env -- --project <name>
+node scripts/vercel-env.js --list --project <name>
+```
+
+پیش از `BALEPAY_ENABLE_LIVE_PAYMENTS=true` این سه مورد باید در حالت sandbox تأیید شده باشد (مرحله ۵):
+تراکنش موفق در کیف‌پول بله، `payments.status='verified'` همراه `provider_payment_charge_id`، و
+آزادشدن موجودی در مسیر لغو.
+
 ---
 
-## ۷.۱) نکات دامنه، iframe و هدرهای امنیتی
+## ۷.۲) نکات دامنه، iframe و هدرهای امنیتی
 
 - `vercel.json` هدر `X-Frame-Options: DENY` را روی همهٔ مسیرها اعمال می‌کند. در اپ موبایل بله، مینی‌اپ در Webview باز می‌شود و این هدر مشکلی ایجاد نمی‌کند؛ اما اگر کاربران نسخهٔ **وب بله** مینی‌اپ را داخل `<iframe>` ببینند و صفحه سفید شود، باید همان مسیر را با `frame-ancestors 'self' https://ble.ir` (و حذف/تغییر `X-Frame-Options` برای مسیر `/checkout`) آزاد کنید. این کار سطح محافظت clickjacking را تغییر می‌دهد؛ فقط پس از تأیید نیاز انجامش دهید و `scripts/check.js` را هم به‌روز کنید (تست، وجود هر چهار هدر امنیتی را الزامی می‌کند).
 - صفحهٔ پرداخت داخل خود اپ بله باز می‌شود، پس لازم نیست `tapi.bale.ai` یا `ble.ir` را در CSP اجازه بدهید؛ مینی‌اپ تنها `https://tapi.bale.ai/miniapp.js` را از SDK بارگذاری می‌کند. اگر بعداً Content-Security-Policy اضافه کردید، `script-src 'self' https://tapi.bale.ai` لازم است.
