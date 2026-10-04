@@ -18,7 +18,7 @@ const MODEL = DEFAULT_PIPELINE;
 const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
-const bluepal = require('./lib/bluepal.js');
+const blupal = require('./lib/blupal.js');
 
 function loadLocalEnv() {
   try {
@@ -126,23 +126,23 @@ const server = http.createServer(async (req, res) => {
     return json(res, 410, { error:'مسیرهای ذخیره‌سازی JSON و ورود/سفارش نمایشی غیرفعال شده‌اند؛ از Supabase Auth و RPCهای امن فروشگاه استفاده کنید.' });
   }
 
-  if (pathname === '/api/payment/bluepal/status') return bluepal.status(req, res);
-  if (pathname === '/api/payment/bluepal/callback') return bluepal.callback(req, res);
+  if (pathname === '/api/payment/blupal/status') return blupal.status(req, res);
+  if (pathname === '/api/payment/blupal/callback') return blupal.callback(req, res);
 
-  if (pathname === '/api/payment/bluepal/request' || pathname === '/api/payment/bluepal/receipt') {
-    const handler = pathname.endsWith('/request') ? bluepal.request : bluepal.receipt;
+  if (pathname === '/api/payment/blupal/request' || pathname === '/api/payment/blupal/receipt') {
+    const handler = pathname.endsWith('/request') ? blupal.request : blupal.receipt;
     if (req.method !== 'POST') return handler(req, res);
     try { req.body = await readBody(req, 32 * 1024); }
     catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
     return handler(req, res);
   }
 
-  // سرور بلو پال نتیجهٔ هر تراکنش را به این مسیر ارسال می‌کند؛ بدون Origin و بدون کوکی است.
-  if (pathname === '/api/payment/bluepal/notify') {
-    if (req.method !== 'POST') return bluepal.notify(req, res);
+  // سرور بلوپال نتیجهٔ هر تراکنش را به این مسیر ارسال می‌کند؛ بدون Origin و بدون کوکی است.
+  if (pathname === '/api/payment/blupal/notify') {
+    if (req.method !== 'POST') return blupal.notify(req, res);
     try { req.body = await readBody(req, 64 * 1024); }
     catch (err) { return json(res, Number(err.status) || 400, { ok:false, error:err.message }); }
-    return bluepal.notify(req, res);
+    return blupal.notify(req, res);
   }
 
   if ((pathname === '/api/ai/status' || pathname === '/api/ai/studio/status') && req.method === 'GET') {

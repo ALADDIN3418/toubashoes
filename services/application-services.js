@@ -35,7 +35,7 @@
  class OrderService{constructor(repo){this.repo=repo}list(){return this.repo.list()}get(id){return this.repo.getById(id)}create(input){return this.repo.create(input)}update(id,patch){return this.repo.update(id,patch)}search(query){return this.repo.search(query,['id','number','customer','phone','trackingCode'])}}
   class PaymentService {
     async createIntent(){throw new Error('پرداخت فقط با RPC پایگاه داده و API امن سمت سرور ایجاد می‌شود.');}
-    async attachAuthority(){throw new Error('شناسهٔ پیگیری بلو پال فقط روی سرور و با نقش service ذخیره می‌شود.');}
+    async attachAuthority(){throw new Error('شناسهٔ فاکتور بلوپال فقط روی سرور و با نقش service ذخیره می‌شود.');}
     async failRequest(){throw new Error('نتیجهٔ پرداخت فقط توسط callback امن سمت سرور ثبت می‌شود.');}
     async applyReceipt(){throw new Error('رسید پرداخت از منبع پایدار Supabase خوانده می‌شود؛ مرورگر مجاز به تسویه نیست.');}
   }

@@ -1,0 +1,270 @@
+# بلوپال (BluPal · blupal.top) — راهنمای عملیاتی صفر تا صد
+
+این فایل تنها راهنمای لازم برای اتصال، آزمون و نگهداری درگاه پرداخت فروشگاه است.
+قرارداد دقیقاً از «داکیومنت» پنل بلوپال گرفته شده است؛ هیچ مسیر یا فیلدی اختراع نشده است.
+
+---
+
+## ۰) درگاه چطور کار می‌کند (سه خط)
+
+1. فروشگاه یک **فاکتور** می‌سازد: `POST /v1/invoices/create` با `amount` به **ریال**.
+2. مشتری به `payment_link` بلوپال می‌رود، **کارت مقصد** و **مبلغ دقیق قابل واریز** (`final_amount`) را می‌بیند
+   و از اپلیکیشن بانک خودش کارت‌به‌کارت واریز می‌کند. `final_amount` = `amount` + یک عدد تصادفی ۳ رقمی،
+   تا واریز هر مشتری از بقیه قابل تشخیص باشد. **واریز باید دقیقاً همین عدد باشد.**
+3. سرورِ فروشگاه وضعیت را با `GET /v1/invoices/{invoice_id}` می‌پرسد و **فقط** وقتی `status = PAID` بود
+   سفارش را نهایی می‌کند. وب‌هوک `payment.completed` فقط «زنگِ بیدارباش» است، نه دلیل پرداخت.
+
+نقشهٔ فایل‌ها:
+
+| فایل | نقش |
+|---|---|
+| `lib/blupal.js` | کل منطق درگاه: ساخت فاکتور، استعلام وضعیت، وب‌هوک، رسید امضاشده، گیت‌های پیکربندی |
+| `api/payment/blupal/request.js` | `POST` ساخت فاکتور برای سفارشِ در انتظار پرداخت |
+| `api/payment/blupal/receipt.js` | `POST` پرس‌وجوی وضعیت (صفحهٔ نتیجه از این استفاده می‌کند) |
+| `api/payment/blupal/status.js` | `GET` سلامت/پیکربندی برای پنل مدیر |
+| `api/payment/blupal/callback.js` | `GET` بازگشت مرورگر از صفحهٔ پرداخت (هدایت به `/payment/result/<uuid>`) |
+| `api/payment/blupal/notify.js` | `POST` وب‌هوک بلوپال (جایی که در پنل ثبت می‌کنید) |
+| `services/blupal-pay.js` | پل مرورگر: هیچ رازی ندارد، فقط با سرور خودمان حرف می‌زند |
+| `supabase/migrations/202610050001_blupal_provider.sql` | جدول پرداخت‌ها + سه RPC: `attach_blupal_payment`، `settle_blupal_payment`، `expire_stale_blupal_checkouts` |
+| `scripts/blupal-cli.js` | ابزار عیب‌یابی و آزمون (تنها جایی که `simulate` قابل استفاده است) |
+
+---
+
+## ۱) در پنل بلوپال
+
+1. وارد پنل بلوپال شوید و بخش **مدیریت درگاه** را باز کنید.
+2. **کارت‌ها:** دست‌کم یک کارت مقصد *فعال* تعریف کنید. اگر هیچ کارت فعالی نباشد درگاه خطای
+   `no_active_card` می‌دهد.
+3. **API درگاه:** کلید را ببینید/بسازید. دو نوع دارد:
+   * `blu_test_…` → محیط **آزمایشی (Sandbox)**؛ پول واقعی جابه‌جا نمی‌شود، لازم نیست کارت واقعی وارد کنید،
+     فاکتور حدود ۳۰ دقیقه عمر دارد.
+   * `blu_live_…` → محیط **واقعی**.
+   کلید را هرگز در چت، ایمیل یا Git قرار ندهید. اگر جایی کامل دیده شد (مثلاً در اسکرین‌شات) آن را **بچرخانید** (Regenerate).
+4. **Webhook درگاه** را روی این نشانی بگذارید (بعد از استقرار مرحلهٔ ۴):
+
+   ```
+   https://<دامنهٔ فروشگاه>/api/payment/blupal/notify
+   ```
+
+5. **Callback page** (اختیاری): اگر خواستید مشتری بعد از پرداخت به سایت برگردد، این را بگذارید:
+
+   ```
+   https://<دامنهٔ فروشگاه>/api/payment/blupal/callback
+   ```
+
+   نگذاشتن آن هم چیزی را خراب نمی‌کند: صفحهٔ `/payment/result/<uuid>` فروشگاه خودش وضعیت را از سرور
+   می‌پرسد و تسویه می‌کند. برای همین است که ما مثل بقیهٔ درگاه‌ها به `callback_url` وابسته نیستیم.
+6. در بخش «آخرین Webhook ها» می‌توانید بعد از هر آزمون، پاسخ و کد HTTP سمت ما را ببینید.
+
+> بلوپال امضای مستندشده‌ای برای وب‌هوک تعریف نکرده است؛ به همین دلیل کد ما به بدنهٔ وب‌هوک اعتماد نمی‌کند
+> و هر بار وضعیت را از خودِ درگاه استعلام می‌کند. هیچ «راز وب‌هوک» در تنظیمات سرور وجود ندارد و لازم نیست.
+
+---
+
+## ۲) متغیرهای محیطی
+
+الگوها: `vercel.env.example` (برای Vercel) و `.env.example` (برای `local-server.js`).
+فقط این کلیدها لازم است:
+
+| کلید | الزام | پیش‌فرض | توضیح |
+|---|---|---|---|
+| `BLUPAL_API_KEY` | بله | — | کلید پنل؛ `blu_test_` فقط با `sandbox` و `blu_live_` فقط با `production` هم‌خوانی دارد |
+| `BLUPAL_MODE` | بله | `sandbox` | `sandbox` یا `production` |
+| `BLUPAL_STATE_SECRET` | بله | — | رشتهٔ تصادفی ≥۳۲ بایت؛ امضای رسید وضعیت پرداخت |
+| `BLUPAL_API_BASE` | نه | `https://blupal.top/api` | فقط اگر درگاه نشانی دیگری گرفت |
+| `BLUPAL_CARD_NUMBER` | نه | خالی | کارت مقصد ۱۶ رقمی؛ خالی = کارت فعال پیش‌فرض پنل (در sandbox نادیده گرفته می‌شود) |
+| `BLUPAL_ALLOWED_PAY_HOSTS` | نه | میزبان `BLUPAL_API_BASE` | میزبان‌های مجاز صفحهٔ پرداخت (کاما جدا) |
+| `BLUPAL_SETTLE_GRACE_MINUTES` | نه | `60` | دقیقه؛ پس از آن، فاکتورِ پرداخت‌نشده رزرو موجودی را آزاد می‌کند (کف ۱۵) |
+| `BLUPAL_ENABLE_LIVE_PAYMENTS` | نه | `false` | تا `true` نشود، در `production` هیچ فاکتور واقعی ساخته نمی‌شود |
+
+تولید رمز امضا:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+### اعمال روی Vercel
+
+```bash
+cp vercel.env.example vercel.env.local     # سپس مقدارها را در vercel.env.local پر کنید
+VERCEL_TOKEN=<توکن> npm run vercel:env -- --project <نام‌یا-prj_شناسه> --dry-run
+VERCEL_TOKEN=<توکن> npm run vercel:env -- --project <نام‌یا-prj_شناسه>
+npm run vercel:env:list -- --project <نام>   # فقط نام کلیدها، بدون مقدار
+```
+
+* کلیدهای راز (`*_API_KEY`, `*_SECRET`, `SERVICE_ROLE`) به‌صورت **sensitive** ذخیره می‌شوند؛ بعداً خوانده نمی‌شوند،
+  فقط قابل جایگزینی‌اند.
+* **بعد از هر تغییر متغیر، یک Redeploy لازم است**؛ متغیرهای جدید به بیلدِ قبلی نمی‌رسند.
+
+### اجرای محلی
+
+```bash
+cp .env.example .env       # پر کردن + SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY
+npm run dev                # http://localhost:3000
+```
+
+---
+
+## ۳) دیتابیس (یک‌بار)
+
+```bash
+supabase db push --linked          # یا: SQL Editor → Paste → Run
+```
+
+`supabase/migrations/202610050001_blupal_provider.sql` این‌ها را انجام می‌دهد:
+
+* `payments.provider` فقط می‌تواند `'blupal'` باشد (کلید پیش‌فرض `mock` حذف می‌شود).
+* رکوردهای رهاشدهٔ درگاه‌های قبلی (که در جدول `payments` مانده‌اند) بسته می‌شوند و
+  رزرو موجودی/سهم کد تخفیف آزاد می‌شود. اگر ردیف *تأییدشده‌ای* از آن‌ها وجود داشته باشد، مهاجرت عمداً
+  خطا می‌دهد تا اول دستی تسویه/بازگشت وجه کنید.
+* سه RPC بالا ساخته می‌شوند؛ هر دو `attach` و `settle` فقط با `service_role` اجرا می‌شوند.
+* `settle_blupal_payment` یک‌مصرف است: پرداخت تأییدشده دوباره تأیید نمی‌شود و پرداخت منقضی‌شده
+  با وب‌هوک تکراری باز نمی‌شود.
+* کف مبلغ سفارش در `create_order_with_payment` به `10000` تومان تغییر می‌کند (= ۱۰۰٬۰۰۰ ریال، حداقل فاکتور بلوپال).
+* `notify pgrst, 'reload schema'` تا PostgREST تابع‌های تازه را ببیند.
+
+بررسی سریع در SQL Editor:
+
+```sql
+select routine_name from information_schema.routines
+ where routine_schema = 'public'
+   and routine_name in ('attach_blupal_payment','settle_blupal_payment','expire_stale_blupal_checkouts');
+```
+
+سه ردیف باید برگردد.
+
+---
+
+## ۴) استقرار و بررسی سلامت
+
+```bash
+npm run build         # چک ساخت + تولید public/
+npm test              # مجموعهٔ تست درگاه (بدون شبکه)
+```
+
+پس از استقرار، نشانی‌ها را در مرورگر باز کنید:
+
+```
+https://<دامنه>/api/payment/blupal/status
+```
+
+خروجی مورد انتظار (فیلدهای مهم):
+
+```json
+{
+  "configured": true,
+  "paymentEnabled": true,
+  "mode": "sandbox",
+  "apiKeyKind": "test",
+  "amountUnit": "IRR",
+  "minAmountToman": 10000,
+  "maxAmountToman": 50000000,
+  "invoiceMethods": ["POST /v1/invoices/create", "GET /v1/invoices/{invoice_id}"],
+  "invoiceStatuses": ["PENDING", "PAID", "EXPIRED", "CANCELED"]
+}
+```
+
+روی همان دامنه، **Webhook درگاه** را با `/api/payment/blupal/notify` تنظیم کنید.
+پاسخ این مسیر همیشه سریع و `200 {"received":true}` است (مستندات بلوپال: ۲۰۰ + JSON تا ۱۰ ثانیه،
+وگرنه سه تلاش دوباره در فواصل ۱۰/۳۰/۶۰ ثانیه می‌آید).
+
+---
+
+## ۵) آزمون کامل در محیط آزمایشی (پول واقعی نه)
+
+با کلید `blu_test_` و `BLUPAL_MODE=sandbox`:
+
+```bash
+# ۱) ساخت فاکتور آزمایشی و گرفتن مبلغ دقیق + لینک پرداخت
+node scripts/blupal-cli.js request --toman 250000
+
+# ۲) همان invoice_id را در مرورگر باز کنید (payment_link)؛ مبلغ دقیق را همان‌جا می‌بینید
+
+# ۳) پرداخت را شبیه‌سازی کنید (فقط sandbox، فقط از CLI):
+node scripts/blupal-cli.js simulate --invoice <invoice_id> --scenario success
+
+# ۴) وضعیت از خود درگاه:
+node scripts/blupal-cli.js status --invoice <invoice_id>
+```
+
+سناریوها: `success` (فاکتور PAID می‌شود **و وب‌هوک ارسال می‌شود**)، `wrong_amount` (PENDING می‌ماند،
+وب‌هوک نمی‌آید)، `expire` (EXPIRED)، `cancel` (CANCELED).
+
+سپس یک سفارش واقعی در فروشگاه بدهید و این چک‌لیست را طی کنید:
+
+- [ ] در مرحلهٔ پرداخت، دکمه «پرداخت امن بلوپال» کار می‌کند و به `payment_link` می‌رویم.
+- [ ] مبلغ سفارش در سایت و مبلغ فاکتور در بلوپال برابر است (سایت تومان، درگاه ریال).
+- [ ] با `simulate --scenario success` و یک بار رفرش صفحهٔ `/payment/result/...`، سفارش `paid` می‌شود.
+- [ ] در پنل بلوپال، بخش «آخرین Webhook ها» برای همان فاکتور پاسخ `200` نشان می‌دهد.
+- [ ] `select status, provider_reference from payments where authority = '<invoice_id>';` → `verified` + `transaction_id`.
+- [ ] موجودی محصول کم شده و سبد خرید آن مشتری خالی شده است.
+- [ ] با `simulate --scenario expire` (روی سفارش دیگر) موجودی آزاد می‌شود و سفارش `cancelled` می‌شود.
+
+---
+
+## ۶) فعال‌سازی وجه واقعی
+
+1. مهاجرت اعمال شده، آزمون بالا موفق بوده، وب‌هوک در پنل ثبت شده و `200` گرفته است.
+2. در Vercel: `BLUPAL_MODE=production`، `BLUPAL_API_KEY=<blu_live_…>` و
+   `BLUPAL_ENABLE_LIVE_PAYMENTS=true` → **Redeploy**.
+3. یک سفارش با مبلغ کم بسازید و واقعاً واریز کنید؛ تا `GET /v1/invoices/{id}` وضعیت `PAID` ندهد،
+   سفارش نهایی نمی‌شود.
+4. برای بستن موقت دریافت وجه واقعی، کافی است `BLUPAL_ENABLE_LIVE_PAYMENTS=false` کنید و Redeploy کنید
+   (سفارش‌های باز با جاروب انقضا بسته می‌شوند).
+
+---
+
+## ۷) عیب‌یابی
+
+| نشانه | معنی | کاری که بکنید |
+|---|---|---|
+| `BLUPAL_API_KEY تنظیم نشده یا قالبش معتبر نیست` | کلید نداریم یا با `blu_test_/blu_live_` شروع نمی‌شود | از پنل کپی کنید؛ پیشوند باید با `BLUPAL_MODE` هم‌خوان باشد |
+| `پیشوند کلید … با BLUPAL_MODE هم‌خوانی ندارد` | کلید تستی در حالت واقعی (یا برعکس) | حالت را اصلاح کنید؛ با کلید تستی فاکتور واقعی دیده نمی‌شود (`mode_mismatch`) |
+| `کلید API بلوپال پذیرفته نشد` (۴۰۱) | کلید باطل/چرخانده‌شده یا درگاه غیرفعال | کلید تازه + فعال کردن درگاه در پنل |
+| `حداقل مبلغ … 100٬000 ریال` | سبد خرید زیر ۱۰٬۰۰۰ تومان | مبلغ را بالا ببرید (کف سایت هم روی همین تنظیم شده) |
+| `حداکثر مبلغ هر فاکتور …` | بالای ۵۰۰٬۰۰۰٬۰۰۰ ریال | سفارش را تقسیم کنید |
+| `هیچ کارت فعالی …` (`no_active_card`) | کارت مقصد در پنل غیرفعال/حذف‌شده | کارت فعال تعریف کنید |
+| `پاسخ بلوپال قابل خواندن نبود` | پاسخ غیر JSON (فایروال/تغییر آدرس) | `BLUPAL_API_BASE` و دسترسی شبکهٔ سرور را بررسی کنید |
+| سفارش پرداخت‌شده ولی `pending` مانده | وب‌هوک نمی‌رسد یا تطبیق واریز طول کشیده | ۱) صفحهٔ نتیجه → «بررسی دوبارهٔ پرداخت» ۲) `node scripts/blupal-cli.js status --invoice <id>` ۳) نشانی webhook و پاسخ ۲۰۰ را در پنل ببینید |
+| مبلغ را کم/زیاد واریز کرده | `final_amount` دقیق نبوده | بلوپال فاکتور را PAID نمی‌کند؛ با فیش واریزی دستی تسویه کنید و در صورت لزوم مابه‌التفاوت را برگردانید |
+| فاکتور منقضی شد | مشتری واریز نکرد | رزرو موجودی خودکار آزاد می‌شود؛ مشتری می‌تواند فاکتور تازه بگیرد (`ادامهٔ پرداخت`) |
+| `verified payment cannot be changed` | تلاش برای تغییر پرداخت تأییدشده | بازگشت وجه فقط از پنل بلوپال؛ در سایت وضعیت را دستکاری نکنید |
+
+دستورهای مفید:
+
+```bash
+node scripts/blupal-cli.js config        # فقط پیکربندی، بدون شبکه
+node scripts/blupal-cli.js verify        # پیش‌از‌انتشار: الگوهای env، مهاجرت، تابع‌ها، Supabase
+node scripts/blupal-cli.js codes         # جدول کدهای مستند بلوپال و اقدام لازم
+node scripts/blupal-cli.js expire --minutes 60   # آزادسازی فاکتورهای رهاشده
+node scripts/blupal-cli.js settle --order <uuid> # تطبیق دستی یک سفارش از روی وضعیت درگاه
+```
+
+`verify` در حالت `production` تا `BLUPAL_ENABLE_LIVE_PAYMENTS=true` نشود عمداً خطا می‌دهد؛ این قفل است، نه خرابی.
+
+---
+
+## ۸) نکات امنیتی که در کد اعمال شده
+
+* کلید API فقط در هدر `X-API-Key` سمت سرور استفاده می‌شود؛ هیچ route آن را برنمی‌گرداند
+  (تست‌ها بررسی می‌کنند در پاسخ `/request` و `/status` اثری از کلید نباشد).
+* مبلغ همیشه از `orders.total_toman` خوانده و به ریال ×۱۰ تبدیل می‌شود؛ مبلغ پاسخ درگاه فقط
+  **مقایسه** می‌شود و هرگز اعمال نمی‌شود.
+* نه بازگشت مرورگر و نه بدنهٔ وب‌هوک پرداخت را نهایی نمی‌کنند؛ تنها `GET /v1/invoices/{id}`.
+* رسید صفحهٔ نتیجه یک توکن HMAC‌دار است (سفارش + مبلغ + شناسهٔ فاکتور، ۲۴ ساعت)؛ جعل آن ۴۰۳ می‌گیرد.
+* `settle_blupal_payment` یک‌مصرف است؛ وب‌هوک تکراری، موجودی یا سفارش را دوباره تغییر نمی‌دهد.
+* `simulate` فقط در CLI و فقط با کلید تستی وجود دارد؛ هیچ مسیری آن را باز نمی‌کند.
+* نشانی صفحهٔ پرداخت باید HTTPS و روی میزبان مجاز باشد، وگرنه کاربر به آن هدایت نمی‌شود.
+* در `production` تا قفل وجه واقعی باز نشود هیچ فاکتوری ساخته نمی‌شود.
+
+---
+
+## ۹) چک‌لیست انتشار (خلاصه)
+
+1. کلید `blu_test_` + سه متغیر اجباری → `npm run vercel:env -- --project <name>` → Redeploy.
+2. `GET /api/payment/blupal/status` → `paymentEnabled: true` و `mode: sandbox`.
+3. مهاجرت Supabase اعمال شده؛ سه RPC در دیتابیس دیده می‌شوند.
+4. چرخهٔ کامل آزمون با `simulate --scenario success` و دیدن وب‌هوک `200` در پنل.
+5. `Webhook درگاه` = `https://<دامنه>/api/payment/blupal/notify`.
+6. `BLUPAL_MODE=production` + `BLUPAL_ENABLE_LIVE_PAYMENTS=true` + کلید `blu_live_` → Redeploy → یک خرید واقعیِ کوچک.
+7. «آخرین Webhook ها» و `payments` برای همان سفارش: `status=verified` و `provider_reference` پر.
