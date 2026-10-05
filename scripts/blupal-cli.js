@@ -127,6 +127,25 @@ function migrationChecks() {
   return { ok: missing.length === 0, missing, detail: missing.length ? `مهاجرت بلوپال کامل نیست: ${missing.join(' | ')}` : 'مهاجرت 202610050001 markers حاضرند.' };
 }
 
+function manualChunkChecks() {
+  const dir = path.join(ROOT, 'supabase', 'manual');
+  let built;
+  try {
+    built = require('./blupal-sql-chunks.js').build(fs.readFileSync(path.join(ROOT, 'supabase', 'migrations', '202610050001_blupal_provider.sql'), 'utf8'));
+  } catch (error) {
+    return { ok: false, detail: `قطعه‌های manual قابل‌ساخت نیستند: ${error.message}` };
+  }
+  const stale = built.filter(chunk => {
+    const file = path.join(dir, chunk.file);
+    return !fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== chunk.sql;
+  }).map(chunk => chunk.file);
+  return {
+    ok: stale.length === 0,
+    detail: stale.length ? `بی‌رمق با مهاجرت (اجرا کن: node scripts/blupal-sql-chunks.js): ${stale.join(', ')}`
+      : `${built.length} قطعهٔ اجرای دستی آماده و به‌روز است (برای چسباندن در SQL Editor).`
+  };
+}
+
 function apiFunctionChecks() {
   const routes = ['request', 'receipt', 'status', 'callback', 'notify'];
   const missing = routes.filter(route => !fs.existsSync(path.join(ROOT, 'api', 'payment', 'blupal', `${route}.js`)));
@@ -178,6 +197,7 @@ async function main() {
     const parity = envParity();
     const migration = migrationChecks();
     const functions = apiFunctionChecks();
+    const chunks = manualChunkChecks();
     const gate = blupal.productionGateError(config);
     const problems = [];
     if (!config.mode) problems.push('BLUPAL_MODE تنظیم نشده است.');
@@ -185,6 +205,7 @@ async function main() {
     if (!parity.ok) problems.push(parity.detail);
     if (!migration.ok) problems.push(migration.detail);
     if (!functions.ok) problems.push(functions.detail);
+    if (!chunks.ok) problems.push(chunks.detail);
     const database = supabaseServerConfig();
     if (!database.serviceConfigured) problems.push('SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY کامل نیست؛ پرداخت به سفارش متصل نمی‌شود.');
     if (gate) problems.push(`قفل وجه واقعی: ${gate.message}`);
@@ -197,6 +218,7 @@ async function main() {
         envParity: { ok: parity.ok, detail: parity.detail, unFilledInProcessEnv: parity.unFilledInProcessEnv },
         migration: { ok: migration.ok, detail: migration.detail },
         apiFunctions: { ok: functions.ok, detail: functions.detail },
+        manualChunks: { ok: chunks.ok, detail: chunks.detail },
         database: { ok: database.serviceConfigured, detail: database.serviceConfigured ? 'پیکربندی سرویس Supabase کامل است.' : 'متغیرهای سرویس Supabase ناقص است.' }
       },
       problems

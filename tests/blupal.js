@@ -818,6 +818,27 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.ok(!/provider is distinct from 'balepay'/.test(sql), 'fail-closed filters were replaced by explicit conversion');
   section('Supabase migration contract');
 
+  /* 18b) the manual chunks: no lost line, no unbalanced dollar-quote, files in sync */
+  const chunks = require('../scripts/blupal-sql-chunks.js');
+  const built = chunks.build(sql);
+  assert.equal(built.length, chunks.CHUNKS.length, 'every declared chunk is produced');
+  const flatten = value => value.split('\n').filter(line => !/^\s*(begin|commit)\s*;\s*$/i.test(line)).join('\n').replace(/\s+/g, ' ').trim();
+  assert.equal(flatten(built.map(chunk => chunk.body).join('\n')), flatten(sql),
+    'the chunks must contain the migration byte-for-byte (only begin/commit are moved)');
+  for (const chunk of built) {
+    assert.equal(chunks.dollarBalance(chunk.sql).depth, 0, `${chunk.file} must close every $$ body`);
+    assert.match(chunk.sql.trim(), /commit;$/, `${chunk.file} must be a complete transaction`);
+    assert.ok(chunk.bytes < 20000, `${chunk.file} must stay small enough to paste safely`);
+  }
+  for (const chunk of built) {
+    const onDisk = path.join(ROOT, 'supabase', 'manual', chunk.file);
+    assert.ok(fs.existsSync(onDisk), `${chunk.file} must be committed for hand-running`);
+    assert.equal(fs.readFileSync(onDisk, 'utf8'), chunk.sql, `${chunk.file} is out of date; run node scripts/blupal-sql-chunks.js`);
+  }
+  const readme = fs.readFileSync(path.join(ROOT, 'BLUPAL_OPERATIONS.md'), 'utf8');
+  assert.ok(/supabase\/manual\/01_schema_and_legacy\.sql/.test(readme), 'the guide must document the chunked fallback');
+  section('manual SQL chunks');
+
   /* 19) the service layer stays narrow: three RPCs, provider-scoped reads */
   const libJs = fs.readFileSync(path.join(ROOT, 'lib', 'blupal.js'), 'utf8');
   const serverJs = fs.readFileSync(path.join(ROOT, 'lib', 'supabase-server.js'), 'utf8');

@@ -111,6 +111,45 @@ npm run dev                # http://localhost:3000
 supabase db push --linked          # یا: SQL Editor → Paste → Run
 ```
 
+### اگر اجرای فایل کامل خطای paste داد
+
+فایل مهاجرت ۶۶۷ خط است؛ چسباندن یک‌جا در Supabase SQL Editor گاهی نیمه‌بریده می‌شود و
+پستگرس این خطا را می‌دهد:
+
+```
+Failed to run sql query: ERROR: 42601: unterminated dollar-quoted string at or near "$$"
+```
+
+این خطا یعنی بدنهٔ `$$ … $$` یک تابع بسته نشده — یعنی **متن ناقص چسبانده شده**، نه اینکه SQL مشکل داشته باشد.
+راه امن: اجرای قطعه‌های آماده به ترتیب شماره (هر قطعه یک تراکنش کامل است):
+
+```
+supabase/manual/01_schema_and_legacy.sql
+supabase/manual/02_order_rpcs.sql
+supabase/manual/03_attach_invoice.sql
+supabase/manual/04_settle_payment.sql
+supabase/manual/05_expiry_and_admin.sql
+supabase/manual/06_retire_legacy.sql
+```
+
+هر بار فقط یک فایل را کپی کن و Run بزن؛ باید پیام `Success. No rows returned` بگیری.
+این فایل‌ها با `node scripts/blupal-sql-chunks.js` از همان فایل مهاجرت ساخته می‌شوند
+(هیچ خطی کم یا زیاد نمی‌شود — تست `node tests/blupal.js` این را بررسی می‌کند) و `npm run build`
+مطمئن می‌شود که بی‌رمق با مهاجرت هم‌زمان‌اند.
+
+**مهم:** اگر اجرا در میانه خطا بدهد، هیچ نیمه‌ای اعمال نمی‌شود (هم `begin; commit;` دارد، هم پستگرس
+اول کل متن را parse می‌کند). برای اطمینان از وضعیت فعلی:
+
+```sql
+select count(*) as blupal_functions from information_schema.routines
+ where routine_schema = 'public' and routine_name like '%\_blupal\_%';
+select conname from pg_constraint where conrelid = 'public.payments'::regclass and conname like 'payments_provider%';
+```
+
+خروجی ۰ یعنی هنوز هیچ‌چیز اعمال نشده و می‌توانی از قطعهٔ ۱ شروع کنی. خروجی ۳ یعنی مهاجرت اعمال شده
+و فقط باید ادامهٔ کار را بررسی کنی. اجرای دوبارهٔ همهٔ قطعه‌ها هم بی‌ضرر است (تابع‌ها
+`create or replace` هستند و قیدها با `drop … if exists` ساخته می‌شوند).
+
 `supabase/migrations/202610050001_blupal_provider.sql` این‌ها را انجام می‌دهد:
 
 * `payments.provider` فقط می‌تواند `'blupal'` باشد (کلید پیش‌فرض `mock` حذف می‌شود).

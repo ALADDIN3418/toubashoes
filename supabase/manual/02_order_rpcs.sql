@@ -1,0 +1,271 @@
+-- بلوپال (BluPal · blupal.top) — قطعهٔ 2 از 6: ثبت اتمیک سفارش/پرداخت و لغو سفارش توسط مشتری
+-- با «node scripts/blupal-sql-chunks.js» از supabase/migrations/202610050001_blupal_provider.sql
+-- ساخته شده؛ خودسرانه ویرایشش نکن. قطعه‌ها را به ترتیب شماره و هرکدام کامل اجرا کن.
+
+begin;
+
+create or replace function public.create_order_with_payment(
+  p_items jsonb,
+  p_address jsonb,
+  p_shipping_method text,
+  p_coupon_code text,
+  p_idempotency_key text
+)
+returns jsonb
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_item record;
+  v_expired record;
+  v_expired_line record;
+  v_variant_id uuid;
+  v_quantity integer;
+  v_stock integer;
+  v_unit_price bigint;
+  v_product_name text;
+  v_product_sku text;
+  v_variant_sku text;
+  v_size text;
+  v_color text;
+  v_subtotal bigint := 0;
+  v_discount bigint := 0;
+  v_shipping bigint := 0;
+  v_total bigint := 0;
+  v_normal_shipping bigint := 0;
+  v_express_shipping bigint := 0;
+  v_free_threshold bigint := 0;
+  v_shipping_options jsonb := '{}'::jsonb;
+  v_coupon public.coupons%rowtype;
+  v_coupon_id uuid;
+  v_coupon_code text;
+  v_order_id uuid;
+  v_number text;
+  v_tracking text;
+  v_payment_id uuid;
+  v_snapshot jsonb;
+  v_lines jsonb := '[]'::jsonb;
+  v_existing jsonb;
+begin
+  if v_user_id is null or not (select public.current_user_is_active()) then
+    raise exception using errcode = '42501', message = 'active authenticated account required';
+  end if;
+  if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) < 1 or jsonb_array_length(p_items) > 50 then
+    raise exception using errcode = '22023', message = 'order must contain between 1 and 50 items';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_items) e(value)
+    where coalesce(e.value->>'variantId','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       or coalesce(e.value->>'quantity','') !~ '^[1-9][0-9]{0,1}$'
+  ) then raise exception using errcode = '22023', message = 'invalid order line'; end if;
+  if coalesce(p_shipping_method,'') not in ('normal','express','free') then
+    raise exception using errcode = '22023', message = 'invalid shipping method';
+  end if;
+  if p_idempotency_key is null or length(p_idempotency_key) < 16 or length(p_idempotency_key) > 100 then
+    raise exception using errcode = '22023', message = 'invalid idempotency key';
+  end if;
+  if jsonb_typeof(p_address) is distinct from 'object'
+     or length(btrim(coalesce(p_address->>'recipient',''))) not between 3 and 100
+     or coalesce(p_address->>'phone','') !~ '^09[0-9]{9}$'
+     or length(btrim(coalesce(p_address->>'province',''))) not between 2 and 100
+     or length(btrim(coalesce(p_address->>'city',''))) not between 2 and 100
+     or length(btrim(coalesce(p_address->>'address',''))) not between 10 and 1000
+     or coalesce(p_address->>'postal_code','') !~ '^[0-9]{10}$' then
+    raise exception using errcode = '22023', message = 'invalid delivery address';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_user_id::text || ':' || p_idempotency_key, 0));
+  select jsonb_build_object('orderId', o.id, 'number', o.number, 'totalToman', o.total_toman, 'status', o.status)
+    into v_existing from public.orders o
+   where o.user_id = v_user_id and o.idempotency_key = p_idempotency_key;
+  if v_existing is not null then return v_existing; end if;
+
+  -- Expired pending checkouts release reserved inventory and coupon capacity exactly once.
+  -- Only rows whose invoice was never created are swept here; a checkout that already has an
+  -- invoice_id may still be matched to a transfer any moment and belongs to the status/expiry path.
+  for v_expired in
+    select o.id, o.coupon_id from public.orders o
+     join public.payments p on p.order_id = o.id
+     where o.status = 'pending_payment' and p.status = 'pending' and p.authority is null
+       and p.provider = 'blupal'
+       and o.created_at < now() - interval '30 minutes'
+     for update of o skip locked
+  loop
+    for v_expired_line in
+      select oi.variant_id, oi.quantity from public.order_items oi where oi.order_id = v_expired.id and oi.variant_id is not null
+    loop
+      update public.product_variants set stock = stock + v_expired_line.quantity
+       where id = v_expired_line.variant_id;
+    end loop;
+    update public.payments set status = 'failed', provider_code = 'EXPIRED', failure_reason = 'Checkout expired',
+      callback_payload = callback_payload || jsonb_build_object('outcome','expired','source','blupal','at',now())
+     where order_id = v_expired.id and status = 'pending';
+    update public.orders set status = 'cancelled', status_history = status_history || jsonb_build_array(
+      jsonb_build_object('status','cancelled','at',now(),'source','expiry'))
+     where id = v_expired.id and status = 'pending_payment';
+    if v_expired.coupon_id is not null then
+      update public.coupons set usage_count = greatest(usage_count - 1, 0) where id = v_expired.coupon_id;
+    end if;
+  end loop;
+
+  select value into v_shipping_options from public.site_settings where key = 'shippingOptions';
+  v_normal_shipping := coalesce(nullif(v_shipping_options->>'normal','')::bigint, 0);
+  v_express_shipping := coalesce(nullif(v_shipping_options->>'express','')::bigint, v_normal_shipping);
+  v_free_threshold := coalesce(nullif(v_shipping_options->>'freeFrom','')::bigint, 0);
+
+  -- Sort/lock variants consistently, validate authoritative price/stock, and reserve stock atomically.
+  for v_item in
+    select (e.value->>'variantId')::uuid as variant_id,
+           sum((e.value->>'quantity')::integer)::integer as quantity
+      from jsonb_array_elements(p_items) e(value)
+     group by (e.value->>'variantId')::uuid
+     order by (e.value->>'variantId')::uuid
+  loop
+    select v.stock, coalesce(v.price_toman, p.price_toman), p.name, p.sku, v.sku, v.size, v.color
+      into v_stock, v_unit_price, v_product_name, v_product_sku, v_variant_sku, v_size, v_color
+      from public.product_variants v
+      join public.products p on p.id = v.product_id
+     where v.id = v_item.variant_id and p.is_active = true
+     for update of v;
+    if not found then raise exception using errcode = 'P0002', message = 'product variant is unavailable'; end if;
+    if v_item.quantity < 1 or v_item.quantity > 99 or v_stock < v_item.quantity then
+      raise exception using errcode = '22023', message = 'insufficient stock';
+    end if;
+    update public.product_variants set stock = stock - v_item.quantity where id = v_item.variant_id;
+    v_subtotal := v_subtotal + v_unit_price * v_item.quantity;
+    v_lines := v_lines || jsonb_build_array(jsonb_build_object(
+      'variantId', v_item.variant_id,
+      'productId', (select product_id from public.product_variants where id = v_item.variant_id),
+      'name', v_product_name,
+      'sku', coalesce(v_variant_sku, v_product_sku),
+      'size', v_size,
+      'color', v_color,
+      'variantLabel', 'سایز ' || v_size || '، ' || v_color,
+      'unitPrice', v_unit_price,
+      'quantity', v_item.quantity
+    ));
+  end loop;
+
+  if p_shipping_method = 'normal' then v_shipping := v_normal_shipping;
+  elsif p_shipping_method = 'express' then v_shipping := v_express_shipping;
+  else
+    if v_subtotal < v_free_threshold then raise exception using errcode = '22023', message = 'order is not eligible for free shipping'; end if;
+    v_shipping := 0;
+  end if;
+
+  if nullif(btrim(coalesce(p_coupon_code,'')), '') is not null then
+    select * into v_coupon from public.coupons
+     where upper(code) = upper(btrim(p_coupon_code))
+     for update;
+    if not found or not v_coupon.is_active then raise exception using errcode = '22023', message = 'coupon unavailable'; end if;
+    if v_subtotal < v_coupon.minimum_order_toman then raise exception using errcode = '22023', message = 'coupon minimum not met'; end if;
+    if v_coupon.usage_limit is not null and v_coupon.usage_count >= v_coupon.usage_limit then raise exception using errcode = '22023', message = 'coupon usage limit reached'; end if;
+    if v_coupon.starts_at is not null and now() < v_coupon.starts_at then raise exception using errcode = '22023', message = 'coupon has not started'; end if;
+    if v_coupon.ends_at is not null and now() > v_coupon.ends_at then raise exception using errcode = '22023', message = 'coupon expired'; end if;
+    v_coupon_id := v_coupon.id;
+    v_coupon_code := v_coupon.code;
+    v_discount := case when v_coupon.discount_type = 'percent'
+      then least(v_subtotal, round(v_subtotal::numeric * v_coupon.amount / 100)::bigint)
+      else least(v_subtotal, v_coupon.amount::bigint) end;
+    update public.coupons set usage_count = usage_count + 1 where id = v_coupon.id;
+  end if;
+
+  v_total := v_subtotal + v_shipping - v_discount;
+  -- BluPal rejects invoices below 100,000 RIAL, i.e. 10,000 Toman.
+  if v_total < 10000 then raise exception using errcode = '22023', message = 'order total is below the payment provider minimum'; end if;
+  v_snapshot := jsonb_build_object(
+    'recipient', btrim(p_address->>'recipient'),
+    'phone', p_address->>'phone',
+    'province', btrim(p_address->>'province'),
+    'city', btrim(p_address->>'city'),
+    'address', btrim(p_address->>'address'),
+    'postal_code', p_address->>'postal_code',
+    'note', left(coalesce(p_address->>'note',''), 1000)
+  );
+  v_number := 'TB-' || to_char(now() at time zone 'UTC', 'YYYYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text,'-',''),1,8));
+  v_tracking := 'TRK-' || upper(substr(replace(gen_random_uuid()::text,'-',''),1,10));
+  insert into public.orders(number, user_id, status, currency, subtotal_toman, shipping_toman, discount_toman,
+    total_toman, address_snapshot, coupon_id, idempotency_key, shipping_method, tracking_code,
+    coupon_code_snapshot, status_history)
+  values (v_number, v_user_id, 'pending_payment', 'IRR', v_subtotal, v_shipping, v_discount, v_total,
+    v_snapshot, v_coupon_id, p_idempotency_key, p_shipping_method, v_tracking, v_coupon_code,
+    jsonb_build_array(jsonb_build_object('status','pending_payment','at',now(),'source','checkout')))
+  returning id into v_order_id;
+
+  insert into public.order_items(order_id, product_id, variant_id, product_name_snapshot, variant_label_snapshot,
+    sku_snapshot, unit_price_toman, quantity)
+  select v_order_id, (line->>'productId')::uuid, (line->>'variantId')::uuid, line->>'name', line->>'variantLabel',
+    line->>'sku', (line->>'unitPrice')::bigint, (line->>'quantity')::integer
+  from jsonb_array_elements(v_lines) line;
+
+  insert into public.payments(order_id, provider, status, amount_toman)
+  values (v_order_id, 'blupal', 'pending', v_total)
+  returning id into v_payment_id;
+
+  insert into public.carts(user_id) values (v_user_id) on conflict (user_id) do nothing;
+  return jsonb_build_object('orderId', v_order_id, 'number', v_number, 'totalToman', v_total,
+    'paymentId', v_payment_id, 'status', 'pending_payment');
+end;
+$$;
+revoke all on function public.create_order_with_payment(jsonb,jsonb,text,text,text) from public, anon;
+grant execute on function public.create_order_with_payment(jsonb,jsonb,text,text,text) to authenticated;
+
+
+-- Customers may abandon the hosted payment page; releasing the order stays possible until BluPal
+-- confirms the transaction, but never while a gateway attempt is still fresh.
+create or replace function public.cancel_pending_order(p_order_id uuid)
+returns jsonb
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_order public.orders%rowtype;
+  v_payment public.payments%rowtype;
+  v_line record;
+  v_at timestamptz := now();
+begin
+  if v_user_id is null or not (select public.current_user_is_active()) then
+    raise exception using errcode = '42501', message = 'active authenticated account required';
+  end if;
+  select * into v_order from public.orders where id = p_order_id and user_id = v_user_id for update;
+  if not found then raise exception using errcode = 'P0002', message = 'pending order not found'; end if;
+  select * into v_payment from public.payments where order_id = v_order.id for update;
+  if v_order.status <> 'pending_payment' or v_payment.status <> 'pending' then
+    return jsonb_build_object('success',false,'cancelled',false,'reason','not_pending');
+  end if;
+  -- A verified BluPal payment means the money moved; only settlement/refund closes it.
+  if v_payment.provider_reference is not null then
+    return jsonb_build_object('success',false,'cancelled',false,'reason','gateway_transaction_recorded');
+  end if;
+  -- A transfer may have been matched a second ago, so a very recent invoice is quarantined
+  -- briefly instead of releasing stock that is already sold;
+  -- expire_stale_blupal_checkouts closes it afterwards.
+  if v_payment.authority is not null
+     and greatest(v_payment.created_at, v_payment.updated_at) > v_at - interval '10 minutes' then
+    return jsonb_build_object('success',false,'cancelled',false,'reason','gateway_verification_pending');
+  end if;
+  for v_line in
+    select variant_id, quantity from public.order_items where order_id = v_order.id and variant_id is not null
+  loop
+    update public.product_variants set stock = stock + v_line.quantity where id = v_line.variant_id;
+  end loop;
+  if v_order.coupon_id is not null then
+    update public.coupons set usage_count = greatest(usage_count - 1, 0) where id = v_order.coupon_id;
+  end if;
+  update public.payments set status = 'failed', provider_code = 'CHECKOUT_ABORTED',
+    failure_reason = 'Payment request was not started',
+    callback_payload = callback_payload || jsonb_build_object('outcome','cancelled','source','checkout','provider','blupal','at',v_at)
+   where id = v_payment.id;
+  update public.orders set status = 'cancelled',
+    status_history = status_history || jsonb_build_array(
+      jsonb_build_object('status','cancelled','at',v_at,'source','checkout'))
+   where id = v_order.id;
+  return jsonb_build_object('success',true,'cancelled',true,'orderId',v_order.id);
+end;
+$$;
+revoke all on function public.cancel_pending_order(uuid) from public, anon;
+grant execute on function public.cancel_pending_order(uuid) to authenticated;
+
+commit;
