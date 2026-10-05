@@ -17,7 +17,7 @@
     "start:comfy": "uvicorn comfy-automation-api.app.main:app --host 0.0.0.0 --port 8000",
     "build": "node scripts/check.js && node scripts/build-vercel.js",
     "lint": "node scripts/check.js",
-    "test": "node tests/supabase-commerce.js && node tests/ai-studio.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/blupal.js && node tests/runtime-smoke.js"
+    "test": "node tests/supabase-commerce.js && node tests/ai-studio.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/blupal.js && node tests/blupal-sql.js && node tests/runtime-smoke.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

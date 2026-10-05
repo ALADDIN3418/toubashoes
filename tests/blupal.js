@@ -788,11 +788,14 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   /* 18) Supabase migration contract */
   const sql = fs.readFileSync(MIGRATION, 'utf8');
   for (const marker of [
-    "check (provider = 'blupal')",
+    "check (provider in ('blupal','zarinpal','balepay','bluepal'))",
     'function public.attach_blupal_payment(',
     'function public.settle_blupal_payment(',
     'function public.expire_stale_blupal_checkouts(',
     "p_invoice_id !~ '^[0-9]{1,20}$'",
+    'create trigger payments_enforce_blupal_provider',
+    "if new.provider is distinct from 'blupal' then",
+    "or pg_catalog.pg_get_constraintdef(con.oid) ilike '%provider = any%'",
     'grant execute on function public.attach_blupal_payment(uuid,text,text,text,bigint,bigint,text) to service_role;',
     'grant execute on function public.settle_blupal_payment(uuid,text,text,bigint,text,text,jsonb) to service_role;',
     'revoke all on function public.expire_stale_blupal_checkouts(integer) from public, anon;',
@@ -810,12 +813,31 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.match(sql, /greatest\(coalesce\(p_grace_minutes, 60\), 15\)/);
   assert.match(sql, /payment status can only be confirmed by the BluPal invoice status check/);
   const legacyLines = sql.split('\n').filter(line => /balepay|zarinpal|bluepal/i.test(line));
-  assert.ok(legacyLines.length > 0, 'legacy rows must still be converted, not ignored');
+  assert.ok(legacyLines.length > 0, 'legacy rows must still be handled, not ignored');
   for (const line of legacyLines) {
-    const isGuard = /^\s*--|not in \(|in \('zarinpal'|drop constraint|drop function|unknown provider|retired gateway/.test(line);
-    assert.ok(isGuard, `legacy identifiers are only allowed inside conversion guards and drops: ${line.trim()}`);
+    const isGuard = /^\s*--|not in \(|in \('zarinpal'|drop constraint|drop function|unknown provider|retired gateway|check \(provider in \('blupal'|pg_get_constraintdef|comment on column public\.payments\.provider/.test(line);
+    assert.ok(isGuard, `legacy identifiers are only allowed inside history guards and drops: ${line.trim()}`);
   }
-  assert.ok(!/provider is distinct from 'balepay'/.test(sql), 'fail-closed filters were replaced by explicit conversion');
+  assert.ok(!/settled rows from the retired gateway/.test(sql), 'a settled legacy row must never block the switch');
+  assert.match(sql, /raise notice 'blupal: % retired-gateway payment row\(s\)/, 'the migration reports preserved history instead of aborting');
+  assert.ok(!/set provider = 'blupal', status = 'failed'/.test(sql), 'closed-out legacy rows keep the provider label they were paid under');
+  assert.match(sql, /and provider in \('zarinpal','balepay','bluepal'\);/, 'the cleanup must touch retired rows only');
+  assert.ok(!/provider is distinct from 'balepay'/.test(sql), 'fail-closed filters were replaced by explicit cleanup');
+  /* a status literal that is not an enum member aborts the whole RPC with 22P02 on real Postgres */
+  const STATUS_MEMBERS = new Set(['pending', 'verified', 'failed', 'refunded', 'pending_payment', 'paid',
+    'processing', 'shipped', 'delivered', 'cancelled', 'PENDING', 'PAID', 'EXPIRED', 'CANCELED']);
+  const statusGroups = [
+    ...[...sql.matchAll(/\b\w*status\s*(?:not\s+)?in\s*\(([^)]*)\)/gi)].map(match => match[1]),
+    ...[...sql.matchAll(/\b\w*status\s*(?:<>|=)\s*'([^']*)'/gi)].map(match => `'${match[1]}'`)
+  ];
+  assert.ok(statusGroups.length >= 20, 'the status-enum guard must actually find the comparisons');
+  for (const group of statusGroups) {
+    for (const quoted of group.match(/'[^']*'/g) || []) {
+      const value = quoted.slice(1, -1);
+      assert.ok(STATUS_MEMBERS.has(value), `'${value}' is not a member of public.payment_status/public.order_status, so real Postgres rejects the query`);
+    }
+  }
+  assert.ok(!/'manual'/.test(sql), "there is no 'manual' payment_status; the app derives MANUAL from provider_code");
   section('Supabase migration contract');
 
   /* 18b) the manual chunks: no lost line, no unbalanced dollar-quote, files in sync */
@@ -837,6 +859,17 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   }
   const readme = fs.readFileSync(path.join(ROOT, 'BLUPAL_OPERATIONS.md'), 'utf8');
   assert.ok(/supabase\/manual\/01_schema_and_legacy\.sql/.test(readme), 'the guide must document the chunked fallback');
+  for (const chunk of built) assert.ok(readme.includes(chunk.file), `the guide must list ${chunk.file} in the run order`);
+  assert.match(readme, /commit;/, 'the guide must tell the reader to check that the paste ends with commit;');
+  assert.match(readme, /P0001/, 'the guide must explain the retired-gateway history error');
+  assert.match(readme, /retired-gateway payment row\(s\)/, 'the guide must quote the notice that history was kept');
+  const supabaseReadme = fs.readFileSync(path.join(ROOT, 'supabase', 'README.md'), 'utf8');
+  assert.match(supabaseReadme, /supabase\/manual\//, 'the Supabase README must point at the paste-safe chunks');
+  assert.match(supabaseReadme, /tests\/blupal-sql\.js/, 'the Supabase README must mention the real-Postgres test');
+  assert.ok(fs.existsSync(path.join(ROOT, 'tests', 'blupal-sql.js')) && fs.existsSync(path.join(ROOT, 'tests', 'blupal-sql-itest.py')),
+    'the SQL must also be exercised against a real Postgres, not only against stubs');
+  const testChain = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts.test;
+  assert.ok(testChain.includes('node tests/blupal-sql.js'), 'the real-Postgres run belongs in npm test');
   section('manual SQL chunks');
 
   /* 19) the service layer stays narrow: three RPCs, provider-scoped reads */

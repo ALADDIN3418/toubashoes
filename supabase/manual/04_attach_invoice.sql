@@ -1,4 +1,4 @@
--- بلوپال (BluPal · blupal.top) — قطعهٔ 3 از 6: ثبت فاکتور بلوپال روی سفارش (فقط service_role)
+-- بلوپال (BluPal · blupal.top) — قطعهٔ 4 از 7: ثبت فاکتور بلوپال روی سفارش (فقط service_role)
 -- با «node scripts/blupal-sql-chunks.js» از supabase/migrations/202610050001_blupal_provider.sql
 -- ساخته شده؛ خودسرانه ویرایشش نکن. قطعه‌ها را به ترتیب شماره و هرکدام کامل اجرا کن.
 

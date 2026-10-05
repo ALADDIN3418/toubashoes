@@ -84,9 +84,16 @@ Workflow قبل از apply، `supabase db push --dry-run` اجرا می‌کند
 `gateway_verification_pending` رد می‌شود تا واریزِ در شرف تطبیق، موجودی را آزاد نکند) و
 `admin_update_order_status` که `PAID` را فقط برای پرداخت `verified` می‌پذیرد.
 
-ردیف‌های `pending` درگاه‌های قبلی هنگام اجرای migration بسته می‌شوند (رزروها آزاد،
-`provider_code = 'GATEWAY_RETIRED'`)؛ اگر ردیف تأییدشده‌ای از آن‌ها وجود داشته باشد migration عمداً
-متوقف می‌شود تا قبل از افزودن قفل `provider` تکلیفش دستی روشن شود.
+هنگام اجرای migration چک‌اوت‌های `pending` درگاه‌های قبلی بسته می‌شوند (رزرو موجودی و سهم کد تخفیف
+آزاد، سفارش `cancelled`، `provider_code = 'GATEWAY_RETIRED'`). ردیف‌های تأییدشدهٔ قدیمی حذف یا
+بازنویسی **نمی‌شوند**: قید `CHECK` نام همان درگاه‌ها را برای تاریخچه می‌پذیرد و تریگر
+`payments_enforce_blupal_provider` ثبت پرداخت تازه با آن‌ها را رد می‌کند؛ تعداد ردیف‌های
+نگهداری‌شده با `NOTICE` گزارش می‌شود.
+
+برای اجرای دستی در Supabase SQL Editor هفت فایل تک‌تراکنشی در `supabase/manual/` هست (با
+`node scripts/blupal-sql-chunks.js` از همان migration ساخته می‌شوند) — چسباندن یک‌جاِ فایل کامل
+ممکن است نیمه‌بریده شود و خطای `unterminated dollar-quoted string` بدهد. همان SQL در
+`node tests/blupal-sql.js` روی Postgres واقعی هم اجرا و راستی‌آزمایی می‌شود.
 
 متغیرهای لازم سمت سرور (هیچ‌کدام در SQL نیستند):
 

@@ -22,12 +22,13 @@ const OUT_DIR = path.join(ROOT, 'supabase', 'manual');
 
 /* مرز هر قطعه = جای شروع آن (تابع یا بلوک). ترتیب همین فهرست، ترتیب اجراست. */
 const CHUNKS = [
-  { file: '01_schema_and_legacy.sql', title: 'قفل provider و تبدیل ردیف‌های درگاه‌های قبلی', start: /^create or replace function public\.create_order_with_payment\(/m },
-  { file: '02_order_rpcs.sql', title: 'ثبت اتمیک سفارش/پرداخت و لغو سفارش توسط مشتری', start: /^-- The storefront stores the BluPal invoice/m },
-  { file: '03_attach_invoice.sql', title: 'ثبت فاکتور بلوپال روی سفارش (فقط service_role)', start: /^create or replace function public\.settle_blupal_payment\(/m },
-  { file: '04_settle_payment.sql', title: 'تسویهٔ یک‌مصرف — تنها راه paid شدن سفارش', start: /^create or replace function public\.expire_stale_blupal_checkouts\(/m },
-  { file: '05_expiry_and_admin.sql', title: 'جاروب انقضا و تغییر وضعیت توسط مدیر', start: /^-- Retired gateway entry points/m },
-  { file: '06_retire_legacy.sql', title: 'حذف تابع‌های بازنشسته و بارگذاری دوبارهٔ schema', start: null }
+  { file: '01_schema_and_legacy.sql', title: 'قفل provider، بستن سبد‌های رهاشده و بایگانی تاریخچهٔ درگاه قبلی', start: /^create or replace function public\.create_order_with_payment\(/m },
+  { file: '02_create_order.sql', title: 'ثبت اتمیک سفارش/پرداخت با رزرو موجودی', start: /^create or replace function public\.cancel_pending_order\(/m },
+  { file: '03_cancel_order.sql', title: 'لغو سفارش پرداخت‌نشده توسط مشتری', start: /^-- The storefront stores the BluPal invoice/m },
+  { file: '04_attach_invoice.sql', title: 'ثبت فاکتور بلوپال روی سفارش (فقط service_role)', start: /^create or replace function public\.settle_blupal_payment\(/m },
+  { file: '05_settle_payment.sql', title: 'تسویهٔ یک‌مصرف — تنها راه paid شدن سفارش', start: /^create or replace function public\.expire_stale_blupal_checkouts\(/m },
+  { file: '06_expiry_and_admin.sql', title: 'جاروب انقضا و تغییر وضعیت توسط مدیر', start: /^-- Retired gateway entry points/m },
+  { file: '07_retire_legacy.sql', title: 'حذف تابع‌های بازنشسته و بارگذاری دوبارهٔ schema', start: null }
 ];
 
 /* اگر پیش از خط تابع، بلوک کامنت توضیحی باشد، آن را به قطعهٔ جدید منتقل می‌کنیم تا

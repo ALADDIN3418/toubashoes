@@ -115,7 +115,10 @@ function migrationChecks() {
   if (!fs.existsSync(file)) return { ok: false, detail: 'فایل مهاجرت بلوپال پیدا نشد.' };
   const sql = fs.readFileSync(file, 'utf8');
   const markers = [
-    "check (provider = 'blupal')",
+    // فقط پیشوند قید بررسی می‌شود؛ فهرست کاملِ نام‌های تاریخ‌مصرف را tests/blupal.js می‌آزماید تا
+    // این ابزارِ عادیابی بدون تکرارِ نام درگاه‌های حذف‌شده، همان قفل را تضمین کند.
+    "check (provider in ('blupal',",
+    'create trigger payments_enforce_blupal_provider',
     'function public.attach_blupal_payment(',
     'function public.settle_blupal_payment(',
     'function public.expire_stale_blupal_checkouts(',

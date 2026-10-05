@@ -1,4 +1,4 @@
--- بلوپال (BluPal · blupal.top) — قطعهٔ 6 از 6: حذف تابع‌های بازنشسته و بارگذاری دوبارهٔ schema
+-- بلوپال (BluPal · blupal.top) — قطعهٔ 7 از 7: حذف تابع‌های بازنشسته و بارگذاری دوبارهٔ schema
 -- با «node scripts/blupal-sql-chunks.js» از supabase/migrations/202610050001_blupal_provider.sql
 -- ساخته شده؛ خودسرانه ویرایشش نکن. قطعه‌ها را به ترتیب شماره و هرکدام کامل اجرا کن.
 

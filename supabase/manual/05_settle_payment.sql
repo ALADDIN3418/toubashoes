@@ -1,4 +1,4 @@
--- بلوپال (BluPal · blupal.top) — قطعهٔ 4 از 6: تسویهٔ یک‌مصرف — تنها راه paid شدن سفارش
+-- بلوپال (BluPal · blupal.top) — قطعهٔ 5 از 7: تسویهٔ یک‌مصرف — تنها راه paid شدن سفارش
 -- با «node scripts/blupal-sql-chunks.js» از supabase/migrations/202610050001_blupal_provider.sql
 -- ساخته شده؛ خودسرانه ویرایشش نکن. قطعه‌ها را به ترتیب شماره و هرکدام کامل اجرا کن.
 
@@ -72,7 +72,7 @@ begin
     end if;
     raise exception using errcode = '23505', message = 'failed payment cannot be re-used';
   end if;
-  if v_payment.status not in ('pending','manual') then
+  if v_payment.status <> 'pending' then
     raise exception using errcode = '23505', message = 'payment is not awaiting settlement';
   end if;
 

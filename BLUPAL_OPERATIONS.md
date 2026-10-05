@@ -113,7 +113,7 @@ supabase db push --linked          # یا: SQL Editor → Paste → Run
 
 ### اگر اجرای فایل کامل خطای paste داد
 
-فایل مهاجرت ۶۶۷ خط است؛ چسباندن یک‌جا در Supabase SQL Editor گاهی نیمه‌بریده می‌شود و
+فایل مهاجرت بیش از ۷۰۰ خط است؛ چسباندن یک‌جا در Supabase SQL Editor گاهی نیمه‌بریده می‌شود و
 پستگرس این خطا را می‌دهد:
 
 ```
@@ -124,18 +124,22 @@ Failed to run sql query: ERROR: 42601: unterminated dollar-quoted string at or n
 راه امن: اجرای قطعه‌های آماده به ترتیب شماره (هر قطعه یک تراکنش کامل است):
 
 ```
-supabase/manual/01_schema_and_legacy.sql
-supabase/manual/02_order_rpcs.sql
-supabase/manual/03_attach_invoice.sql
-supabase/manual/04_settle_payment.sql
-supabase/manual/05_expiry_and_admin.sql
-supabase/manual/06_retire_legacy.sql
+supabase/manual/01_schema_and_legacy.sql      ۱۴۳ خط
+supabase/manual/02_create_order.sql           ۲۱۵ خط
+supabase/manual/03_cancel_order.sql            ۶۴ خط
+supabase/manual/04_attach_invoice.sql          ۸۷ خط
+supabase/manual/05_settle_payment.sql         ۱۲۳ خط
+supabase/manual/06_expiry_and_admin.sql       ۱۲۷ خط
+supabase/manual/07_retire_legacy.sql           ۲۱ خط
 ```
+
+قبل از Run یک چشم‌به‌خط بزن: **آخرین خط چیزی که paste کرده‌ای باید `commit;` باشد.** اگر نبود، کپی
+ناقص است و همان خطای بالا را می‌گیری (فایل را از GitHub با دکمهٔ Raw بردار، نه از پیش‌نمایش چت).
 
 هر بار فقط یک فایل را کپی کن و Run بزن؛ باید پیام `Success. No rows returned` بگیری.
 این فایل‌ها با `node scripts/blupal-sql-chunks.js` از همان فایل مهاجرت ساخته می‌شوند
 (هیچ خطی کم یا زیاد نمی‌شود — تست `node tests/blupal.js` این را بررسی می‌کند) و `npm run build`
-مطمئن می‌شود که بی‌رمق با مهاجرت هم‌زمان‌اند.
+مطمئن می‌شود که قطعه‌ها همیشه با مهاجرت هم‌زمان بمانند.
 
 **مهم:** اگر اجرا در میانه خطا بدهد، هیچ نیمه‌ای اعمال نمی‌شود (هم `begin; commit;` دارد، هم پستگرس
 اول کل متن را parse می‌کند). برای اطمینان از وضعیت فعلی:
@@ -150,12 +154,45 @@ select conname from pg_constraint where conrelid = 'public.payments'::regclass a
 و فقط باید ادامهٔ کار را بررسی کنی. اجرای دوبارهٔ همهٔ قطعه‌ها هم بی‌ضرر است (تابع‌ها
 `create or replace` هستند و قیدها با `drop … if exists` ساخته می‌شوند).
 
+### خطای `P0001: payments contains settled rows from the retired gateway`
+
+این خطا مخصوص قطعهٔ ۱ در **نسخهٔ قبلی** بود: اگر جدول `payments` ردیف تأییدشده‌ای از درگاه قبلی
+داشته باشد، مهاجرت عمداً می‌ایستاد تا تاریخچهٔ مالی دست‌نخورده بماند. نسخهٔ فعلی همان تاریخچه را
+نگه می‌دارد و دیگر متوقف نمی‌شود:
+
+- ردیف‌های پرداختی قدیمی با همان نام درگاهِ خودشان **می‌مانند** — برای گزارش مالی و تطبیق
+  واریزی‌های قبلی؛ هیچ مبلغ یا وضعیتی بازنویسی نمی‌شود.
+- قفل `CHECK` طوری اضافه می‌شود که این نام‌های تاریخ‌مصرف در ستون مجاز بمانند، ولی یک تریگر
+  (`payments_enforce_blupal_provider`) اجازه نمی‌دهد **پرداخت تازه‌ای** با درگاه حذف‌شده ثبت شود.
+- چک‌اوت‌های رهاشدهٔ `pending` از درگاه قبلی بسته می‌شوند: موجودی آزاد، سفارش `cancelled`،
+  `provider_code = 'GATEWAY_RETIRED'` و مصرف کوپن برگشت می‌خورد (وگرنه آن موجودی برای همیشه قفل می‌ماند).
+- یک `NOTICE` هم می‌بینی: `blupal: N retired-gateway payment row(s) stay in the table as history`
+  — این پیام خطا نیست؛ می‌گوید چند ردیف قدیمی به‌عنوان تاریخچه نگهداری شد.
+
+قبل از اجرا خوب است نگاهی به همان جدول بیندازی (چند ردیف است، وضعیتش چه بود، مال چه تاریخی):
+
+```sql
+select provider, status, count(*) as rows,
+       min(created_at)::date as oldest, max(created_at)::date as newest, sum(amount_toman) as toman
+  from public.payments group by 1, 2 order by 1, 2;
+```
+
+اگر همان `P0001` را گرفتی، یعنی قطعهٔ ۱ قدیمی را paste کرده‌ای؛ فایل `01_schema_and_legacy.sql` را
+دوباره (به‌صورت Raw) بردار و اجرا کن. اگر می‌خواهی تاریخچهٔ تستی را پاک کنی هم اجباری نیست —
+قطعه‌ها بدون حذف هم اجرا می‌شوند.
+
+همین SQL حالا در `node tests/blupal-sql.js` روی یک Postgres واقعی هم اجرا می‌شود (هر دو مسیر:
+قطعه‌ها و خودِ فایل مهاجرت، با ردیف‌های قدیمیِ پرداخت‌شده و رهاشده). اگر روی ماشینت
+`pgserver` نصب نباشد، تست با پیام SKIP رد می‌شود؛ با `pip install "pgserver" "psycopg[binary]"` فعال می‌شود.
+
 `supabase/migrations/202610050001_blupal_provider.sql` این‌ها را انجام می‌دهد:
 
-* `payments.provider` فقط می‌تواند `'blupal'` باشد (کلید پیش‌فرض `mock` حذف می‌شود).
-* رکوردهای رهاشدهٔ درگاه‌های قبلی (که در جدول `payments` مانده‌اند) بسته می‌شوند و
-  رزرو موجودی/سهم کد تخفیف آزاد می‌شود. اگر ردیف *تأییدشده‌ای* از آن‌ها وجود داشته باشد، مهاجرت عمداً
-  خطا می‌دهد تا اول دستی تسویه/بازگشت وجه کنید.
+* `payments.provider` کلید پیش‌فرض `mock` را از دست می‌دهد؛ قید `CHECK` بعد از این فقط `'blupal'` و
+  نام درگاه‌های بازنشسته (برای رکوردهای قدیمی) را می‌پذیرد، و تریگر `payments_enforce_blupal_provider`
+  نمی‌گذارد پرداخت **تازه** با درگاه حذف‌شده ثبت شود یا یک پرداخت به درگاه بازنشسته منتقل شود.
+* چک‌اوت‌های `pending` درگاه‌های قبلی بسته می‌شوند: رزرو موجودی و سهم کد تخفیف آزاد می‌شود، سفارش
+  `cancelled` می‌شود و `provider_code = 'GATEWAY_RETIRED'` ثبت می‌شود. ردیف‌های *تأییدشده*ٔ قدیمی
+  بازنویسی نمی‌شوند (همان تاریخچهٔ مالی‌اند) و مهاجرت به‌جای توقف، تعدادشان را با `NOTICE` گزارش می‌کند.
 * سه RPC بالا ساخته می‌شوند؛ هر دو `attach` و `settle` فقط با `service_role` اجرا می‌شوند.
 * `settle_blupal_payment` یک‌مصرف است: پرداخت تأییدشده دوباره تأیید نمی‌شود و پرداخت منقضی‌شده
   با وب‌هوک تکراری باز نمی‌شود.
