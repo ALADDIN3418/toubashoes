@@ -17,7 +17,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const blupal = require('../lib/blupal.js');
-const { serverConfiguration, callServiceRpc, supabaseServerConfig } = require('../lib/supabase-server.js');
+const { serverConfiguration, callServiceRpc, supabaseServerConfig, missingServerKeys } = require('../lib/supabase-server.js');
 
 const ROOT = path.join(__dirname, '..');
 const TEMPLATES = ['vercel.env.example', '.env.example'];
@@ -210,7 +210,10 @@ async function main() {
     if (!functions.ok) problems.push(functions.detail);
     if (!chunks.ok) problems.push(chunks.detail);
     const database = supabaseServerConfig();
-    if (!database.serviceConfigured) problems.push('SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY کامل نیست؛ پرداخت به سفارش متصل نمی‌شود.');
+    if (!database.serviceConfigured) {
+      const missing = missingServerKeys();
+      problems.push(`سفارش پرداخت‌شده به دیتابیس وصل نمی‌شود؛ در Vercel این متغیرها تنظیم نشده: ${missing.join('، ') || 'نامشخص'}.`);
+    }
     if (gate) problems.push(`قفل وجه واقعی: ${gate.message}`);
     console.log(JSON.stringify({
       ok: problems.length === 0,
@@ -222,7 +225,7 @@ async function main() {
         migration: { ok: migration.ok, detail: migration.detail },
         apiFunctions: { ok: functions.ok, detail: functions.detail },
         manualChunks: { ok: chunks.ok, detail: chunks.detail },
-        database: { ok: database.serviceConfigured, detail: database.serviceConfigured ? 'پیکربندی سرویس Supabase کامل است.' : 'متغیرهای سرویس Supabase ناقص است.' }
+        database: { ok: database.serviceConfigured, missing: missingServerKeys(), detail: database.serviceConfigured ? 'پیکربندی سرویس Supabase کامل است.' : `متغیرهای سرویس Supabase ناقص است: ${missingServerKeys().join('، ')}.` }
       },
       problems
     }, null, 2));

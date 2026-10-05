@@ -782,6 +782,28 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.equal(unconfiguredStatus.body.configured, false);
   assert.equal(unconfiguredStatus.body.paymentEnabled, false);
   assert.equal(unconfiguredStatus.res.statusCode, 200, 'the health endpoint answers even when nothing is configured');
+  /* an owner who has not wired Vercel yet must be told exactly what is missing — by name only */
+  const supabaseServer = require('../lib/supabase-server.js');
+  assert.deepEqual(supabaseServer.missingServerKeys({ SUPABASE_URL: 'https://x.supabase.co' }),
+    ['SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY'], 'the missing list names the key that is absent');
+  assert.deepEqual(supabaseServer.missingServerKeys({
+    SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_abc', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_abc'
+  }), [], 'a complete configuration reports nothing missing');
+  assert.deepEqual(supabaseServer.missingServerKeys({ SUPABASE_URL: 'https://x.supabase.co/rest/v1' }),
+    ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY'], 'a project URL with a path is still unusable');
+  let configError = null;
+  try { supabaseServer.serverConfiguration({}); } catch (error) { configError = error; }
+  assert.equal(configError.status, 503);
+  assert.match(configError.message, /SUPABASE_URL/, 'the refusal the shopper sees names the missing variables');
+  assert.match(configError.message, /Redeploy/, 'and tells the owner the deployment has to be rebuilt');
+  assert.deepEqual(unconfiguredStatus.body.missingDatabaseKeys, [], 'the gateway key being absent is not a Supabase problem');
+  const partialStatus = await runHandler(BluPal.status, {
+    state: newState(), request: { method: 'GET', headers: {} }, env: { SUPABASE_SERVICE_ROLE_KEY: '' }
+  });
+  assert.deepEqual(partialStatus.body.missingDatabaseKeys, ['SUPABASE_SERVICE_ROLE_KEY'],
+    'the health endpoint names the variable the owner has to add in Vercel');
+  assert.equal(partialStatus.body.configured, false, 'and the payment stays off until it is there');
+  assert.equal(JSON.stringify(unconfiguredStatus.body).includes('eyJ'), false, 'a service key value must never be printed');
   section('status endpoint');
 
 
@@ -1063,7 +1085,8 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.equal(packageJson.scripts['blupal:check'], 'node scripts/blupal-cli.js verify');
   assert.match(packageJson.scripts.test, /tests\/blupal\.js/);
   const ops = fs.readFileSync(path.join(ROOT, 'BLUPAL_OPERATIONS.md'), 'utf8');
-  for (const must of ['blupal.top', 'X-API-Key', 'final_amount', 'Webhook درگاه', 'Callback page', 'simulate', '200', 'invoice_id']) {
+  for (const must of ['blupal.top', 'X-API-Key', 'final_amount', 'Webhook درگاه', 'Callback page', 'simulate', '200', 'invoice_id',
+    'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'missingDatabaseKeys']) {
     assert.ok(ops.includes(must), `the operations guide must cover ${must}`);
   }
   assert.ok(!/bluepal\.ir|sk_test_|sk_live_|merchant_id/i.test(ops), 'the operations guide must not describe the other vendor');
