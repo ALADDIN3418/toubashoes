@@ -318,7 +318,7 @@ function cartPage(){
       <aside class="cart-summary compact-summary-panel">
         <h3 class="summary-heading">خلاصه سفارش</h3>
         <div class="summary-line"><span>جمع اقلام (${totalCount.toLocaleString('fa-IR')} عدد)</span><b>${toman(sub)}</b></div>
-        <div class="summary-line"><span>هزینه ارسال</span><b>${shipping?toman(shipping):'<span style="color:#10b981;font-weight:700">رایگان</span>'}</b></div>
+        <div class="summary-line"><span>هزینه ارسال</span><b>${shipping?toman(shipping):'<span style="color:var(--touba-brand,#10b981);font-weight:700">رایگان</span>'}</b></div>
         ${discount?`<div class="summary-line discount-line"><span>تخفیف</span><b style="color:#ef4444">− ${toman(discount)}</b></div>`:''}
         <div class="summary-line total"><span>مبلغ قابل پرداخت</span><b class="final-price">${toman(finalTotal)}</b></div>
 

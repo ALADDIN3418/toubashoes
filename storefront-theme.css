@@ -1530,3 +1530,94 @@ body.storefront-mode[data-theme="light"] .brand-emblem {
   color: inherit;
   border-inline-end-color: rgba(15, 23, 17, 0.22);
 }
+
+/* ═══════ هم‌سازی مؤلفه‌ها و کنتراست: هر دو تم، دکمه‌ها و فرم‌ها ═══════
+   استایل پایه (stage4.css) روشن‌محور نوشته شده؛ این بلوک همهٔ کنترل‌های ویترین را
+   در دو تم روی متغیرهای مشترک می‌آورد: چیپ‌ها، پیل‌ها، شمارندهٔ تعداد، توست،
+   مودال، تایم‌لاین، کارت رهگیری، حالت انتخاب رادیویی، autofill و افکت hover. */
+
+/* چیپ وضعیت — سبز/قرمز/آبی؛ در تیره به‌جای پس‌زمینهٔ پاستلیِ سفید، تیِنت نیمه‌شفاف. */
+body.storefront-mode .badge.green{background:#e3f3e6;color:#1f7a3d;border:1px solid #bfe3c8}
+body.storefront-mode .badge.red{background:#fdecec;color:#b3372f;border:1px solid #f2c4bf}
+body.storefront-mode .badge.info{background:#e8f0fe;color:#1a56b4;border:1px solid #c6daf5}
+body.storefront-mode[data-theme="dark"] .badge{background:rgba(236,241,226,.09);color:var(--touba-muted);border-color:var(--touba-border)}
+body.storefront-mode[data-theme="dark"] .badge.green{background:rgba(74,222,128,.13);color:#6fca8b;border-color:rgba(74,222,128,.28)}
+body.storefront-mode[data-theme="dark"] .badge.red{background:rgba(248,113,113,.13);color:#ef9d97;border-color:rgba(248,113,113,.3)}
+body.storefront-mode[data-theme="dark"] .badge.info{background:rgba(96,165,250,.14);color:#9ec3f5;border-color:rgba(96,165,250,.35)}
+
+/* پیل سایز/رنگ و تب‌ها — حالت انتخاب با رنگ برند. */
+body.storefront-mode .pill{border-color:var(--touba-border)}
+body.storefront-mode .pill:hover{border-color:var(--touba-brand)}
+body.storefront-mode .pill.selected{background:color-mix(in srgb,var(--touba-brand) 20%,var(--touba-surface))!important;border-color:var(--touba-brand)!important;color:var(--touba-text)!important;font-weight:700}
+body.storefront-mode .tab{color:var(--touba-muted)}
+body.storefront-mode .tab.active{color:var(--touba-brand)!important;border-bottom-color:var(--touba-brand)!important}
+
+/* شمارندهٔ تعداد (سبد و صفحهٔ محصول). */
+body.storefront-mode .qty{background:var(--touba-surface)!important;border-color:var(--touba-border)!important}
+body.storefront-mode .qty button{background:var(--touba-surface-soft)!important;color:var(--touba-text)!important}
+body.storefront-mode .qty button:hover{background:color-mix(in srgb,var(--touba-brand) 22%,var(--touba-surface-soft))!important}
+body.storefront-mode .qty button:active{transform:scale(.94)}
+body.storefront-mode .qty span{color:var(--touba-text)!important}
+
+/* توست: هم‌خانوادهٔ سطحِ تم، با حاشیه و سایهٔ شناور. */
+body.storefront-mode .toast{background:var(--touba-surface-raised)!important;color:var(--touba-text)!important;border:1px solid var(--touba-border)!important;box-shadow:var(--shadow-floating)!important}
+
+/* دکمه‌های عملیات ریز (حذف/ویرایش/کد تخفیف). */
+body.storefront-mode .action{background:var(--touba-surface-soft)!important;color:var(--touba-text)!important;border:1px solid var(--touba-border)!important}
+body.storefront-mode .action:hover{background:color-mix(in srgb,var(--touba-brand) 16%,var(--touba-surface-soft))!important;border-color:var(--touba-brand)!important}
+body.storefront-mode .action.danger{color:#c53a2d}
+body.storefront-mode[data-theme="dark"] .action.danger{color:#f19189}
+
+/* مودال: هاورِ دکمهٔ بستن. */
+body.storefront-mode .modal-head .close:hover{background:color-mix(in srgb,var(--touba-brand) 18%,var(--touba-surface-soft))!important}
+
+/* رادیو/چک‌باکس: رنگ انتخاب از برند + هایلایت گزینهٔ انتخابی در کارت‌های ارسال و پرداخت. */
+body.storefront-mode input[type="radio"],
+body.storefront-mode input[type="checkbox"]{accent-color:var(--touba-brand)}
+body.storefront-mode .shipping-option:has(input:checked),
+body.storefront-mode .payment-method-card:has(input:checked){border-color:var(--touba-brand)!important;background:color-mix(in srgb,var(--touba-brand) 10%,var(--touba-surface-soft))!important}
+
+/* خودکارپُرکردن مرورگر در تیره: بلوک زرد پیش‌فرض کروم حذف می‌شود. */
+body.storefront-mode input:-webkit-autofill,
+body.storefront-mode input:-webkit-autofill:hover,
+body.storefront-mode input:-webkit-autofill:focus{box-shadow:0 0 0 1000px var(--touba-surface-raised) inset!important;-webkit-text-fill-color:var(--touba-text)!important;border-radius:10px}
+
+/* بازشوی select در تم تیره. */
+body.storefront-mode[data-theme="dark"] select option{background:var(--touba-surface-raised);color:var(--touba-text)}
+
+/* سلکت‌های رنگ/سایز داخل سبد و برچسب موجودی. */
+body.storefront-mode .cart-variant-fields select{background:var(--touba-surface-raised)!important;color:var(--touba-text)!important;border:1px solid var(--touba-border)!important;border-radius:8px;padding:4px 8px}
+body.storefront-mode .variant-stock-label{color:var(--touba-subtle)!important}
+
+/* کارت رهگیری و تایم‌لاین مراحل. */
+body.storefront-mode .tracking-card{background:var(--touba-surface-soft)!important;border:1px solid var(--touba-border)!important;color:var(--touba-text)!important}
+body.storefront-mode .tracking-card p{color:var(--touba-muted)}
+body.storefront-mode .timeline-step{color:var(--touba-subtle)!important}
+body.storefront-mode .timeline-step:before{background:var(--touba-border)!important}
+body.storefront-mode .timeline-step i{background:var(--touba-surface-raised)!important;color:var(--touba-subtle)!important;border:1px solid var(--touba-border)}
+body.storefront-mode .timeline-step.done{color:var(--touba-brand)!important}
+body.storefront-mode .timeline-step.done i{background:var(--touba-brand)!important;border-color:transparent!important;color:#10190f!important}
+body.storefront-mode[data-theme="light"] .timeline-step.done i{color:#fbfdf7!important}
+body.storefront-mode .timeline-step.done:before{background:var(--touba-brand)!important}
+
+/* یادداشت خطا: تیِنت قرمز ماندگار در هر دو تم (از قاعدهٔ عمومی .notice بعدتر می‌آید). */
+body.storefront-mode .notice.error-notice,
+body.storefront-mode .error-notice{background:color-mix(in srgb,#e5484d 13%,var(--touba-surface))!important;color:var(--touba-text)!important;border-color:color-mix(in srgb,#e5484d 32%,var(--touba-border))!important}
+
+/* هایلایت سبزِ آیکون نتیجهٔ پرداخت در تم تیره (پاستلِ روشن در stage3.css ثابت است). */
+body.storefront-mode[data-theme="dark"] .payment-result-icon.success{background:rgba(74,222,128,.14);color:#6fca8b}
+body.storefront-mode[data-theme="dark"] .payment-result-icon.failure{background:rgba(248,113,113,.14);color:#ef9d97}
+body.storefront-mode[data-theme="dark"] .payment-result-icon.pending{background:rgba(252,211,77,.14);color:#e8c473}
+body.storefront-mode[data-theme="dark"] .category-card:hover .category-icon{background:rgba(74,222,128,.14);color:#6fca8b}
+
+/* حالت غیرفعال دکمه‌ها (دکمهٔ «افزودن» ناموجود/در حال ارسال). */
+body.storefront-mode .btn:disabled{opacity:.55;filter:saturate(.55);cursor:not-allowed}
+body.storefront-mode .btn:disabled:hover{transform:none;box-shadow:none}
+
+/* قابِ بندانگشتیِ انتخابی گالری محصول. */
+body.storefront-mode .thumbs button.selected,
+body.storefront-mode .gallery-thumb.selected{outline:2px solid var(--touba-brand);outline-offset:2px}
+
+/* حالت خالی و کادر سبد خالی. */
+body.storefront-mode .empty{color:var(--touba-muted)!important}
+body.storefront-mode .empty-cart-box p{color:var(--touba-muted)}

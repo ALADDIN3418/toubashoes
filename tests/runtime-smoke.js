@@ -123,6 +123,31 @@ async function main() {
   assert.match(studio, /StoreServices\.products\.update/);
   assert(fs.readFileSync(path.join(root,'services/ai-product-desc.js'),'utf8').length > 0, 'separate product-description assistant remains present');
 
+  // Theme-parity guard: every storefront control must be themed in BOTH palettes.
+  {
+    const theme = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf-8');
+    for (const needle of [
+      'body.storefront-mode .badge.info',
+      'body.storefront-mode[data-theme=\"dark\"] .badge.info',
+      'body.storefront-mode .toast{background:var(--touba-surface-raised)!important',
+      'body.storefront-mode .qty button{background:var(--touba-surface-soft)!important',
+      'body.storefront-mode .pill.selected',
+      'body.storefront-mode .tab.active{color:var(--touba-brand)!important',
+      'accent-color:var(--touba-brand)',
+      'input:-webkit-autofill',
+      'body.storefront-mode .notice.error-notice',
+      'body.storefront-mode .timeline-step.done i',
+      'data-theme=\"dark\"] .payment-result-icon.success',
+      'body.storefront-mode .modal-head .close:hover'
+    ]) assert(theme.includes(needle), `storefront-theme.css missing theme-parity rule: ${needle}`);
+    const stage3 = fs.readFileSync(path.join(root,'stage3.js'),'utf-8');
+    assert(!stage3.includes('style=\"color:#777\"'), 'stage3.js login hint must use themed .muted, not hardcoded #777');
+    assert(!stage3.includes('background:#eef4ff'), 'stage3.js BluPal chip must use .badge.info, not inline pastel');
+    assert(stage3.includes('badge info'), 'stage3.js BluPal chip missing .badge.info');
+    assert(!fs.readFileSync(path.join(root,'customer-orders.js'),'utf8').includes('#fbe9e4'), 'customer-orders tracking error must use .notice.error-notice');
+    assert(fs.readFileSync(path.join(root,'stage4.js'),'utf8').includes('color:var(--touba-brand,#10b981)'), 'stage4 free-shipping highlight must follow theme brand color');
+  }
+
   console.log('PASS: Supabase-only hydration, fail-closed schema guard, no local commerce snapshots/demo fixtures, Supabase Storage image path, script order, AI Studio constraints, and responsive layout guards');
 }
 
