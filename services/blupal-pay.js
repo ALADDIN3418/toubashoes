@@ -1,9 +1,10 @@
 /* BluPal client bridge (بلوپال · blupal.top — کارت‌به‌کارت با فاکتور).
  *
  * این فایل عمداً هیچ راز یا مبلغی را تعیین نمی‌کند؛ فقط سه کار می‌کند:
- *   ۱) ساخت فاکتور از سرور (POST /api/payment/blupal/request) و هدایت کاربر به payment_link
- *      (سرور مبلغ را از پایگاه داده به ریال می‌فرستد و «مبلغ دقیق قابل واریز» = final_amount را برمی‌گرداند)
- *   ۲) نگهداری receipt امضاشدهٔ سرور در sessionStorage تا پس از بازگشت مشتری، وضعیت همان سفارش پیدا شود
+ *   ۱) ساخت فاکتور از سرور (POST /api/payment/blupal/request) و هدایت کاربر به صفحهٔ پرداختِ فروشگاه
+ *      که کارت مقصد و «مبلغ دقیق قابل واریز» = final_amount را نشان می‌دهد
+ *   ۲) نگهداری receipt امضاشدهٔ سرور و پاسخِ ساخت فاکتور در sessionStorage تا صفحهٔ /payment/transfer
+ *      و بازگشت مشتری بدون وابستگی به حافظهٔ فرارِ صفحه کار کنند
  *   ۳) پرس‌وجوی وضعیت از سرور (POST /api/payment/blupal/receipt) — سرور خودش وضعیت فاکتور را با
  *      GET /v1/invoices/{invoice_id} از درگاه می‌پرسد؛ پاسخ کلاینت و وب‌هوک هرگز مبنای پرداخت نیست.
  * مستندات: پنل بلوپال ← «داکیومنت» (پایگاه: https://blupal.top/api)
@@ -16,6 +17,8 @@
   const STATUS_ENDPOINT = '/api/payment/blupal/status';
   const RECEIPT_PREFIX = 'touba.blupal.receipt.';
   const PENDING_PREFIX = 'touba.blupal.pending.';
+  const GATEWAY_PREFIX = 'touba.blupal.gateway.';
+  const TRANSFER_ROUTE = '/payment/transfer';
   const OUTCOMES = ['paid', 'pending', 'expired', 'cancelled'];
   let limitsCache = null;
 
@@ -79,6 +82,30 @@
     const store = safeStorage();
     if (!store) return;
     try { if (orderId) store.removeItem(PENDING_PREFIX + orderId); else { const id = pendingOrderId(); if (id) store.removeItem(PENDING_PREFIX + id); } } catch { /* ignore */ }
+  }
+
+  // پاسخ سرور برای ساخت فاکتور (کارت مقصد، مبلغ دقیق، لینک درگاه، مهلت) این‌جا نگه داشته
+  // می‌شود تا صفحهٔ پرداختِ خودِ فروشگاه (/payment/transfer) بتواند بعد از جابه‌جایی کاملِ صفحه آن‌ها را نشان دهد.
+  // هیچ رازی در این پاسخ نیست؛ همان اطلاعاتی است که صفحهٔ درگاه هم به مشتری نشان می‌دهد.
+  function rememberGateway(orderId, gateway) {
+    const store = safeStorage();
+    if (!store || !orderId || !gateway) return;
+    try { store.setItem(GATEWAY_PREFIX + orderId, JSON.stringify({ ...gateway, rememberedAt: Date.now() })); } catch { /* private mode */ }
+  }
+
+  function gatewayFor(orderId) {
+    const store = safeStorage();
+    if (!store || !orderId) return null;
+    try {
+      const raw = store.getItem(GATEWAY_PREFIX + orderId);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function forgetGateway(orderId) {
+    const store = safeStorage();
+    if (!store || !orderId) return;
+    try { store.removeItem(GATEWAY_PREFIX + orderId); } catch { /* ignore */ }
   }
 
   // receipt از query هم پذیرفته می‌شود تا پیوندهای ارسالی پشتیبانی کار کنند.
@@ -184,11 +211,12 @@
   }
 
   // تلاش دوباره برای پرداخت همان سفارشِ باز (فاکتور تازه از سرور گرفته می‌شود).
+  // دیگر کل صفحه را به درگاه نمی‌فرستد؛ پاسخ تازه ذخیره می‌شود و فراخوان، صفحهٔ پرداخت فروشگاه را باز می‌کند.
   async function retryPayment(orderId) {
     const target = orderId || pendingOrderId();
     if (!target) throw new Error('سفارش بازی برای پرداخت پیدا نشد.');
     const gateway = await requestGateway(target);
-    openPayment(gateway);
+    rememberGateway(target, gateway);
     return gateway;
   }
 
@@ -209,6 +237,10 @@
     clearPending,
     requestGateway,
     openPayment,
+    rememberGateway,
+    gatewayFor,
+    forgetGateway,
+    TRANSFER_ROUTE,
     settleOnce,
     pollSettlement,
     retryPayment

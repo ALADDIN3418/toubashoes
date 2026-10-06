@@ -674,6 +674,7 @@ window.wishlistPage=wishlistPage;
 window.go=smoothGo;
 window.shop=modernShop;
 window.checkout=modernCheckout;
+window.paymentTransfer=paymentTransfer;
 window.tracking=modernTracking;
 window.contentPage=modernContentPage;
 window.render=animatedRender;
@@ -970,6 +971,99 @@ function modernCheckout() {
         </div>
       </aside>
     </form>
+  </main>${footer()}`;
+}
+
+/* ---- صفحهٔ پرداخت فروشگاه: کارت سبزرنگ + مبلغ دقیق + کپی ریال و تومان ---- */
+function ptxGroup(v){return String(v??'').replace(/\B(?=(\d{3})+(?!\d))/g,'٬')}
+function ptxCardGroups(v){const d=String(v||'').replace(/\D/g,'').slice(0,16);return d.replace(/(.{4})(?=.)/g,'$1 ')}
+async function ptxCopy(raw,label){
+  const value=String(raw??'');
+  if(!value){toast('چیزی برای کپی نیست.');return}
+  let ok=false;
+  try{
+    if(window.navigator?.clipboard?.writeText){await window.navigator.clipboard.writeText(value);ok=true}
+    else throw new Error('no-clipboard-api');
+  }catch{
+    try{
+      const area=document.createElement('textarea');
+      area.value=value;area.setAttribute('readonly','');area.style.position='fixed';area.style.top='-1000px';
+      document.body.appendChild(area);area.select();
+      ok=Boolean(document.execCommand&&document.execCommand('copy'));
+      area.remove();
+    }catch{ok=false}
+  }
+  toast(ok?`${label} کپی شد — در اپلیکیشن بانک بچسبانید`:'کپی نشد؛ متن را از همین صفحه دستی بردارید.');
+}
+function paymentTransfer(){
+  const bridge=window.ToubaBluPal;
+  const orderId=String(window.__checkoutOrderId||(bridge&&bridge.pendingOrderId?bridge.pendingOrderId():'')||'');
+  const gw=orderId&&bridge&&bridge.gatewayFor?bridge.gatewayFor(orderId):null;
+  const order=(db.orders||[]).find(x=>String(x.id)===String(orderId));
+  if(!gw){
+    return `${header()}<main class="page container" style="max-width:720px"><div class="panel empty"><div class="big">💳</div><h2>فعلاً فاکتور بازی برای پرداخت ندارید</h2><p>برای دریافت شمارهٔ کارت و مبلغ دقیق، سفارش را از سبد خرید نهایی کنید.</p><a class="btn" href="/checkout">رفتن به تسویه حساب</a></div></main>${footer()}`;
+  }
+  if(order&&order.paymentStatus==='PAID'){
+    return `${header()}<main class="page container" style="max-width:720px"><div class="panel" style="text-align:center;padding:34px"><div style="font-size:40px;color:#10b981">✓</div><h2>پرداخت این سفارش تأیید شده است</h2><p style="color:#666">نیازی به واریز دوباره نیست؛ رسید و وضعیت ارسال را ببینید.</p><a class="btn" href="/payment/result/${esc(orderId)}">مشاهدهٔ رسید سفارش</a> <a class="btn outline" href="/account/orders">سفارش‌های من</a></div></main>${footer()}`;
+  }
+  const fa=number=>Number(number||0).toLocaleString('fa-IR');
+  const finalRial=Math.max(0,Math.floor(Number(gw.finalAmountRial||0)));
+  const tomanWhole=Math.floor(finalRial/10);
+  const tomanRem=finalRial%10;
+  const tomanCopy=tomanRem?`${tomanWhole}.${tomanRem}`:`${tomanWhole}`;
+  const cardDigits=String(gw.destinationCard||'').replace(/\D/g,'');
+  const payUrl=/^https:\/\//i.test(String(gw.paymentUrl||''))?String(gw.paymentUrl):'';
+  const expiryMs=Number(Date.parse(String(gw.expiresAt||'')))||0;
+  const expiryText=expiryMs?new Intl.DateTimeFormat('fa-IR',{dateStyle:'short',timeStyle:'short'}).format(new Date(expiryMs)):`${Number(gw.checkoutMinutes||60)} دقیقه پس از ساخت فاکتور`;
+  return `${header()}<main class="page container" style="max-width:780px;margin:24px auto 60px">
+    <div class="breadcrumb"><a href="/">خانه</a>　/　<a href="/checkout">تسویه حساب</a>　/　<span>پرداخت بلوپال</span></div>
+    <h1 class="page-title" style="margin-bottom:6px">واریز به کارت · سفارش ${esc(gw.orderNumber||order?.number||'')}</h1>
+    <p class="muted" style="margin:0 0 18px;font-size:12.5px">شمارهٔ فاکتور: <code>${esc(gw.invoiceId||gw.authority||'—')}</code> · مهلت پرداخت: ${esc(expiryText)}</p>
+
+    <section class="panel" style="background:linear-gradient(135deg,#081710 0%,#0d2b1c 55%,#123a26 100%);border:1px solid rgba(16,185,129,.45);box-shadow:0 14px 40px rgba(6,40,25,.35);color:#eafff5">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <b style="color:#6ee7b7;font-size:13px;letter-spacing:.02em">◈ کارت مقصد — فقط به همین کارت واریز کنید</b>
+        <span style="font-size:11px;color:#9adbc0">بلوپال · کارت‌به‌کارت</span>
+      </div>
+      <div dir="ltr" style="text-align:center;font:800 clamp(22px,6.4vw,32px)/1.7 'Courier New',ui-monospace,monospace;letter-spacing:.1em;color:#34d399;text-shadow:0 0 22px rgba(52,211,153,.4)">${cardDigits?esc(ptxCardGroups(cardDigits)):'— — — —'}</div>
+      <div style="display:flex;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+        ${cardDigits?`<button type="button" class="btn small" style="background:#10b981;color:#04160d;border:0" onclick="ptxCopy('${esc(cardDigits)}','شمارهٔ کارت')">کپی شمارهٔ کارت</button>`:`<p style="font-size:12px;color:#bfe9d4;margin:0">شمارهٔ کارت پیش‌فرض پنل است؛ آن را از صفحهٔ رسمی درگاه بردارید.</p>`}
+        ${payUrl?`<a class="btn small outline" style="color:#eafff5;border-color:#34d399" href="${esc(payUrl)}" target="_blank" rel="noopener">مشاهدهٔ صفحهٔ رسمی درگاه ↗</a>`:''}
+      </div>
+      <p style="font-size:11.5px;color:#9adbc0;margin:12px 0 0;text-align:center">شمارهٔ کارتِ <b>خودتان</b>، CVV2 یا رمز دوم را هیچ‌جای این صفحه وارد نکنید؛ پرداخت فقط از اپلیکیشن بانک شما انجام می‌شود.</p>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <h3 style="margin:0 0 12px">مبلغ دقیق قابل واریز</h3>
+      <div class="summary-line total" style="border-bottom:1px dashed #cfe3c3;padding-bottom:10px">
+        <span>به ریال <small class="muted">(مرجع اصلی تطبیق)</small></span>
+        <b style="font-size:19px;color:#0b7a4f">${fa(finalRial)} ریال</b>
+      </div>
+      <div style="display:flex;gap:8px;margin:10px 0 14px;flex-wrap:wrap">
+        <button type="button" class="btn small" onclick="ptxCopy('${finalRial}','مبلغ به ریال')">کپی مبلغ به ریال</button>
+        <button type="button" class="btn outline small" onclick="ptxCopy('${tomanCopy}','مبلغ به تومان')">کپی مبلغ به تومان</button>
+      </div>
+      <div class="summary-line" style="border:0;padding:0">
+        <span>به تومان ${tomanRem?'<small class="muted">(با دقتِ اعشار — همین عدد در ریال دقیق است)</small>':''}</span>
+        <b>${fa(tomanWhole)}${tomanRem?`.${fa(tomanRem)}`:''} تومان</b>
+      </div>
+      ${tomanRem?`<div class="notice" style="margin-top:12px;background:#fdf6e3;border-color:#e8d9a8;color:#7a5c00">همراه‌بانک‌هایی که ورودی‌شان «تومانِ عددصحیح» است نمی‌توانند ${fa(tomanRem)} دَه‌تومانیِ آخر را بپذیرند؛ در آن بانک‌ها <b>همان مبلغ ریالی را وارد کنید</b> (حالت ریال) — واریزِ تومانِ گرد‌شده با فاکتور تطبیق نمی‌شود.</div>`:''}
+    </section>
+
+    <section class="panel" style="margin-top:16px;background:#f5f8f2">
+      <h3 style="margin:0 0 10px">چرا مبلغ، رُند نیست؟</h3>
+      <ol style="margin:0;padding-inline-start:20px;font-size:13px;line-height:2;color:#31483a">
+        <li>برای تشخیص پولِ تو از میان صدها واریزِ هم‌مبلغ، درگاه مبلغی تصادفی تا ۹۹۰ ریال به فاکتور اضافه می‌کند؛ همین چند ریال، «کد پیگیری» واریز توست.</li>
+        <li>تطبیق پرداخت <b>فقط با همین عدد رقم‌به‌رقم</b> انجام می‌شود؛ یک ریال کم یا زیاد یعنی پرداختِ بی‌صاحب.</li>
+        <li>اگر مبلغِ متفاوتی بریزی، پرداخت تأیید نمی‌شود و سفارش در انتظار می‌ماند؛ وجه طبق مقررات درگاه عودت می‌شود ولی زمان از دست می‌رود.</li>
+      </ol>
+    </section>
+
+    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+      <button type="button" class="btn" style="flex:1;min-width:220px" onclick="go('/payment/result/${esc(orderId)}')">پرداخت کردم — بررسی وضعیت</button>
+      <a class="btn outline" style="flex:0 0 auto" href="/account/orders">سفارش‌های من</a>
+    </div>
+    <p class="muted" style="font-size:11.5px;margin-top:12px">وضعیت را فروشگاه خودش نزد درگاه پیگیری می‌کند؛ لازم نیست فیش واریزی را برای کسی بفرستید، مگر مبلغ را اشتباه واریز کرده باشید.</p>
   </main>${footer()}`;
 }
 
