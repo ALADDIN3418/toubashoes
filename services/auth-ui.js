@@ -1054,16 +1054,54 @@
   g.account = accountPage;
   g.ordersPage = ordersPage;
 
+  // صفحهٔ انتظار پیش از رسیدن داده‌ها: انیمیشن برند (نه متن اخطار)، تا مشتری هنگام
+  // بارگذاریِ اولِ سرورِ سردِ Vercel سایت را ترک نکند. خطای واقعی همچون گذشته fail-closed است.
+  function dbLoadingScreen() {
+    return `<main class="tb-load" role="status" aria-live="polite">
+      <style>
+        .tb-load{min-height:100vh;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:#07110c;color:#e7f2dd;padding:24px}
+        .tb-load .tb-orbit{position:relative;width:88px;height:88px;display:grid;place-items:center}
+        .tb-load .tb-ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(140,173,75,.18);border-top-color:#a6c75e;animation:tb-spin .9s linear infinite}
+        .tb-load .tb-leaf{font-size:32px;color:#a6c75e;animation:tb-bob 1.7s ease-in-out infinite}
+        .tb-load h1{font-size:19px;margin:0;font-weight:700;color:#f2f8e9}
+        .tb-load .tb-sub{margin:8px 0 0;font-size:12.5px;color:#9db38b;display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
+        .tb-load .tb-dots i{display:inline-block;width:5px;height:5px;margin:0 2px;border-radius:50%;background:#a6c75e;animation:tb-jump 1s infinite}
+        .tb-load .tb-dots i:nth-child(2){animation-delay:.15s}
+        .tb-load .tb-dots i:nth-child(3){animation-delay:.3s}
+        .tb-load .tb-cards{display:flex;gap:10px;width:min(680px,92vw)}
+        .tb-load .tb-card{flex:1;border-radius:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);overflow:hidden}
+        .tb-load .tb-photo{height:62px;background:linear-gradient(90deg,rgba(166,199,94,.06) 25%,rgba(166,199,94,.17) 40%,rgba(166,199,94,.06) 65%);background-size:300%;animation:tb-shine 1.4s infinite}
+        .tb-load .tb-line{height:8px;margin:9px 10px;border-radius:6px;background:rgba(255,255,255,.09);animation:tb-fade 1.2s ease-in-out infinite}
+        .tb-load .tb-card .tb-line:last-child{width:58%;margin-bottom:12px}
+        .tb-load .tb-retry{border:1px solid rgba(166,199,94,.3);background:none;color:#7d9070;font-size:11px;border-radius:999px;padding:6px 16px;transition:.2s}
+        .tb-load .tb-retry:hover{color:#cfe8a8;border-color:#a6c75e}
+        @keyframes tb-spin{to{transform:rotate(360deg)}}
+        @keyframes tb-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+        @keyframes tb-jump{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-5px);opacity:1}}
+        @keyframes tb-fade{0%,100%{opacity:.5}50%{opacity:1}}
+        @keyframes tb-shine{to{background-position:-150% 0}}
+        @media (prefers-reduced-motion:reduce){.tb-load *{animation:none !important}}
+      </style>
+      <div class="tb-orbit"><span class="tb-ring" aria-hidden="true"></span><span class="tb-leaf" aria-hidden="true">❧</span></div>
+      <div style="text-align:center">
+        <h1>در حال آماده‌سازی ویترین…</h1>
+        <p class="tb-sub">اطلاعات فروشگاه مستقیم و امن از Supabase خوانده می‌شود؛ صفحه با دریافت کامل تازه می‌شود <span class="tb-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
+      </div>
+      <div class="tb-cards" aria-hidden="true">${'<div class="tb-card"><div class="tb-photo"></div><div class="tb-line"></div><div class="tb-line"></div></div>'.repeat(4)}</div>
+      <button type="button" class="tb-retry" onclick="location.reload()">اگر دیر شد، این را بزن</button>
+    </main>`;
+  }
+
   let __isAuthRendering = false;
   g.render = function () {
     if (__isAuthRendering) return;
     if (!g.__TOUBA_DATABASE_READY) {
       const app = g.document.querySelector?.('#app');
-      const loading = g.DataProvider?.state?.status === 'loading' || g.DataProvider?.state?.status === 'disconnected';
+      const loading = g.DataProvider?.state?.status === 'loading' || g.DataProvider?.state?.status === 'disconnected' || (!g.DataProvider?.state?.status && !g.__TOUBA_DATABASE_ERROR && !g.DataProvider?.state?.error);
       const error = g.__TOUBA_DATABASE_ERROR || g.DataProvider?.state?.error;
       if (g.document.body?.classList) g.document.body.classList.remove('storefront-mode','admin-body','has-commerce-sticky');
       if (app) app.innerHTML = loading
-        ? '<main class="page container"><section class="auth-card" role="status" style="text-align:center;margin:48px auto"><h1>در حال اتصال امن به پایگاه داده…</h1><p class="muted">اطلاعات فروشگاه فقط از Supabase بارگذاری می‌شوند.</p></section></main>'
+        ? dbLoadingScreen()
         : `<main class="page container"><section class="auth-card" role="alert" style="max-width:720px;text-align:center;margin:48px auto"><h1>فروشگاه موقتاً در دسترس نیست</h1><p class="muted">${esc(error?.message || 'اتصال یا آماده‌سازی پایگاه داده انجام نشد.')}</p><div class="notice" style="text-align:right">برای ادامه، تنظیمات Supabase و اجرای migrationهای عملیاتی پروژه را بررسی کنید. برنامه عمداً به دادهٔ Demo یا ذخیره‌سازی محلی برنمی‌گردد.</div><button class="btn" type="button" onclick="location.reload()">تلاش دوباره</button></section></main>`;
       return;
     }

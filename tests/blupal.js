@@ -1001,8 +1001,8 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   const stage3 = fs.readFileSync(path.join(ROOT, 'stage3.js'), 'utf8');
   assert.match(stage3, /window\.ToubaBluPal/, 'the storefront must use the BluPal bridge');
   assert.match(stage3, /ToubaBluPal\.requestGateway\(orderId\)/);
-  assert.match(stage3, /ToubaBluPal\.rememberGateway\(orderId, gateway\)/, 'the checkout must keep the invoice for the store\'s own payment page');
-  assert.match(stage3, /go\('\/payment\/transfer'\)/, 'the checkout must land on the transfer page, not on the gateway domain');
+  assert.match(stage3, /ToubaBluPal\.openPayment\(gateway\)/, 'the checkout must hand the customer straight to the official gateway page');
+  assert.ok(!/payment\/transfer|rememberGateway/.test(stage3), 'no intermediate store-owned payment page may sit between checkout and the gateway');
   assert.match(stage3, /row\.waitingForPayment/, 'the result page must read the new waiting flag');
   assert.match(stage3, /row\.invoiceId/, 'the result page shows the invoice id, not a track id');
   assert.match(stage3, /finalAmountRial/, 'the exact transfer amount is surfaced while pending');
@@ -1120,49 +1120,34 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.ok(!/balepay|Bale Pay|بله‌پی|zarinpal/i.test(ops), 'no retired gateway may reappear in the guide');
   section('ops CLI and guide');
 
-  /* 25) the store-owned payment page (green card, dual-copy amounts) + admin shipping labels */
-  section('payment transfer page and shipping labels');
-  // the floating guide was removed; its explanation now lives on the transfer page itself.
-  assert.ok(!fs.existsSync(path.join(ROOT, 'services', 'payment-guide.js')), 'the floating guide must be gone');
-  const transferIndex = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  assert.ok(!transferIndex.includes('payment-guide'), 'index.html must not reference the deleted guide');
+  /* 25) direct gateway handoff, animated DB loading screen, admin shipping labels */
+  section('gateway handoff, loading screen and shipping labels');
+  // the floating guide and the store-owned payment page were both removed by decision; nothing may keep them alive.
+  assert.ok(!fs.existsSync(path.join(ROOT, 'services', 'payment-guide.js')), 'the floating guide must stay deleted');
+  const handoffIndex = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.ok(!handoffIndex.includes('payment-guide'), 'index.html must not reference the deleted guide');
   assert.ok(!fs.readFileSync(path.join(ROOT, 'scripts', 'build-vercel.js'), 'utf8').includes('payment-guide'), 'the build list must not reference the deleted guide');
-  assert.ok(!fs.readFileSync(path.join(ROOT, 'BLUPAL_OPERATIONS.md'), 'utf8').includes('services/payment-guide.js'), 'the runbook must not reference the deleted guide file');
-  // the bridge keeps the server's invoice answer in sessionStorage so the route survives a full reload.
+  const stage4Handoff = fs.readFileSync(path.join(ROOT, 'stage4.js'), 'utf8');
+  assert.ok(!/paymentTransfer/.test(stage4Handoff), 'the intermediate payment page must be gone');
+  assert.ok(!/payment\/transfer/.test(stage3), 'the storefront must not route to an intermediate page');
+  // the bridge stays minimal: ask the server for an invoice, jump to payment_link — retry included.
   const bridgeSource = fs.readFileSync(path.join(ROOT, 'services', 'blupal-pay.js'), 'utf8');
-  assert.match(bridgeSource, /rememberGateway/, 'the bridge must persist the gateway payload');
-  assert.match(bridgeSource, /gatewayFor/, 'the bridge must expose the persisted gateway payload');
-  assert.match(bridgeSource, /forgetGateway/, 'a settled order must not keep a stale invoice around');
+  assert.ok(!/rememberGateway|gatewayFor|TRANSFER_ROUTE/.test(bridgeSource), 'no invoice persistence may survive the removed page');
   const retryFn = bridgeSource.match(/async function retryPayment[\s\S]*?\n  \}/)?.[0] || '';
-  assert.ok(/rememberGateway\(target, gateway\)/.test(retryFn), 'retry must persist the fresh invoice for the transfer page');
-  assert.ok(!/openPayment/.test(retryFn), 'retry must not jump to the gateway domain itself anymore');
-  const fakeBridgeWindow = {
-    location: { pathname: '/payment/transfer' },
-    sessionStorage: (() => { const box = new Map(); return { getItem: key => (box.has(key) ? box.get(key) : null), setItem: (key, value) => box.set(key, String(value)), removeItem: key => box.delete(key) }; })()
-  };
-  new Function('window', bridgeSource)(fakeBridgeWindow);
-  const bridgeApi = fakeBridgeWindow.ToubaBluPal;
-  assert.equal(bridgeApi.TRANSFER_ROUTE, '/payment/transfer');
-  bridgeApi.rememberGateway('ord-1', { paymentUrl: 'https://blupal.top/payment/1', finalAmountRial: 126400950, destinationCard: '6037991122334455' });
-  const remembered = bridgeApi.gatewayFor('ord-1');
-  assert.equal(remembered.finalAmountRial, 126400950, 'the transfer page reads the exact rial amount back from storage');
-  assert.equal(typeof remembered.rememberedAt, 'number');
-  bridgeApi.forgetGateway('ord-1');
-  assert.equal(bridgeApi.gatewayFor('ord-1'), null, 'forgetGateway clears the invoice');
-  // the transfer page itself: green card, dual copy buttons, the why-explanation, no own payment logic.
-  const transferPage = (fs.readFileSync(path.join(ROOT, 'stage4.js'), 'utf8').match(/function paymentTransfer\(\)[\s\S]*?\nfunction modernTracking/) || [''])[0];
-  assert.ok(transferPage.length > 500, 'stage4 must define paymentTransfer before modernTracking');
-  assert.match(transferPage, /#34d399/, 'the destination card must be displayed in green');
-  assert.match(transferPage, /کپی مبلغ به ریال/, 'a rial copy button is required');
-  assert.match(transferPage, /کپی مبلغ به تومان/, 'some banks take toman input, so a toman copy button is required too');
-  assert.match(transferPage, /کپی شمارهٔ کارت/, 'the card number must be copyable');
-  assert.match(transferPage, /چرا مبلغ، رُند نیست؟/, 'the page must explain why the amount is not round');
-  assert.match(transferPage, /۹۹۰ ریال/, 'the explanation must name the gateway amount-correction band');
-  assert.match(transferPage, /دَه‌تومانی/, 'the fractional toman case must be explained, not rounded');
-  assert.match(transferPage, /go\('\/payment\/result\//, 'the page must lead back to the single-source settlement check');
-  assert.ok(!/ToubaAuth\.client\.from/.test(transferPage), 'the transfer page is display-only; money state never comes from it');
-  assert.ok(!/fetch\(/.test(transferPage), 'the transfer page must not call the gateway directly');
+  assert.match(retryFn, /openPayment\(gateway\)/, 'retry must return the customer straight to the official gateway page');
+  // the exact-amount explanation lives as a short note on the checkout page, not on a page of its own.
+  assert.match(stage4Handoff, /کد تشخیص واریز/, 'the checkout note must explain why the amount is not round');
+  assert.match(stage4Handoff, /رقم‌به‌رقم/);
+  assert.match(stage4Handoff, /مستقیم به صفحهٔ رسمی بلوپال/, 'the customer is told the gateway page is the source');
+  // cold-load experience: an animation while Supabase answers; a real error page only for real errors.
   const authUiSource = fs.readFileSync(path.join(ROOT, 'services', 'auth-ui.js'), 'utf8');
+  assert.match(authUiSource, /function dbLoadingScreen/, 'the pre-data screen must be an animation, not a warning');
+  assert.match(authUiSource, /@keyframes tb-spin/, 'the loading screen must actually animate');
+  assert.match(authUiSource, /prefers-reduced-motion/, 'the animation must respect reduced-motion settings');
+  assert.match(authUiSource, /role="status" aria-live="polite"/, 'assistive tech must announce the loading state');
+  assert.match(authUiSource, /tb-retry/, 'the loading screen offers a way out if the cold start drags');
+  assert.ok(!/فقط از Supabase بارگذاری می‌شوند/.test(authUiSource), 'the static Supabase wording page is replaced by the animation');
+  assert.match(authUiSource, /فروشگاه موقتاً در دسترس نیست/, 'a real failure still fails closed with its own page');
   const authUiExports = authUiSource.match(/g\.ToubaAuthUI = Object\.freeze\(\{[\s\S]*?\}\);/)?.[0] || '';
   assert.match(authUiExports, /shippingLabelModal/, 'the modal must be on the public panel API');
   assert.match(authUiExports, /copyShippingLabel/, 'the clipboard helper must be on the public panel API');
@@ -1174,7 +1159,7 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
 
   /* 26) the whole suite ran; nothing may have touched the network */
   assert.ok(results.length >= 20, `all documented areas must be covered (only ${results.length})`);
-  for (const required of ['POST /v1/invoices/create contract', 'GET /v1/invoices/{invoice_id} contract', 'sandbox simulation', 'Supabase migration contract', 'environment templates', 'client bridge behaviour', 'payment transfer page and shipping labels']) {
+  for (const required of ['POST /v1/invoices/create contract', 'GET /v1/invoices/{invoice_id} contract', 'sandbox simulation', 'Supabase migration contract', 'environment templates', 'client bridge behaviour', 'gateway handoff, loading screen and shipping labels']) {
     assert.ok(results.includes(required), `missing covered area: ${required}`);
   }
   assert.equal(BluPal.PROVIDER, 'blupal');

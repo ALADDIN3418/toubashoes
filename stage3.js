@@ -86,13 +86,12 @@ function bindForms(){
       window.__checkoutOrderId=orderId;
       await DataProvider.refresh(STORE,db);
       if(!window.ToubaBluPal)throw new Error('پل پرداخت بلوپال بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
-      // سرور فاکتور بلوپال را می‌سازد (invoice_id)؛ ما به‌جای پریدنِ ناگهانی به دامنهٔ بیرونی،
-      // اول صفحهٔ پرداختِ خودمان را باز می‌کنیم: کارت سبزرنگ + مبلغ دقیق + کپی ریال/تومان.
+      // سرور فاکتور بلوپال را می‌سازد (invoice_id) و پیوند صفحهٔ پرداخت + مبلغ دقیق واریز را می‌دهد؛
+      // مشتری بی‌واسطه به همان صفحهٔ رسمی درگاه هدایت می‌شود (کارت و مبلغ دقیق آنجا نمایش داده می‌شود).
       const gateway=await ToubaBluPal.requestGateway(orderId);
       window.__checkoutIdempotencyKey=null;
       if(!gateway.paymentUrl)throw new Error('درگاه بلوپال نشانی صفحهٔ پرداخت را برنگرداند.');
-      ToubaBluPal.rememberGateway(orderId, gateway);
-      go('/payment/transfer');
+      ToubaBluPal.openPayment(gateway);
       return;
     }catch(error){
       if(orderId){
@@ -127,7 +126,6 @@ async function resumeBluPalPayment(orderId){
   const order=db.orders.find(x=>String(x.id)===String(orderId));
   if(!order||order.paymentStatus!=='PENDING')return false;
   await ToubaBluPal.retryPayment(orderId);
-  go('/payment/transfer');
   return true;
 }
 
@@ -206,7 +204,7 @@ async function saveCoupon(f,id){let code=f.elements.code.value.trim().toUpperCas
 async function couponToggle(code){let c=db.coupons.find(x=>x.code===code);if(c){await DataRepositories.coupons.update(c.id||c.code,{active:!c.active});render()}}
 function orderDetails(id){let o=db.orders.find(x=>x.id===id);if(!o)return;showModal(`<h2>سفارش ${esc(o.number||o.id)}</h2><div class="notice">مشتری: ${esc(o.customer)} · ${esc(o.phone)}<br>نشانی: ${esc(o.province||'')}، ${esc(o.city||'')}، ${esc(o.address||'')} · ${esc(o.postal||'—')}<br>تاریخ: ${esc(o.date||'')}<br>کد پیگیری: <b>${esc(o.trackingCode||'—')}</b></div><h3>اقلام سفارش</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>محصول</th><th>واریانت</th><th>قیمت واحد</th><th>تعداد</th><th>جمع</th></tr></thead><tbody>${(o.itemsList||[]).map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.variantLabel||`سایز ${i.size}، ${i.color}`)}</td><td>${toman(i.unitPrice)}</td><td>${i.quantity}</td><td>${toman(i.unitPrice*i.quantity)}</td></tr>`).join('')}</tbody></table></div><div class="summary-line"><span>جمع اقلام</span><b>${toman(o.subtotal??o.total)}</b></div><div class="summary-line"><span>تخفیف</span><b>− ${toman(o.discount)}</b></div><div class="summary-line"><span>هزینه ارسال</span><b>${toman(o.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(o.total)}</b></div><p>وضعیت: ${ST3_STATUS[o.status]||o.status} · پرداخت: ${o.paymentStatus==='PAID'?'پرداخت شده':o.paymentStatus==='FAILED'?'ناموفق':'در انتظار پرداخت'}</p>`)}
 async function orderStatus(id,status){try{await StoreServices.orders.update(id,{status});await DataProvider.refresh(STORE,db);render();toast('وضعیت سفارش در پایگاه داده ذخیره شد')}catch(error){toast(error.message||'به‌روزرسانی وضعیت سفارش انجام نشد.')}}
-function render(){document.body.classList.remove('admin-body');let p=path(),html;if(p==='/')html=(typeof window.home==='function'?window.home():home());else if(p==='/shop'||p==='/search')html=(typeof window.shop==='function'?window.shop():shop());else if(p.startsWith('/category/')){let slug=decodeURIComponent(p.split('/')[2]),c=db.categories.find(x=>x.id===slug||x.slug===slug||x.name===slug);html=(typeof window.shop==='function'?window.shop(c?c.id:slug):(c?shop(c.id):shop()))}else if(p.startsWith('/product/'))html=(typeof window.detail==='function'?window.detail(decodeURIComponent(p.split('/')[2])):detail(decodeURIComponent(p.split('/')[2])));else if(p==='/cart')html=(typeof window.cartPage==='function'?window.cartPage():cartPage());else if(p==='/checkout')html=(typeof window.checkout==='function'?window.checkout():checkout());else if(p==='/login')html=login();else if(p==='/account')html=account();else if(p==='/account/orders')html=ordersPage();else if(p==='/tracking')html=(typeof window.tracking==='function'?window.tracking():tracking());else if(p==='/payment/transfer')html=(typeof window.paymentTransfer==='function'?window.paymentTransfer():notFound());else if(p.startsWith('/payment/result/'))html=paymentResult(decodeURIComponent(p.split('/')[3]));else if(p==='/about'||p==='/contact'||p==='/terms'||p==='/privacy')html=(typeof window.contentPage==='function'?window.contentPage(p.slice(1)):contentPage(p.slice(1)));else if(p==='/admin'||p.startsWith('/admin/')){document.body.classList.remove('admin-body');html=admin()}else html=notFound();$('#app').innerHTML=html;bindForms();window.scrollTo(0,0)}
+function render(){document.body.classList.remove('admin-body');let p=path(),html;if(p==='/')html=(typeof window.home==='function'?window.home():home());else if(p==='/shop'||p==='/search')html=(typeof window.shop==='function'?window.shop():shop());else if(p.startsWith('/category/')){let slug=decodeURIComponent(p.split('/')[2]),c=db.categories.find(x=>x.id===slug||x.slug===slug||x.name===slug);html=(typeof window.shop==='function'?window.shop(c?c.id:slug):(c?shop(c.id):shop()))}else if(p.startsWith('/product/'))html=(typeof window.detail==='function'?window.detail(decodeURIComponent(p.split('/')[2])):detail(decodeURIComponent(p.split('/')[2])));else if(p==='/cart')html=(typeof window.cartPage==='function'?window.cartPage():cartPage());else if(p==='/checkout')html=(typeof window.checkout==='function'?window.checkout():checkout());else if(p==='/login')html=login();else if(p==='/account')html=account();else if(p==='/account/orders')html=ordersPage();else if(p==='/tracking')html=(typeof window.tracking==='function'?window.tracking():tracking());else if(p.startsWith('/payment/result/'))html=paymentResult(decodeURIComponent(p.split('/')[3]));else if(p==='/about'||p==='/contact'||p==='/terms'||p==='/privacy')html=(typeof window.contentPage==='function'?window.contentPage(p.slice(1)):contentPage(p.slice(1)));else if(p==='/admin'||p.startsWith('/admin/')){document.body.classList.remove('admin-body');html=admin()}else html=notFound();$('#app').innerHTML=html;bindForms();window.scrollTo(0,0)}
 window.__stage3AdminSection=adminSection;window.__stage3BindForms=bindForms;window.__stage3Render=render;window.processBluPalReceipt=processBluPalReceipt;window.retryBluPalReceipt=retryBluPalReceipt;window.retryBluPalPayment=retryBluPalPayment;window.resumeBluPalPayment=resumeBluPalPayment;
 
 // بازگشت از صفحهٔ پرداخت: /api/payment/blupal/callback مشتری را به همین مسیر /payment/result/<id>
