@@ -261,6 +261,85 @@
     return `<select class="select" aria-label="وضعیت سفارش ${esc(order.number||order.id)}" onchange="orderStatus('${esc(order.id)}',this.value)">${available.map(status=>`<option value="${status}" ${status===order.status?'selected':''}>${status}</option>`).join('')}</select>`;
   }
 
+  /* ---------- برچسب ارسال: اطلاعات گیرنده برای بسته‌بندی و پست ---------- */
+  const SHIPPING_LABEL_NAMES = { normal: 'پست عادی', express: 'پست سریع', free: 'ارسال رایگان' };
+
+  function findHydratedOrder(orderId) {
+    const database = getDb();
+    return ((database && database.orders) || []).find(o => String(o.id) === String(orderId) || String(o.number || '') === String(orderId)) || null;
+  }
+
+  function shippingMethodLabel(order) {
+    return SHIPPING_LABEL_NAMES[order.shippingMethod] || order.shippingMethod || 'پست عادی';
+  }
+
+  function shippingLabelLines(order) {
+    const lines = ['— برچسب ارسال · کفش طوبی —'];
+    lines.push(`سفارش: ${order.number || order.id}`);
+    if (order.date) lines.push(`تاریخ: ${order.date}`);
+    lines.push(`گیرنده: ${order.customer || '—'}`);
+    lines.push(`موبایل: ${order.phone || '—'}`);
+    const region = [order.province, order.city].filter(Boolean).join(' — ');
+    if (region) lines.push(`استان و شهر: ${region}`);
+    lines.push(`آدرس: ${order.address || '—'}`);
+    if (order.postal) lines.push(`کد پستی: ${order.postal}`);
+    if (order.note) lines.push(`یادداشت مشتری: ${order.note}`);
+    lines.push(`روش ارسال: ${shippingMethodLabel(order)}`);
+    const items = (order.itemsList || []).map((item, index) => {
+      const variant = [item.size ? `سایز ${item.size}` : '', item.color || ''].filter(Boolean).join(' / ');
+      return `${index + 1}) ${item.name || 'کالا'}${variant ? ` (${variant})` : ''} × ${Number(item.quantity || 0)}`;
+    });
+    if (items.length) lines.push(`اقلام:\n${items.join('\n')}`);
+    lines.push(`مبلغ کل: ${Number(order.total || 0).toLocaleString('fa-IR')} تومان`);
+    lines.push(`پرداخت: ${order.paymentStatus === 'PAID' ? 'تأییدشده ✓' : 'در انتظار تأیید درگاه'}`);
+    if (order.trackingCode) lines.push(`کد رهگیری: ${order.trackingCode}`);
+    return lines;
+  }
+
+  function copyPlainText(text) {
+    const fallback = () => {
+      if (!g.document || !g.document.createElement) return false;
+      const area = g.document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.top = '-1000px';
+      g.document.body.appendChild(area);
+      area.select();
+      let ok = false;
+      try { ok = Boolean(g.document.execCommand && g.document.execCommand('copy')); } catch { ok = false; }
+      area.remove();
+      return ok;
+    };
+    if (g.navigator && g.navigator.clipboard && g.navigator.clipboard.writeText) {
+      return g.navigator.clipboard.writeText(text).then(() => true).catch(() => fallback());
+    }
+    return Promise.resolve(fallback());
+  }
+
+  function shippingLabelModal(orderId) {
+    const order = findHydratedOrder(orderId);
+    if (!order) { g.toast('سفارش در حافظهٔ پنل پیدا نشد؛ ابتدا «به‌روزرسانی» را بزنید.'); return; }
+    const row = (label, value) => `<div class="summary-line"><span>${esc(label)}</span><b>${esc(value || '—')}</b></div>`;
+    const items = (order.itemsList || []).map(item => `<div class="summary-line"><span>${esc(item.name || 'کالا')}${item.size ? ` · سایز ${esc(String(item.size))}` : ''}${item.color ? ` / ${esc(item.color)}` : ''} × ${Number(item.quantity || 0)}</span><b>${toman(Number(item.unitPrice || 0) * Number(item.quantity || 0))}</b></div>`).join('') || '<p class="muted">کالایی ثبت نشده است.</p>';
+    const paid = order.paymentStatus === 'PAID';
+    g.showModal(`
+      <div style="max-width:560px">
+        <h3 style="margin:0 0 4px">📦 برچسب ارسال · سفارش ${esc(order.number || order.id)}</h3>
+        ${paid ? '<div class="notice" style="margin:10px 0;background:#e8f4d9;color:#2e5a1c">پرداخت نزد درگاه تأیید شده است — بسته را ارسال کنید و وضعیت را «ارسال شده» بزنید.</div>' : `<div class="notice error-notice" style="margin:10px 0">پرداخت این سفارش هنوز نزد درگاه تأیید نشده (${esc(order.paymentStatus || 'PENDING')}); تا تأییدِ قطعی بسته ارسال نشود.</div>`}
+        <div style="margin-top:6px">${row('گیرنده', order.customer)}${row('موبایل', order.phone)}${row('استان و شهر', [order.province, order.city].filter(Boolean).join(' — '))}${row('آدرس کامل', order.address)}${row('کد پستی', order.postal)}${order.note ? row('یادداشت مشتری', order.note) : ''}${row('روش ارسال', shippingMethodLabel(order))}${row('هزینه ارسال', order.shipping ? toman(order.shipping) : 'رایگان')}${row('مبلغ کل', toman(order.total))}${order.trackingCode ? row('کد رهگیری', order.trackingCode) : ''}</div>
+        <div style="margin-top:10px"><b style="font-size:12.5px">اقلام سفارش</b>${items}</div>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn small" type="button" onclick="ToubaAuthUI.copyShippingLabel('${esc(order.id)}')">کپی برچسب</button><button class="btn outline small" type="button" onclick="closeModal()">بستن</button></div>
+      </div>`);
+  }
+
+  async function copyShippingLabel(orderId) {
+    const order = findHydratedOrder(orderId);
+    if (!order) { g.toast('سفارش پیدا نشد.'); return; }
+    const ok = await copyPlainText(shippingLabelLines(order).join('\n'));
+    g.toast(ok ? 'متن برچسب کپی شد؛ در اپ پستی بچسبانید.' : 'کپی نشد؛ متن را از پنجرهٔ برچسب دستی بردارید.');
+  }
+
   async function refreshAdminData(section) {
     await g.DataProvider.refresh('toubashop-v1', getDb());
     await loadAdminSection(section);
@@ -601,10 +680,10 @@
           <h3 style="margin:0">آخرین سفارش‌ها</h3>
           <button type="button" class="btn outline small" onclick="ToubaAuthUI.switchAdminSection('orders')">مشاهده همه سفارش‌ها ←</button>
         </div>
-        ` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ', 'وضعیت', 'تاریخ'], ords.slice(0, 6).map(order => {
+        ` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ', 'وضعیت', 'تاریخ', 'برچسب ارسال'], ords.slice(0, 6).map(order => {
           const status = orderLabels[order.status] || order.status || '—';
-          return `<tr><td><b>${esc(order.number || order.id)}</b></td><td>${esc(order.customer)}</td><td>${toman(order.total)}</td><td><span class="badge ${order.status === 'لغو شده' || order.status === 'CANCELLED' ? 'red' : 'green'}">${esc(status)}</span></td><td>${esc(order.date || '—')}</td></tr>`;
-        }).join(''));
+          return `<tr><td><b>${esc(order.number || order.id)}</b></td><td>${esc(order.customer)}<br><small style="color:#666">${esc([order.province, order.city].filter(Boolean).join(' — ') || order.phone || '')}</small></td><td>${toman(order.total)}</td><td><span class="badge ${order.status === 'لغو شده' || order.status === 'CANCELLED' ? 'red' : 'green'}">${esc(status)}</span></td><td>${esc(order.date || '—')}</td><td><button class="action" onclick="ToubaAuthUI.shippingLabelModal('${esc(order.id)}')">📦 برچسب</button></td></tr>`;
+        }).join('') || `<tr><td colspan="6">هنوز سفارشی ثبت نشده است.</td></tr>`);
         return;
       }
 
@@ -645,10 +724,15 @@
       }
       if (section === 'orders') {
         const ords = (database && database.orders) || [];
+        const SHIPPING_NAMES = { normal: 'پست عادی', express: 'پست سریع', free: 'ارسال رایگان' };
         target.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
           <h2 style="font-size:18px;margin:0">سفارش‌ها (${ords.length})</h2>
-        </div>` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ (تومان)', 'تاریخ', 'کد پیگیری', 'وضعیت', 'تغییر وضعیت'], ords.map(o => `<tr><td><b>${esc(o.number || o.id)}</b></td><td>${esc(o.customer)}<br><small style="color:#666">${esc(o.phone || '')}</small></td><td>${toman(o.total)}</td><td>${esc(o.date || '—')}</td><td><code>${esc(o.trackingCode || o.id)}</code></td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td>${orderStatusControl(o)}</td></tr>`).join(''));
+          <button class="btn outline small" onclick="ToubaAuthUI.refreshDatabase()">به‌روزرسانی از پایگاه داده</button>
+        </div>
+        <p class="muted" style="margin:0 0 12px;font-size:12px">برچسبِ هر سفارش نام، آدرس، کد پستی و اقلام گیرنده را برای بسته‌بندی و ارسال نشان می‌دهد؛ با «کپی برچسب» متنش را در اپ پستی بچسبانید.</p>
+        <div class="shop-toolbar" style="margin-bottom:10px"><input class="select" style="max-width:320px" placeholder="جستجو: شماره سفارش، مشتری، موبایل، شهر یا کد پستی" oninput="filterAdminTable(this.value)"></div>` +
+        adminTable(['شماره سفارش', 'مشتری', 'مبلغ (تومان)', 'ارسال', 'تاریخ', 'پرداخت', 'وضعیت', 'تغییر وضعیت', 'برچسب ارسال'], ords.map(o => `<tr data-search="${esc(`${o.number || o.id} ${o.customer || ''} ${o.phone || ''} ${o.city || ''} ${o.province || ''} ${o.postal || ''}`.toLocaleLowerCase())}"><td><b>${esc(o.number || o.id)}</b><br><small style="color:#666"><code>${esc(o.trackingCode || o.id)}</code></small></td><td>${esc(o.customer)}<br><small style="color:#666">${esc(o.phone || '')} · ${esc([o.province, o.city].filter(Boolean).join(' — ') || 'بدون شهر')}</small></td><td>${toman(o.total)}</td><td>${esc(SHIPPING_NAMES[o.shippingMethod] || o.shippingMethod || 'عادی')}<br><small style="color:#666">${o.shipping ? toman(o.shipping) : 'رایگان'}</small></td><td>${esc(o.date || '—')}</td><td><span class="badge ${o.paymentStatus === 'PAID' ? 'green' : 'red'}">${o.paymentStatus === 'PAID' ? 'تأییدشده' : o.paymentStatus === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td>${orderStatusControl(o)}</td><td><button class="action" onclick="ToubaAuthUI.shippingLabelModal('${esc(o.id)}')">📦 برچسب ارسال</button></td></tr>`).join('') || '<tr><td colspan="9">هنوز سفارشی ثبت نشده است.</td></tr>');
         return;
       }
 
@@ -931,6 +1015,8 @@
     updatePassword,
     loadAdminSection,
     refreshDatabase,
+    shippingLabelModal,
+    copyShippingLabel,
     updateContactMessageStatus,
     bulkApplyProducts,
     bulkApplyCategories,

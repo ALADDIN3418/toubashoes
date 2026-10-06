@@ -1119,9 +1119,52 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.ok(!/balepay|Bale Pay|بله‌پی|zarinpal/i.test(ops), 'no retired gateway may reappear in the guide');
   section('ops CLI and guide');
 
-  /* 25) the whole suite ran; nothing may have touched the network */
+  /* 25) floating transfer-amount guide + admin shipping labels */
+  section('floating payment guide and shipping labels');
+  const guideSource = fs.readFileSync(path.join(ROOT, 'services', 'payment-guide.js'), 'utf8');
+  assert.match(guideSource, /۹۹۰ ریال/, 'the guide must explain the gateway amount-correction band');
+  assert.match(guideSource, /عودت/, 'a mismatched transfer must be explained together with its refund path');
+  assert.match(guideSource, /رقم‌به‌رقم/, 'the guide must demand digit-exact transfers');
+  for (const pathMarker of ["'/cart'", "'/checkout'", '/payment/result/']) {
+    assert.ok(guideSource.includes(pathMarker), `the guide must appear on ${pathMarker}`);
+  }
+  assert.ok(!/fetch\(/.test(guideSource), 'the guide is static text and must never hit the network');
+  assert.match(guideSource, /z-index:70/, 'the guide must sit below the modal layer (z-index 90)');
+  const guideIndexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(guideIndexHtml, /<script src="\/services\/payment-guide\.js" defer><\/script>/, 'the guide must be loaded by the storefront');
+  assert.ok(guideIndexHtml.indexOf('/services/blupal-pay.js') < guideIndexHtml.indexOf('/services/payment-guide.js'), 'the guide loads after the payment bridge');
+  assert.match(fs.readFileSync(path.join(ROOT, 'scripts', 'build-vercel.js'), 'utf8'), /'services\/payment-guide\.js'/, 'the guide must ship to Vercel');
+  // The module must be eval-safe for Node (no DOM at load) and expose its pure logic.
+  const fakeWindow = {
+    location: { pathname: '/checkout' },
+    sessionStorage: (() => { const box = new Map(); return { getItem: key => (box.has(key) ? box.get(key) : null), setItem: (key, value) => box.set(key, value) }; })()
+  };
+  new Function('window', guideSource)(fakeWindow);
+  const guide = fakeWindow.ToubaPaymentGuide;
+  assert.ok(guide && Array.isArray(guide.STEPS) && guide.STEPS.length >= 4, 'the guide exposes its steps without a browser');
+  assert.equal(guide.isGuidePath('/checkout'), true);
+  assert.equal(guide.isGuidePath('/cart'), true);
+  assert.equal(guide.isGuidePath('/payment/result/tb-1'), true);
+  assert.equal(guide.isGuidePath('/product/shoe'), false);
+  assert.equal(guide.isGuidePath('/admin'), false);
+  assert.equal(guide.isResultPath('/payment/result/tb-1'), true);
+  assert.equal(guide.isResultPath('/checkout'), false);
+  assert.equal(guide.acknowledged(), false, 'a fresh tab has not read the guide yet');
+  guide.acknowledge();
+  assert.equal(guide.acknowledged(), true, '«فهمیدم» must stick for the rest of the tab session');
+  const authUiSource = fs.readFileSync(path.join(ROOT, 'services', 'auth-ui.js'), 'utf8');
+  const authUiExports = authUiSource.match(/g\.ToubaAuthUI = Object\.freeze\(\{[\s\S]*?\}\);/)?.[0] || '';
+  assert.match(authUiExports, /shippingLabelModal/, 'the modal must be on the public panel API');
+  assert.match(authUiExports, /copyShippingLabel/, 'the clipboard helper must be on the public panel API');
+  assert.ok((authUiSource.match(/onclick="ToubaAuthUI\.shippingLabelModal\(/g) || []).length >= 2, 'both the orders section and the dashboard must offer the label');
+  assert.match(authUiSource, /کد پستی: /, 'the label carries the postal code for the post office');
+  assert.match(authUiSource, /آدرس: /, 'the label carries the full address');
+  assert.match(authUiSource, /هنوز نزد درگاه تأیید نشده/, 'the label must block shipping while the gateway has not confirmed payment');
+  assert.match(authUiSource, /execCommand/, 'the copy helper needs a fallback for browsers without the clipboard API');
+
+  /* 26) the whole suite ran; nothing may have touched the network */
   assert.ok(results.length >= 20, `all documented areas must be covered (only ${results.length})`);
-  for (const required of ['POST /v1/invoices/create contract', 'GET /v1/invoices/{invoice_id} contract', 'sandbox simulation', 'Supabase migration contract', 'environment templates', 'client bridge behaviour']) {
+  for (const required of ['POST /v1/invoices/create contract', 'GET /v1/invoices/{invoice_id} contract', 'sandbox simulation', 'Supabase migration contract', 'environment templates', 'client bridge behaviour', 'floating payment guide and shipping labels']) {
     assert.ok(results.includes(required), `missing covered area: ${required}`);
   }
   assert.equal(BluPal.PROVIDER, 'blupal');
