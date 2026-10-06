@@ -1625,3 +1625,12 @@ body.storefront-mode .empty-cart-box p{color:var(--touba-muted)}
 /* در تم تیره نشانِ سبز لوگو با درخشش ملایم از پس‌زمینه جدا می‌شود. */
 body.storefront-mode[data-theme="dark"] .auth-touba-mark{filter:drop-shadow(0 0 18px rgba(140,173,75,.30)) brightness(1.18) saturate(1.05)}
 body.storefront-mode .pf-adv-hint{color:var(--touba-subtle)}
+
+/* نوار اسلایدهای فرم محصول در تم تیره (مودال‌های داخل ویترین). */
+body.storefront-mode .img-slide{background:var(--touba-surface-raised);border-color:var(--touba-border)}
+body.storefront-mode .img-slide.main{border-color:var(--touba-brand);box-shadow:0 0 0 2px rgba(140,173,75,.22)}
+body.storefront-mode .img-slide figcaption{color:var(--touba-muted)}
+body.storefront-mode .img-slide .img-actions{border-top-color:var(--touba-border)}
+body.storefront-mode .img-slide .img-actions button{color:var(--touba-text);border-inline-start-color:var(--touba-border)}
+body.storefront-mode .img-slide .img-actions button:hover{background:var(--touba-surface-soft)}
+body.storefront-mode .img-slide .img-actions .rm{color:#f19189}

@@ -169,6 +169,18 @@ async function main() {
     assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
   }
 
+  // Multi-slide upload guards: the product form must accept several files and manage them.
+  {
+    const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
+    assert(enh.includes('multiple onchange="uploadManualProductImage(this)"'), 'file input must allow selecting several slides at once');
+    for (const needle of ['function renderImageStrip','function imageSetMain','function imageMove','function imageRemove','function readFormImages','function writeFormImages','اسلاید اول تصویر اصلی'])
+      assert(enh.includes(needle), `enhancements.js multi-slide missing: ${needle}`);
+    assert(enh.includes("oninput=\"renderImageStrip(this.form)\""), 'images textarea must live-sync the preview strip');
+    const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
+    assert(css.includes('.image-strip{') && css.includes('.img-slide.main{'), 'slide strip styles must ship');
+    assert(fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8').includes('body.storefront-mode .img-slide'), 'slide strip must be themed for dark mode');
+  }
+
   // Login mark + simplified product-entry flow guards.
   {
     const auth = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');

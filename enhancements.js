@@ -62,8 +62,10 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 <div class="field full"><label>سایزها را تیک بزنید (۲۲ تا ۴۸)</label>${sizeGridMarkup(p.sizes)}<p class="pf-hint">یک عدد در «موجودی هر سایز» بنویسید؛ روی همهٔ ترکیب‌های سایز×رنگ تقسیم می‌شود. موجودی دقیق هر ترکیب در تنظیمات پیشرفته است.</p></div>
 <div class="field full"><label>قیمت قبل از تخفیف (اختیاری — برای درج خط‌خورده)</label><input type="number" min="0" name="oldPrice" value="${p.oldPrice||''}"></div>
 </div>
-<div class="pf-section-title"><b>۳</b> تصویر محصول</div>
-<div class="manual-upload-row"><input type="file" id="manual-image-file" class="file-sr" accept="image/jpeg,image/png,image/webp" onchange="uploadManualProductImage(this)"><button type="button" class="action" onclick="this.form.querySelector('#manual-image-file').click()">⬆️ آپلود تصویر از رایانه/موبایل</button><span class="muted" id="manual-upload-status">می‌توانید بدون تصویر ذخیره کنید و بعداً اضافه کنید.</span></div>
+<div class="pf-section-title"><b>۳</b> تصاویر محصول — چند اسلاید</div>
+<p class="pf-hint" style="margin:0 0 8px">یک‌جا چند فایل انتخاب کنید — مثلاً یک اسلاید برای هر رنگ. اسلاید اول تصویر اصلی است؛ مشتری در صفحهٔ محصول همهٔ اسلایدها را می‌بیند. بدون تصویر هم می‌توانید ذخیره کنید و بعداً اضافه کنید.</p>
+<div class="manual-upload-row"><input type="file" id="manual-image-file" class="file-sr" accept="image/jpeg,image/png,image/webp" multiple onchange="uploadManualProductImage(this)"><button type="button" class="action" onclick="this.form.querySelector('#manual-image-file').click()">⬆️ آپلود چند اسلاید از رایانه/موبایل</button><span class="muted" id="manual-upload-status">JPEG/PNG/WebP — هر فایل تا ۵ مگابایت؛ خودکار فشرده و در فضای ابری طوبی ذخیره می‌شود.</span></div>
+<div class="image-strip" id="image-strip"></div>
 <label class="pf-check"><input type="checkbox" name="active" ${p.active!==false?'checked':''}> <b>منتشر شود</b> (از این پس در فروشگاه دیدنی است)</label>
 <div class="pf-save-row"><button class="btn">${id?'💾 ذخیره تغییرات':'＋ ثبت محصول'}</button><p class="pf-hint">کد SKU، آدرس صفحه (slug) و برند «طوبی» خودکار ساخته می‌شوند؛ جدول واریانت هم هنگام ذخیره همسان‌سازی می‌شود.</p></div>
 <details class="pf-adv"><summary>⚙️ تنظیمات پیشرفته — توضیح‌ها، موجودی تک‌تک ترکیب‌ها، ویژگی‌ها و مشخصات</summary><div class="form-grid">
@@ -74,13 +76,13 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 <div class="field full"><label>توضیح کوتاه</label><input name="shortDesc" maxlength="180" value="${esc(p.shortDesc||p.desc)}" placeholder="خالی = از نام محصول ساخته می‌شود"></div>
 <div class="field full"><label>توضیح کامل</label><textarea name="longDesc">${esc(p.longDesc||p.desc)}</textarea></div>
 <div class="field full"><button type="button" class="action" onclick="buildVariantEditor()">بازسازی جدول سایز × رنگ</button><p class="pf-hint">موجودی هر ترکیب مستقل؛ اگر این جدول را دستی تغییر دهید، همین مقدارها جای «موجودی هر سایز» را می‌گیرند.</p><div class="table-wrap"><table class="data-table"><thead><tr><th>سایز</th><th>رنگ</th><th>SKU واریانت</th><th>موجودی</th></tr></thead><tbody id="variant-editor">${variantRows}</tbody></table></div></div>
-<div class="field full"><label>آدرس تصاویر (هر کدام در یک خط)</label><textarea name="images" placeholder="/hero-shoe.jpg">${esc((p.images||[]).join('\n'))}</textarea></div>
+<div class="field full"><label>آدرس تصاویر (هر کدام در یک خط)</label><textarea name="images" oninput="renderImageStrip(this.form)" placeholder="/hero-shoe.jpg">${esc((p.images||[]).join('\n'))}</textarea></div>
 <div class="field full"><label>ویژگی‌ها (هر مورد در یک خط)</label><textarea name="features">${esc((p.features||[]).join('\n'))}</textarea></div>
 <div class="field full"><label>مشخصات (هر خط: نام: مقدار)</label><textarea name="specifications">${esc(Object.entries(p.specifications||{}).map(([k,v])=>`${k}: ${v}`).join('\n'))}</textarea></div>
 <div class="field"><label><input type="checkbox" name="featured" ${p.featured?'checked':''}> محصول ویژه (نمایش در خانه)</label></div>
 <div class="field"><label><input type="checkbox" name="bestSeller" ${p.bestSeller?'checked':''}> پرفروش</label></div>
 </div></details>
-</form>`)}
+</form>`);renderImageStrip(document.getElementById('product-edit-form'))}
 function syncSizeSpecification(form,sizeValues){let field=form?.elements?.specifications;if(!field)return '';let raw=Array.isArray(sizeValues)?sizeValues:String(form.elements.sizes?.value||'').split(','),sizes=[...new Set(raw.map(value=>String(value||'').trim()).filter(Boolean))],isSizeLine=/^\s*(?:سایزبندی(?:\s*(?:موجود|کالا|محصول))?|سایز(?:ها)?|اندازه(?:بندی)?|sizes?|size\s*range)\s*:/iu,lines=String(field.value||'').split(/\r?\n/).filter(line=>line.trim()&&!isSizeLine.test(line));if(sizes.length)lines.push(`سایزبندی: ${sizes.join('، ')}`);field.value=lines.join('\n');return field.value}
 function variantEditorRow(v){return `<tr><td><input class="v-size" value="${esc(v.size)}" readonly></td><td><input class="v-color" value="${esc(v.color)}" readonly></td><td><input class="v-sku" value="${esc(v.sku||'')}" aria-label="SKU واریانت"></td><td><input class="v-stock" type="number" min="0" value="${Number(v.stock)||0}" aria-label="موجودی"></td></tr>`}
 
@@ -122,25 +124,52 @@ function syncSizeGrid(form){
   form.querySelectorAll('#size-grid input[type=checkbox]').forEach(cb=>{const on=nums.has(Number(cb.value));cb.checked=on;cb.closest('.size-cell').classList.toggle('on',on)});
 }
 async function uploadManualProductImage(input){
-  const form=input?.form,status=form?.querySelector('#manual-upload-status'),file=input?.files&&input.files[0];
-  if(!file)return;
+  const form=input?.form,status=form?.querySelector('#manual-upload-status'),files=[...(input?.files||[])];
+  if(!files.length)return;
   const report=msg=>{if(status)status.textContent=msg};
-  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){report('❌ فقط فایل JPEG، PNG یا WebP مجاز است.');return}
-  if(file.size>5*1024*1024){report('❌ حجم فایل باید کمتر از ۵ مگابایت باشد.');return}
   if(!window.DataRepositories?.media?.create){report('❌ اتصال Supabase آماده نیست؛ صفحه را تازه‌سازی کنید.');return}
-  report('⏳ در حال آماده‌سازی و آپلود تصویر…');
-  try{
-    let dataUrl=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(new Error('خواندن فایل انجام نشد.'));fr.readAsDataURL(file)});
-    dataUrl=await shrinkImageTo(dataUrl,1600,.86);
-    const alt=(form.elements.name?.value||'محصول').trim()+' — تصویر دستی';
-    const media=await DataRepositories.media.create({url:dataUrl,alt});
+  const good=[],bad=[];
+  for(const file of files){
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type||'')||file.size>5*1024*1024){bad.push(file.name);continue}
+    try{
+      report(`⏳ آپلود و فشرده‌سازی اسلاید ${good.length+1} از ${files.length}…`);
+      let dataUrl=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(new Error('خواندن فایل انجام نشد.'));fr.readAsDataURL(file)});
+      dataUrl=await shrinkImageTo(dataUrl,1600,.86);
+      const alt=((form.elements.name?.value||'محصول').trim())+` — اسلاید ${good.length+1}`;
+      const media=await DataRepositories.media.create({url:dataUrl,alt});
+      good.push(media.url);
+    }catch{bad.push(file.name)}
+  }
+  if(good.length){
     const ta=form.elements.images,lines=String(ta?.value||'').split('\n').map(x=>x.trim()).filter(Boolean);
-    if(!lines.includes(media.url))lines.push(media.url);
+    for(const url of good)if(!lines.includes(url))lines.push(url);
     if(ta)ta.value=lines.join('\n');
-    report(`✅ تصویر آپلود شد و به لیست افزوده شد (${Math.max(1,Math.round((media.byteSize||file.size)/1024))} کیلوبایت)`);
-  }catch(error){report('❌ '+(error.message||'آپلود انجام نشد.'))}
-  finally{input.value=''}
+  }
+  renderImageStrip(form);
+  report(good.length?`✅ ${good.length} اسلاید آپلود شد${bad.length?` — ${bad.length} فایل نامعتبر رد شد`:''}`:'❌ هیچ فایلی آپلود نشد؛ فقط JPEG/PNG/WebP تا ۵ مگابایت مجاز است.');
+  input.value='';
 }
+function _toubaImageForm(){return document.getElementById('product-edit-form')}
+function readFormImages(form){return String(form?.elements?.images?.value||'').split('\n').map(x=>x.trim()).filter(Boolean)}
+function writeFormImages(form,list){if(form?.elements?.images)form.elements.images.value=list.join('\n');renderImageStrip(form)}
+function renderImageStrip(form){
+  if(!form)form=_toubaImageForm();
+  const strip=document.getElementById('image-strip');if(!strip||!form)return;
+  const list=readFormImages(form);
+  if(!list.length){strip.innerHTML='<span class="muted" style="font-size:11px">هنوز اسلایدی نیست — فایل‌ها را انتخاب کنید تا پیش‌نمایش همین‌جا ساخته شود.</span>';return}
+  strip.innerHTML=list.map((url,i)=>`<figure class="img-slide${i===0?' main':''}">
+<img src="${esc(url)}" alt="اسلاید ${faDigits(i+1)}" loading="lazy" onerror="this.style.opacity=.2">
+<figcaption><span>اسلاید ${faDigits(i+1)}</span>${i===0?'<b class="img-tag">اصلی</b>':''}</figcaption>
+<div class="img-actions">
+${i>0?`<button type="button" title="انتخاب به‌عنوان تصویر اصلی" onclick="imageSetMain(${i})">⭐</button>`:''}
+<button type="button" title="یک قدم جلوتر" onclick="imageMove(${i},-1)"${i===0?' disabled':''}>◂</button>
+<button type="button" title="یک قدم عقب‌تر" onclick="imageMove(${i},1)"${i===list.length-1?' disabled':''}>▸</button>
+<button type="button" class="rm" title="حذف اسلاید" onclick="imageRemove(${i})">✕</button>
+</div></figure>`).join('');
+}
+function imageSetMain(i){const f=_toubaImageForm(),l=readFormImages(f);if(i<1||i>=l.length)return;l.unshift(l.splice(i,1)[0]);writeFormImages(f,l)}
+function imageMove(i,d){const f=_toubaImageForm(),l=readFormImages(f),j=i+d;if(i<0||j<0||j>=l.length)return;[l[i],l[j]]=[l[j],l[i]];writeFormImages(f,l)}
+function imageRemove(i){const f=_toubaImageForm(),l=readFormImages(f);l.splice(i,1);writeFormImages(f,l);toast(l.length?'اسلاید حذف شد':'همهٔ اسلایدها حذف شدند')}
 async function shrinkImageTo(dataUrl,maxSide,quality){
   try{
     if(typeof Image==='undefined')return dataUrl;
