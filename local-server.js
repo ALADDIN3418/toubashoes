@@ -19,6 +19,7 @@ const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const blupal = require('./lib/blupal.js');
+const { looksLikeSecretKey } = require('./lib/supabase-server.js');
 
 function loadLocalEnv() {
   try {
@@ -109,7 +110,8 @@ const server = http.createServer(async (req, res) => {
     let url = '';
     try { const parsed = new URL(rawUrl); if (parsed.protocol === 'https:' && !parsed.username && !parsed.password && parsed.pathname === '/' && !parsed.search && !parsed.hash) url = parsed.origin; } catch { /* keep config disabled */ }
     const anonKey = String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
-    const safeKey = anonKey && anonKey.length < 4096 ? anonKey : '';
+    // یک کلید secret هرگز نباید به مرورگر برسد، حتی اگر در متغیر عمومی اشتباهی گذاشته شده باشد
+    const safeKey = anonKey && anonKey.length < 4096 && !looksLikeSecretKey(anonKey) ? anonKey : '';
     const publicConfig = { configured:Boolean(url || safeKey), enabled:Boolean(url && safeKey), url, anonKey:safeKey };
     res.writeHead(200, { 'Content-Type':'application/javascript; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
     return res.end(`window.TOUBA_PUBLIC_CONFIG=Object.freeze(${JSON.stringify(publicConfig)});`);

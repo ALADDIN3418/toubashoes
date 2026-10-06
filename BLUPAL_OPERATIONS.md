@@ -102,6 +102,12 @@ Vercel به‌صورت پیش‌فرض متغیر را برای همهٔ محی�
 4. در Vercel: **Project → Settings → Environment Variables → Add** →
    Name = `SUPABASE_SERVICE_ROLE_KEY` (دقیقاً همین، با همین حروف بزرگ) — Value = همان کلید —
    تیکِ **Production** و **Preview** هر دو روشن → **Save**.
+   - **متغیر تازه بساز، `SUPABASE_ANON_KEY` را ویرایش نکن.** کلید anon/publishable مالِ مرورگر است و
+     از RLS رد نمی‌شود؛ این یکی کلید دوم و جداست. اگر مقدار anon را در `SUPABASE_SERVICE_ROLE_KEY`
+     بگذاری، فروشگاه خودش می‌فهمد و همان‌جا می‌ایستد (پیام «کلید عمومی در جای اشتباه»).
+   - چون Supabase در مستندات تازه همان کلید سرویس را **secret key** صدا می‌زند، نام
+     `SUPABASE_SECRET_KEY` هم پذیرفته می‌شود؛ نامِ اصلیِ این پروژه اما `SUPABASE_SERVICE_ROLE_KEY` است
+     و پیام‌های خطا همان را می‌نویسند.
 5. بعد از ذخیره: **Project → Deployments → آخرین deployment → ⋯ → Redeploy**. بدون این کار
    متغیر تازه به تابع‌های سرور نمی‌رسد و همان پیام خطا می‌ماند.
 
@@ -113,6 +119,19 @@ https://<دامنهٔ فروشگاهت>/api/payment/blupal/status
 
 باید این‌ها را ببینی: `"missingDatabaseKeys": []` و `"configured": true`. اگر هنوز نام کلیدی در
 `missingDatabaseKeys` هست، یعنی همان یکی یا Redeploy نشده یا اسمش در Vercel فرق دارد.
+
+**این دو کلید جای هم نمی‌نشینند.** `SUPABASE_PUBLISHABLE_KEY` (یا `SUPABASE_ANON_KEY`) کلیدِ عمومیِ
+مرورگر است و از محدودیت‌های RLS رد نمی‌شود؛ `SUPABASE_SERVICE_ROLE_KEY` کلیدِ secretِ سرور است.
+اگر مقدار یکی را در متن دیگری گذاشته باشی، فروشگاه خودش می‌فهمد و همان‌جا می‌ایستد:
+
+| حالت | پیامی که می‌بینی |
+|---|---|
+| کلید سرویس اصلاً تنظیم نشده | «این متغیرها در Vercel تنظیم نشده‌اند: `SUPABASE_SERVICE_ROLE_KEY`» |
+| کلید anon در جای `SUPABASE_SERVICE_ROLE_KEY` | «کلید عمومی … در جای SUPABASE_SERVICE_ROLE_KEY گذاشته شده است» |
+| کلید secret در جای `SUPABASE_PUBLISHABLE_KEY`/anon | «کلید secret … در جای … گذاشته شده» — این حالت نشتی است؛ کلید را در Supabase **Rotate** کن |
+
+به‌همین دلیل `/api/supabase-config` هرگز مقدادی را که شکلِ کلید secret دارد (`sb_secret_…` یا JWTِ
+با `role: service_role`) به مرورگر برنمی‌گرداند، حتی اگر اشتباهی در متغیر عمومی گذاشته شده باشد.
 
 **امنیت:** این کلید از کل دیتابیس رد می‌شود؛ فقط در Vercel (سمت سرور) بماند — نه در فایل‌های پروژه،
 نه در چت، نه در `index.html`. اگر جایی لو رفت، در همان صفحهٔ API Keys یک کلید جدید بساز و

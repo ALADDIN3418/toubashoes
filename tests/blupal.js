@@ -804,6 +804,31 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
     'the health endpoint names the variable the owner has to add in Vercel');
   assert.equal(partialStatus.body.configured, false, 'and the payment stays off until it is there');
   assert.equal(JSON.stringify(unconfiguredStatus.body).includes('eyJ'), false, 'a service key value must never be printed');
+  /* the two Supabase keys are not interchangeable — each swap gets its own message */
+  const anonJwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: 'anon' })).toString('base64url')}.sig`;
+  const serviceJwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.sig`;
+  const swapped = supabaseServer.supabaseServerConfig({
+    SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: anonJwt, SUPABASE_SERVICE_ROLE_KEY: anonJwt
+  });
+  assert.equal(swapped.serviceKeyIsPublic, true, 'the anon key in the service slot is detected');
+  assert.equal(swapped.serviceConfigured, false, 'and does not count as a service configuration');
+  let swapError = null;
+  try { supabaseServer.serverConfiguration({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: anonJwt, SUPABASE_SERVICE_ROLE_KEY: anonJwt }); }
+  catch (error) { swapError = error; }
+  assert.match(swapError.message, /کلید عمومی/, 'the owner is told which key is in the wrong slot');
+  assert.match(swapError.message, /sb_secret_/, 'and where the right one comes from');
+  assert.equal(supabaseServer.supabaseServerConfig({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_a', SUPABASE_SECRET_KEY: 'sb_secret_b' }).serviceConfigured,
+    true, 'SUPABASE_SECRET_KEY is accepted as an alias, because Supabase renamed the key');
+  assert.deepEqual(supabaseServer.missingServerKeys({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_a' }), ['SUPABASE_SERVICE_ROLE_KEY'],
+    'but the guide and the error always name the canonical variable');
+  assert.equal(supabaseServer.looksLikeSecretKey(serviceJwt), true, 'a legacy service_role JWT is recognised');
+  assert.equal(supabaseServer.looksLikeSecretKey(anonJwt), false, 'a legacy anon JWT is not');
+  assert.equal(supabaseServer.looksLikeSecretKey('sb_publishable_abc'), false, 'the publishable key is public by design');
+  let leakError = null;
+  try { supabaseServer.serverConfiguration({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_PUBLISHABLE_KEY: serviceJwt, SUPABASE_SERVICE_ROLE_KEY: serviceJwt }); }
+  catch (error) { leakError = error; }
+  assert.equal(leakError.status, 503, 'a secret key in the public slot stops the storefront instead of shipping it');
+  assert.match(leakError.message, /مرورگر|Rotate/, 'and says the key leaked and must be rotated');
   section('status endpoint');
 
 

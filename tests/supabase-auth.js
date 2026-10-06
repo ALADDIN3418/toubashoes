@@ -80,6 +80,18 @@ const path = require('path');
   assert.match(response.body,/public-browser-key/);
   assert.doesNotMatch(response.body,/never-expose-this/);
   assert.match(response.body,/"enabled":true/);
+  /* a privileged key pasted into the public slot must never reach the browser */
+  const secretJwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.sig`;
+  process.env.SUPABASE_PUBLISHABLE_KEY = secretJwt;
+  response.body = '';
+  api({ method: 'GET' }, response);
+  assert.doesNotMatch(response.body, /eyJ/, 'a service_role JWT must not be echoed to the browser');
+  assert.match(response.body, /"enabled":false/, 'and the storefront then reports the config as unusable');
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'sb_secret_test_value';
+  response.body = '';
+  api({ method: 'GET' }, response);
+  assert.doesNotMatch(response.body, /sb_secret_test_value/, 'the sb_secret_ prefix is refused too');
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'public-browser-key';
   for(const [k,v] of [['SUPABASE_URL',originalEnv.url],['SUPABASE_PUBLISHABLE_KEY',originalEnv.key],['SUPABASE_ANON_KEY',originalEnv.anon],['SUPABASE_SERVICE_ROLE_KEY',originalEnv.service]]) {
     if(v===undefined) delete process.env[k]; else process.env[k]=v;
   }
