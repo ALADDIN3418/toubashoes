@@ -192,11 +192,11 @@ function categoryCards(){
   let chosen=categoryIds.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale');
   if(!chosen.length)chosen=db.categories.filter(c=>c.active&&c.id!=='sale').slice(0,6);
   return chosen.map(c=>{
-    let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;
+    let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;if(c.imageUrl)style={...style,bg:c.imageUrl,pos:'center'};
     let count=db.products.filter(p=>p.active&&p.category===c.id).length;
     let url=`/category/${encodeURIComponent(c.slug||c.id)}`;
     return `<a href="${url}" class="lux-category-card" aria-label="مشاهده دسته‌بندی ${esc(c.name)}">
-      <div class="category-image-visual" style="background-image:url('${style.bg}');background-position:${style.pos}"></div>
+      <div class="category-image-visual" style="background-image:url('${esc(style.bg)}');background-position:${style.pos}"></div>
       <div class="category-card-overlay"></div>
       <div class="category-card-top">
         <span class="category-tag-badge">${esc(style.tag)}</span>
@@ -215,7 +215,7 @@ function categoryCards(){
 }
 
 function card(p){
-  let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||0),0)/reviews.length:0,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorMap[c]||'#64748b'};border:1px solid rgba(0,0,0,0.15)" title="${esc(c)}"></span>`}).join('');
+  let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||0),0)/reviews.length:0,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${(()=>{let m=p.specifications&&p.specifications.__colorHexes;let h=m&&m[c];return /^#[0-9a-fA-F]{6}$/.test(String(h||''))?h:(colorMap[c]||'#64748b')})()};border:1px solid rgba(125,135,125,.6)" title="${esc(c)}"></span>`}).join('');
   let stockMarkup = stock === 1
     ? `<span class="stock-indicator last-one" title="تنها ۱ عدد باقی مانده است"><i></i>تنها ۱ عدد باقی مانده</span>`
     : stock > 1

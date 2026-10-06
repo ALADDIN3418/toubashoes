@@ -1634,3 +1634,8 @@ body.storefront-mode .img-slide .img-actions{border-top-color:var(--touba-border
 body.storefront-mode .img-slide .img-actions button{color:var(--touba-text);border-inline-start-color:var(--touba-border)}
 body.storefront-mode .img-slide .img-actions button:hover{background:var(--touba-surface-soft)}
 body.storefront-mode .img-slide .img-actions .rm{color:#f19189}
+
+body.storefront-mode .pf-colors-hex{background:var(--touba-surface-soft);border-color:var(--touba-border)}
+body.storefront-mode .chf{color:var(--touba-text)}
+body.storefront-mode .chf-note{color:var(--touba-muted)}
+body.storefront-mode .chf input[type=color]{border-color:var(--touba-border)}

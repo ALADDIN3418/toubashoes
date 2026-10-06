@@ -57,7 +57,7 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 </div>
 <div class="pf-section-title"><b>۲</b> سایز، رنگ و موجودی</div>
 <div class="form-grid">
-<div class="field"><label>رنگ‌بندی (با ویرگول)</label><input id="variant-colors" name="colors" value="${esc(p.colors.join(','))}" placeholder="مشکی، سفید"></div>
+<div class="field"><label>رنگ‌بندی (با ویرگول)</label><input id="variant-colors" name="colors" onchange="renderColorHexEditor(this.form)" value="${esc(p.colors.join(','))}" placeholder="مشکی، سفید"></div><div class="field full"><div class="pf-colors-hex" id="color-hex-editor"></div><input type="hidden" name="colorHex" id="color-hex-data" value="${esc(JSON.stringify((p.specifications&&p.specifications.__colorHexes)||{}))}"></div>
 <div class="field"><label>موجودی هر سایز</label><input id="variant-stock-all" type="number" min="0" value="0" onchange="applyStockToAllVariants(this.form)" placeholder="مثلاً ۱۰"></div>
 <div class="field full"><label>سایزها را تیک بزنید (۲۲ تا ۴۸)</label>${sizeGridMarkup(p.sizes)}<p class="pf-hint">یک عدد در «موجودی هر سایز» بنویسید؛ روی همهٔ ترکیب‌های سایز×رنگ تقسیم می‌شود. موجودی دقیق هر ترکیب در تنظیمات پیشرفته است.</p></div>
 <div class="field full"><label>قیمت قبل از تخفیف (اختیاری — برای درج خط‌خورده)</label><input type="number" min="0" name="oldPrice" value="${p.oldPrice||''}"></div>
@@ -78,11 +78,11 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 <div class="field full"><button type="button" class="action" onclick="buildVariantEditor()">بازسازی جدول سایز × رنگ</button><p class="pf-hint">موجودی هر ترکیب مستقل؛ اگر این جدول را دستی تغییر دهید، همین مقدارها جای «موجودی هر سایز» را می‌گیرند.</p><div class="table-wrap"><table class="data-table"><thead><tr><th>سایز</th><th>رنگ</th><th>SKU واریانت</th><th>موجودی</th></tr></thead><tbody id="variant-editor">${variantRows}</tbody></table></div></div>
 <div class="field full"><label>آدرس تصاویر (هر کدام در یک خط)</label><textarea name="images" oninput="renderImageStrip(this.form)" placeholder="/hero-shoe.jpg">${esc((p.images||[]).join('\n'))}</textarea></div>
 <div class="field full"><label>ویژگی‌ها (هر مورد در یک خط)</label><textarea name="features">${esc((p.features||[]).join('\n'))}</textarea></div>
-<div class="field full"><label>مشخصات (هر خط: نام: مقدار)</label><textarea name="specifications">${esc(Object.entries(p.specifications||{}).map(([k,v])=>`${k}: ${v}`).join('\n'))}</textarea></div>
+<div class="field full"><label>مشخصات (هر خط: نام: مقدار)</label><textarea name="specifications">${esc(Object.entries(p.specifications||{}).filter(([k])=>!String(k).startsWith('__')).map(([k,v])=>`${k}: ${v}`).join('\n'))}</textarea></div>
 <div class="field"><label><input type="checkbox" name="featured" ${p.featured?'checked':''}> محصول ویژه (نمایش در خانه)</label></div>
 <div class="field"><label><input type="checkbox" name="bestSeller" ${p.bestSeller?'checked':''}> پرفروش</label></div>
 </div></details>
-</form>`);renderImageStrip(document.getElementById('product-edit-form'))}
+</form>`);const _pf=document.getElementById('product-edit-form');renderImageStrip(_pf);renderColorHexEditor(_pf)}
 function syncSizeSpecification(form,sizeValues){let field=form?.elements?.specifications;if(!field)return '';let raw=Array.isArray(sizeValues)?sizeValues:String(form.elements.sizes?.value||'').split(','),sizes=[...new Set(raw.map(value=>String(value||'').trim()).filter(Boolean))],isSizeLine=/^\s*(?:سایزبندی(?:\s*(?:موجود|کالا|محصول))?|سایز(?:ها)?|اندازه(?:بندی)?|sizes?|size\s*range)\s*:/iu,lines=String(field.value||'').split(/\r?\n/).filter(line=>line.trim()&&!isSizeLine.test(line));if(sizes.length)lines.push(`سایزبندی: ${sizes.join('، ')}`);field.value=lines.join('\n');return field.value}
 function variantEditorRow(v){return `<tr><td><input class="v-size" value="${esc(v.size)}" readonly></td><td><input class="v-color" value="${esc(v.color)}" readonly></td><td><input class="v-sku" value="${esc(v.sku||'')}" aria-label="SKU واریانت"></td><td><input class="v-stock" type="number" min="0" value="${Number(v.stock)||0}" aria-label="موجودی"></td></tr>`}
 
@@ -170,6 +170,43 @@ ${i>0?`<button type="button" title="انتخاب به‌عنوان تصویر ا
 function imageSetMain(i){const f=_toubaImageForm(),l=readFormImages(f);if(i<1||i>=l.length)return;l.unshift(l.splice(i,1)[0]);writeFormImages(f,l)}
 function imageMove(i,d){const f=_toubaImageForm(),l=readFormImages(f),j=i+d;if(i<0||j<0||j>=l.length)return;[l[i],l[j]]=[l[j],l[i]];writeFormImages(f,l)}
 function imageRemove(i){const f=_toubaImageForm(),l=readFormImages(f);l.splice(i,1);writeFormImages(f,l);toast(l.length?'اسلاید حذف شد':'همهٔ اسلایدها حذف شدند')}
+const DEFAULT_COLOR_HEX={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};
+function renderColorHexEditor(form){
+  const box=form?.querySelector('#color-hex-editor');if(!box)return;
+  const colors=[...new Set(String(form.elements.colors.value||'').split(',').map(x=>x.trim()).filter(Boolean))];
+  let map={};try{map=JSON.parse(form.querySelector('#color-hex-data').value||'{}')||{}}catch{}
+  if(!colors.length){box.innerHTML='<span class="chf-note">اول رنگ‌ها را بنویسید تا نقطهٔ هر رنگ در کارت محصول قابل تنظیم شود.</span>';return}
+  box.innerHTML='<span class="chf-note">رنگ نقطهٔ هر رنگ‌بندی در کارت محصول:</span>'+colors.map(c=>`<label class="chf"><input type="color" data-color="${esc(c)}" value="${/^#[0-9a-fA-F]{6}$/.test(map[c]||'')?map[c]:DEFAULT_COLOR_HEX[c]||'#64748b'}"><span>${esc(c)}</span></label>`).join('');
+  box.querySelectorAll('input[type=color]').forEach(inp=>inp.addEventListener('input',()=>collectColorHexes(form)));
+}
+function collectColorHexes(form){
+  const out={};form.querySelectorAll('#color-hex-editor input[type=color]').forEach(inp=>{out[inp.dataset.color]=inp.value});
+  form.querySelector('#color-hex-data').value=JSON.stringify(out);
+}
+function previewCategoryImage(form){
+  const img=form?.querySelector('#cat-image-preview'),v=String(form.elements.imageUrl?.value||'').trim();
+  if(!img)return;
+  if(v&&/^(\/[^\s]+|https:\/\/[^\s]+)$/.test(v)){img.src=v;img.style.display='block'}else if(!v){img.style.display='none'}
+}
+async function uploadCategoryImage(input){
+  const form=input?.form,status=form?.querySelector('#cat-upload-status'),file=input?.files&&input.files[0];
+  if(!file)return;
+  const report=msg=>{if(status)status.textContent=msg};
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){report('❌ فقط JPEG/PNG/WebP');return}
+  if(file.size>5*1024*1024){report('❌ حجم فایل باید کمتر از ۵ مگابایت باشد.');return}
+  if(!window.DataRepositories?.media?.create){report('❌ اتصال Supabase آماده نیست.');return}
+  report('⏳ در حال آپلود…');
+  try{
+    let dataUrl=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(new Error('خواندن فایل انجام نشد.'));fr.readAsDataURL(file)});
+    dataUrl=await shrinkImageTo(dataUrl,1280,.86);
+    const alt=((form.elements.name?.value||'دسته‌بندی').trim())+' — تصویر دسته';
+    const media=await DataRepositories.media.create({url:dataUrl,alt});
+    if(form.elements.imageUrl)form.elements.imageUrl.value=media.url;
+    previewCategoryImage(form);
+    report('✅ تصویر دسته آپلود شد؛ حالا «ذخیره» را بزنید.');
+  }catch(error){report('❌ '+(error.message||'آپلود انجام نشد.'))}
+  finally{input.value=''}
+}
 async function shrinkImageTo(dataUrl,maxSide,quality){
   try{
     if(typeof Image==='undefined')return dataUrl;

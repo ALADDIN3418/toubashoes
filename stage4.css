@@ -7007,3 +7007,12 @@ details.pf-adv[open]>summary:after{content:"▲"}
 .img-slide .img-actions button:disabled{opacity:.35;cursor:default;background:none}
 .img-slide .img-actions .rm{color:#a34537}
 .img-slide .img-actions .rm:hover{background:#fbe9e4}
+
+/* ═══ ویرایشگر رنگِ نقطه‌های کارت محصول + پیش‌نمایش تصویر دسته ═══ */
+.pf-colors-hex{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 11px;border:1px dashed #d5ddc8;border-radius:11px;background:#fbfcf7;margin-top:2px}
+.chf-note{font-size:11px;color:#7d8b80}
+.chf{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#33413a;cursor:pointer;user-select:none}
+.chf input[type=color]{width:30px;height:24px;padding:0;border:1px solid #cfd8c4;border-radius:6px;background:none;cursor:pointer}
+.chf input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.chf input[type=color]::-webkit-color-swatch{border:0;border-radius:4px}
+#cat-image-preview{object-fit:cover}

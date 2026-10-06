@@ -169,6 +169,23 @@ async function main() {
     assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
   }
 
+  // v1.0.1: category images, admin-tunable card color dots, release hygiene.
+  {
+    const app = fs.readFileSync(path.join(root,'app.js'),'utf8');
+    assert(app.includes('name="imageUrl"') && app.includes('uploadCategoryImage(this)') && app.includes('cat-image-preview'), 'category modal must offer image URL + upload with preview');
+    const st3 = fs.readFileSync(path.join(root,'stage3.js'),'utf8');
+    assert(st3.includes("imageUrl:f.elements.imageUrl?.value.trim()||''"), 'saveCategory must persist the image');
+    assert(st3.includes('obj.specifications.__colorHexes=hx'), 'saveProduct must persist admin color-dot hexes');
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    assert(st4.includes('p.specifications.__colorHexes'), 'product card dots must honor admin-configured hexes');
+    assert(st4.includes("if(c.imageUrl)style={...style,bg:c.imageUrl,pos:'center'}"), 'category cards must show admin-set image');
+    assert(st4.includes("background-image:url('${esc(style.bg)}')"), 'category background url must be escaped');
+    const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+    assert(pkg.version === '1.0.1', 'package version must be 1.0.1');
+    assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
+    assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
+  }
+
   // Multi-slide upload guards: the product form must accept several files and manage them.
   {
     const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');

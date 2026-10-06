@@ -3,5 +3,6 @@
   "description": "فروشگاه تخصصی کفش و چرم طوبی با دیتابیس پایدار، درگاه امن و پنل مدیریت مدرن",
   "capabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  ],
+  "version": "1.0.1"
 }
