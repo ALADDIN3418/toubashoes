@@ -1086,7 +1086,8 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   assert.match(packageJson.scripts.test, /tests\/blupal\.js/);
   const ops = fs.readFileSync(path.join(ROOT, 'BLUPAL_OPERATIONS.md'), 'utf8');
   for (const must of ['blupal.top', 'X-API-Key', 'final_amount', 'Webhook درگاه', 'Callback page', 'simulate', '200', 'invoice_id',
-    'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'missingDatabaseKeys']) {
+    'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'missingDatabaseKeys',
+    'API Keys', 'Create new key', 'Redeploy', 'sb_publishable_']) {
     assert.ok(ops.includes(must), `the operations guide must cover ${must}`);
   }
   assert.ok(!/bluepal\.ir|sk_test_|sk_live_|merchant_id/i.test(ops), 'the operations guide must not describe the other vendor');
