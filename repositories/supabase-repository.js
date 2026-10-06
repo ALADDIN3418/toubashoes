@@ -26,6 +26,10 @@
 
   function clone(value) { return structuredClone(value); }
   function isUuid(value) { return UUID_RE.test(String(value || '')); }
+  function newUuid() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 3) | 8).toString(16); });
+  }
   function upsertLocal(rows, row) {
     const index = rows.findIndex(x => String(x.id) === String(row.id));
     if (index >= 0) rows[index] = row;
@@ -194,6 +198,7 @@
       const row = { product_id:productId, size:String(v.size || '').trim(), color:String(v.color || '').trim(), sku:String(v.sku || '').trim() || null, stock:Math.max(0, Math.floor(Number(v.stock)||0)), price_toman:Number(v.price)>0?Math.round(Number(v.price)):null };
       if (old?.id) row.id = old.id;
       else if (isUuid(v.id)) row.id = v.id;
+      else row.id = newUuid(); // جداول زندهٔ قدیمی ممکن است default برای id نداشته باشند؛ هرگز id تهی نفرست.
       return row;
     });
     const { data, error } = await client.from('product_variants').upsert(rows,{onConflict:'product_id,size,color'}).select('*');

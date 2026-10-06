@@ -148,6 +148,27 @@ async function main() {
     assert(fs.readFileSync(path.join(root,'stage4.js'),'utf8').includes('color:var(--touba-brand,#10b981)'), 'stage4 free-shipping highlight must follow theme brand color');
   }
 
+  // Admin product-form upgrade guards: honest <title>, size-tick grid 22-48, manual upload, variant-id resilience.
+  {
+    const idx = fs.readFileSync(path.join(root,'index.html'),'utf-8');
+    assert(idx.includes('<title>کفش طوبی | '), 'index.html <title> must start with ' + 'کفش طوبی');
+    assert(!/<title>[^<]*22342065/.test(idx), 'index.html <title> must not contain the enamad code');
+    assert(!/og:title[^>]*22342065|twitter:title[^>]*22342065/.test(idx), 'social title tags must not contain the enamad code');
+    assert(!fs.readFileSync(path.join(root,'services/seo.js'),'utf8').includes('22342065'), 'seo.js home title must use store name, not enamad code');
+    const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
+    for (const needle of ['function sizeGridMarkup','SIZE_TICK_MIN=22','SIZE_TICK_MAX=48','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','سایزبندی با تیک'])
+      assert(enh.includes(needle), `enhancements.js missing product-form feature: ${needle}`);
+    const digits = enh.match(/function faDigits\(n\)\{return String\(n\)\.replace\(\s*\/[^/]*\/g\s*,\s*d\s*=>\s*'([^']*)'/);
+    assert(digits && [...digits[1]].length === 10 && digits[1][0] === '\u06f0' && digits[1][9] === '\u06f9', 'faDigits conversion map must cover all ten Persian digits in order');
+    const repo = fs.readFileSync(path.join(root,'repositories/supabase-repository.js'),'utf8');
+    assert(repo.includes('function newUuid()') && repo.includes('else row.id = newUuid();'), 'saveVariants must generate uuid ids so NOT NULL(id) can never fire');
+    const migPath = path.join(root,'supabase/migrations/202610060001_variant_id_default.sql');
+    assert(fs.existsSync(migPath), 'variant id default migration must ship');
+    assert(/product_variants[\s\S]*alter column id set default/.test(fs.readFileSync(migPath,'utf8')), 'migration must set product_variants.id default');
+    const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
+    assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
+  }
+
   console.log('PASS: Supabase-only hydration, fail-closed schema guard, no local commerce snapshots/demo fixtures, Supabase Storage image path, script order, AI Studio constraints, and responsive layout guards');
 }
 
