@@ -186,11 +186,10 @@ const CATEGORY_STYLES = {
 };
 
 function categoryCards(){
-  let cms=db.settings.homepage||{},categoryIds=Array.isArray(cms.categoryIds)?cms.categoryIds.slice():db.categories.slice(0,6).map(c=>c.id);
-  let legacyDefault=['men','women','sport','formal','sandal','slipper'];
-  if(categoryIds.length===legacyDefault.length&&legacyDefault.every(id=>categoryIds.includes(id)))categoryIds=['women','men','accessories','sport','formal','sandal'];
-  let chosen=categoryIds.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale');
-  if(!chosen.length)chosen=db.categories.filter(c=>c.active&&c.id!=='sale').slice(0,6);
+  let cms=db.settings.homepage||{};
+  let configured=Array.isArray(cms.categoryIds)&&cms.categoryIds.length?cms.categoryIds.slice():null;
+  let chosen=configured?configured.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale'):db.categories.filter(c=>c.active&&c.id!=='sale');
+  if(!configured&&chosen.length>1){let order=['women','men','accessories','sport','formal','sandal'];chosen.sort((a,b)=>{let ia=order.indexOf(a.id),ib=order.indexOf(b.id);return (ia<0?99:ia)-(ib<0?99:ib)});}
   return chosen.map(c=>{
     let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;if(c.imageUrl)style={...style,bg:c.imageUrl,pos:'center'};
     let count=db.products.filter(p=>p.active&&p.category===c.id).length;

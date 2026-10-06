@@ -169,6 +169,25 @@ async function main() {
     assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
   }
 
+  // v1.0.1b: IRANSans webfont, admin console skin, full homepage categories.
+  {
+    const styles = fs.readFileSync(path.join(root,'styles.css'),'utf8');
+    assert(styles.includes("@font-face{font-family:'IRANSans'") && styles.includes("url('/fonts/IRANSansWeb.woff2')"), 'IRANSans @font-face must ship with local woff2');
+    assert(styles.includes("font-family:'IRANSans','Vazirmatn',Tahoma,sans-serif"), 'body must prefer IRANSans with graceful fallbacks');
+    for (const w of ['','_Light','_Medium','_Bold','_UltraLight']) assert(fs.existsSync(path.join(root,'fonts',`IRANSansWeb${w}.woff2`)), `missing font file: IRANSansWeb${w}.woff2`);
+    const build = fs.readFileSync(path.join(root,'scripts/build-vercel.js'),'utf8');
+    assert(build.includes("'fonts/IRANSansWeb.woff2'"), 'fonts must be in the Vercel build whitelist');
+    const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
+    assert(css.includes('--font-sans: IRANSans'), 'stage4 --font-sans must prefer IRANSans');
+    const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+    assert(authUi.includes("selected==='products'?") && !authUi.includes('افزودن سریع محصول'), 'admin head toolbar must be contextual per section');
+    assert(css.includes('body.admin-body{') && css.includes('.auth-admin-head{') && css.includes('backdrop-filter'), 'admin console skin must exist');
+    assert(css.includes('body.admin-body input:-webkit-autofill'), 'admin forms need the autofill fix too');
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    assert(!st4.includes('db.categories.slice(0,6)'), 'homepage must show ALL active categories, not a capped six');
+    assert(st4.includes("background-image:url('${esc(style.bg)}')"), 'category card image stays escaped');
+  }
+
   // v1.0.1: category images, admin-tunable card color dots, release hygiene.
   {
     const app = fs.readFileSync(path.join(root,'app.js'),'utf8');
