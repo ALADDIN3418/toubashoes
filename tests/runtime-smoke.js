@@ -156,7 +156,7 @@ async function main() {
     assert(!/og:title[^>]*22342065|twitter:title[^>]*22342065/.test(idx), 'social title tags must not contain the enamad code');
     assert(!fs.readFileSync(path.join(root,'services/seo.js'),'utf8').includes('22342065'), 'seo.js home title must use store name, not enamad code');
     const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
-    for (const needle of ['function sizeGridMarkup','SIZE_TICK_MIN=22','SIZE_TICK_MAX=48','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','سایزبندی با تیک'])
+    for (const needle of ['function sizeGridMarkup','SIZE_TICK_MIN=22','SIZE_TICK_MAX=48','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','تیک بزنید'])
       assert(enh.includes(needle), `enhancements.js missing product-form feature: ${needle}`);
     const digits = enh.match(/function faDigits\(n\)\{return String\(n\)\.replace\(\s*\/[^/]*\/g\s*,\s*d\s*=>\s*'([^']*)'/);
     assert(digits && [...digits[1]].length === 10 && digits[1][0] === '\u06f0' && digits[1][9] === '\u06f9', 'faDigits conversion map must cover all ten Persian digits in order');
@@ -167,6 +167,23 @@ async function main() {
     assert(/product_variants[\s\S]*alter column id set default/.test(fs.readFileSync(migPath,'utf8')), 'migration must set product_variants.id default');
     const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
     assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
+  }
+
+  // Login mark + simplified product-entry flow guards.
+  {
+    const auth = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+    assert(auth.includes('touba-logo.png') && auth.includes('auth-touba-mark'), 'login/signup must show the calligraphic Touba chess-piece mark');
+    assert(!/font-size:38px;color:#(83a74a|10b981)">♙/.test(auth), 'raw pawn glyph must be gone from auth pages');
+    assert(!auth.includes('quickProductModal()') || auth.includes('function quickProductModal') === false, 'admin toolbar must offer one unified add-product button');
+    assert(auth.includes('onclick="productModal()">＋'), 'admin catalog toolbar needs the unified add-product button');
+    const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
+    for (const needle of ['function quickProductModal(){return productModal()}','function applyStockToAllVariants','pf-section-title','details class="pf-adv"','منتشر شود'])
+      assert(enh.includes(needle), `enhancements.js simplified product form missing: ${needle}`);
+    const stage3 = fs.readFileSync(path.join(root,'stage3.js'),'utf-8');
+    assert(stage3.includes('if(window.buildVariantEditor){buildVariantEditor();'), 'saveProduct must auto-sync the variant table instead of blocking the admin');
+    assert(stage3.includes("sku:fd.get('sku').trim()||('TB-'+Date.now()"), 'SKU must auto-generate when left empty');
+    const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
+    assert(css.includes('.auth-touba-mark{') && css.includes('details.pf-adv'), 'mark + advanced-section styles must ship');
   }
 
   console.log('PASS: Supabase-only hydration, fail-closed schema guard, no local commerce snapshots/demo fixtures, Supabase Storage image path, script order, AI Studio constraints, and responsive layout guards');

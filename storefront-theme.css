@@ -1621,3 +1621,7 @@ body.storefront-mode .gallery-thumb.selected{outline:2px solid var(--touba-brand
 /* حالت خالی و کادر سبد خالی. */
 body.storefront-mode .empty{color:var(--touba-muted)!important}
 body.storefront-mode .empty-cart-box p{color:var(--touba-muted)}
+
+/* در تم تیره نشانِ سبز لوگو با درخشش ملایم از پس‌زمینه جدا می‌شود. */
+body.storefront-mode[data-theme="dark"] .auth-touba-mark{filter:drop-shadow(0 0 18px rgba(140,173,75,.30)) brightness(1.18) saturate(1.05)}
+body.storefront-mode .pf-adv-hint{color:var(--touba-subtle)}
