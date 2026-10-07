@@ -185,7 +185,7 @@ async function main() {
     assert(css.includes('body.admin-body input:-webkit-autofill'), 'admin forms need the autofill fix too');
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(!st4.includes('db.categories.slice(0,6)'), 'homepage must show ALL active categories, not a capped six');
-    assert(st4.includes("background-image:url('${esc(c.imageUrl)}')"), 'category chip image stays escaped');
+    assert(st4.includes("src=\"${esc(c.imageUrl)}\""), 'category tile image src must be escaped');
   }
 
   // v1.0.1: category images, admin-tunable card color dots, release hygiene.
@@ -197,23 +197,26 @@ async function main() {
     assert(st3.includes('obj.specifications.__colorHexes=hx'), 'saveProduct must persist admin color-dot hexes');
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(st4.includes('p.specifications.__colorHexes'), 'product card dots must honor admin-configured hexes');
-    assert(st4.includes('cat-chip-thumb is-image'), 'category chips must show admin-set image when imageUrl is set');
-    assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'category chips must carry a name-matched auto icon');
+    assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
+    assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.2', 'package version must be 1.0.2');
+    assert(pkg.version === '1.0.3', 'package version must be 1.0.3');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
 
-  // v1.0.2: homepage categories redesigned as compact icon chips (icon tile + name, reference-style).
+  // v1.0.3: categories = ONE horizontal swipe row showing ONLY the admin's image (no buttons/labels).
   {
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
-    assert(!st4.includes('CATEGORY_STYLES'), 'old full-cover category showcase must be retired');
-    assert(st4.includes('cat-chip-row') && st4.includes('class=\"cat-chip\"'), 'category section must render the chip row');
-    assert(st4.includes('cat-chip-sale'), 'sale tile must join the chip row');
-    for (const needle of ['.cat-chip-row{','.cat-chip-thumb{','.cat-chip-name{','.cat-chip-thumb.is-image','.cat-chip-off{'])
-      assert(themeCss.includes(needle), `chip styles missing from storefront-theme.css: ${needle}`);
+    assert(!st4.includes('CATEGORY_STYLES') && !st4.includes('cat-chip'), 'chip/button experiment must be fully retired');
+    assert(st4.includes('<div class=\"cat-tile-row\">${categoryCards()}</div>'), 'section renders one tile row, nothing appended');
+    assert(!st4.includes('saleCard'), 'sale button must not join the category row');
+    assert(st4.includes('alt="${esc(c.name)}"'), 'the tile image keeps the category name for screen readers only');
+    assert(st4.includes('cat-tile-emoji'), 'image-less categories get the quiet emoji fallback');
+    for (const needle of ['.cat-tile-row{','overflow-x:auto','scrollbar-width:none','.cat-tile img{','object-fit:contain'])
+      assert(themeCss.includes(needle), `scroll row style missing: ${needle}`);
+    assert(!themeCss.includes('cat-chip') && !themeCss.includes('cat-chip-off'), 'no button chrome left in the theme css');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
