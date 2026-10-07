@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.7', 'package version must be 1.0.7');
+    assert(pkg.version === '1.0.8', 'package version must be 1.0.8');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -210,7 +210,7 @@ async function main() {
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
     assert(!st4.includes('CATEGORY_STYLES') && !st4.includes('cat-chip'), 'chip/button experiment must be fully retired');
-    assert(st4.includes('<div class=\"cat-tile-row\">${categoryCards()}</div>'), 'section renders one tile row, nothing appended');
+    assert(st4.includes('<div class=\"cat-tile-row\" id=\"cat-tile-row\">${categoryCards()}</div>'), 'section renders exactly one tile row (plus the two arrow buttons), nothing else appended');
     assert(!st4.includes('saleCard'), 'sale button must not join the category row');
     assert(st4.includes('alt="${esc(c.name)}"'), 'the tile image keeps the category name for screen readers only');
     assert(st4.includes('cat-tile-emoji'), 'image-less categories get the quiet emoji fallback');
@@ -231,15 +231,16 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.7', 'package version must be 1.0.7');
+    assert(pkg.version === '1.0.8', 'package version must be 1.0.8');
   }
 
   // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
   {
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
-    for (const dead of ['startCategoryCarousel','cat-tile-ghost','requestAnimationFrame','catCarouselPxPerSec','cat-tile-set'])
+    for (const dead of ['startCategoryCarousel','cat-tile-ghost','catCarouselPxPerSec','cat-tile-set'])
       assert(!st4.includes(dead), `carousel/clone leftover must not exist in stage4.js: ${dead}`);
+    assert(!/(scrollLeft|setInterval)[\s\S]{0,40}(carousel|marquee|loop)/i.test(st4), 'no auto-loop engine may sneak back into stage4.js');
     assert(!themeCss.includes('cat-tile-ghost') && !themeCss.includes('.cat-tile-set{'), 'no clone leftovers in the theme css');
     assert(themeCss.includes('scroll-snap-type:x proximity') && themeCss.includes('scroll-snap-align:start'), 'manual swipe keeps snap');
     assert(themeCss.includes('width:150px;height:150px') && themeCss.includes('width:208px;height:208px') && themeCss.includes('width:136px;height:136px'), 'enlarged tile sizes stay');
@@ -259,6 +260,22 @@ async function main() {
     assert(st4.includes('cms.categoryIds'), 'manual homepage.categoryIds override still wins');
     const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
     assert(css.includes('body.admin-body .cat-order-move{'), 'move buttons styled inside the admin skin scope');
+  }
+
+  // v1.0.8: category row edge arrows + Touba logo inside the splash loader ring.
+  {
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+    const html = fs.readFileSync(path.join(root,'index.html'),'utf8');
+    const baseCss = fs.readFileSync(path.join(root,'styles.css'),'utf8');
+    assert(st4.includes('cat-row-wrap') && st4.includes('id="cat-tile-row"'), 'category row must sit inside the arrowed wrapper');
+    assert(st4.includes('scrollCatRow(-1)') && st4.includes('scrollCatRow(1)'), 'both edge arrows wired, one tile per tap');
+    assert(st4.includes('function updateCatArrows') && st4.includes("addEventListener('resize',updateCatArrows"), 'arrows must track overflow');
+    assert(st4.includes('base.__catArrows'), 'render pipeline must refresh arrow state');
+    assert(st4.includes("'chev-r':'") && st4.includes("'chev-l':'"), 'chevron glyphs registered in the icon set');
+    assert(themeCss.includes('.cat-arrow{') && themeCss.includes('.cat-row-wrap.has-overflow .cat-arrow{display:grid}') && themeCss.includes('.cat-arrow-start{inset-inline-start:2px}'), 'arrows hidden until overflow, RTL-aware placement');
+    assert(html.includes('class="initial"') && html.includes('initial-ring') && html.includes('<img src="/touba-logo.png" alt="طوبی">'), 'splash must show the Touba logo in the ring');
+    assert(baseCss.includes('.initial-ring:after') && baseCss.includes('@keyframes initial-spin') && baseCss.includes('prefers-reduced-motion'), 'splash spinner defined and motion-safe');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.

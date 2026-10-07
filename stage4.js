@@ -18,7 +18,9 @@ function uiIcon(name){
     moon:'<path d="M20.8 14.2A8.5 8.5 0 0 1 9.8 3.2 8.5 8.5 0 1 0 20.8 14.2Z"/>',
     trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
     check:'<path d="M20 6 9 17l-5-5"/>',
-    sparkle:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>'
+    sparkle:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>',
+    'chev-r':'<path d="m9 6 6 6-6 6"/>',
+    'chev-l':'<path d="m15 6-6 6 6 6"/>'
   };
   return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p[name]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
 }
@@ -210,6 +212,26 @@ function categoryCards(){
     return `<a href="${url}" class="cat-tile" style="--cat-tint:${CATEGORY_TINTS[idx%CATEGORY_TINTS.length]}" aria-label="دسته‌بندی ${esc(c.name)}"><span class="cat-tile-media cat-tile-emoji" aria-hidden="true"><i>${emoji}</i></span><b class="cat-tile-name">${esc(c.name)}</b></a>`;
   }).join('');
 }
+/* Category row edge arrows v1.0.8: hint that more categories exist. They appear
+   only when the row actually overflows; one tap = one tile, RTL-safe via
+   scrollIntoView (no scrollLeft sign math). */
+function scrollCatRow(dir){
+  let row=document.getElementById('cat-tile-row');
+  if(!row)return;
+  let tiles=Array.prototype.slice.call(row.children);
+  if(tiles.length<2)return;
+  let rc=row.getBoundingClientRect(),mid=rc.left+rc.width/2,idx=0,best=Number.POSITIVE_INFINITY;
+  for(let i=0;i<tiles.length;i++){let r=tiles[i].getBoundingClientRect();let d=Math.abs(r.left+r.width/2-mid);if(d<best){best=d;idx=i}}
+  let next=Math.max(0,Math.min(tiles.length-1,idx+(Number(dir)>0?1:-1)));
+  try{tiles[next].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})}catch(error){row.scrollBy({left:(Number(dir)||1)*180,behavior:'smooth'})}
+}
+function updateCatArrows(){
+  for(let wrap of document.querySelectorAll('.cat-row-wrap')){
+    let row=wrap.querySelector('.cat-tile-row');
+    if(row)wrap.classList.toggle('has-overflow',row.scrollWidth>row.clientWidth+8);
+  }
+}
+
 
 function card(p){
   let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||0),0)/reviews.length:0,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${(()=>{let m=p.specifications&&p.specifications.__colorHexes;let h=m&&m[c];return /^#[0-9a-fA-F]{6}$/.test(String(h||''))?h:(colorMap[c]||'#64748b')})()};border:1px solid rgba(125,135,125,.6)" title="${esc(c)}"></span>`}).join('');
@@ -356,7 +378,7 @@ function home(){
   let heroImage=(!cms.heroImage||cms.heroImage==='/hero-shoe.jpg'||cms.heroImage==='hero-shoe.jpg'||cms.heroImage==='/touba-hero.jpg')?'/touba-hero-editorial.jpg':cms.heroImage,banner=promo[0],bannerImage=(!banner?.imageUrl||banner.imageUrl==='/hero-shoe.jpg'||banner.imageUrl==='/touba-hero.jpg')?heroImage:banner.imageUrl;
   let freeShippingThreshold=Number(db.settings.shippingOptions?.freeFrom??db.settings.freeShipping??0),freeShippingActive=Number.isFinite(freeShippingThreshold)&&freeShippingThreshold>0;
   const categoryRows=db.categories.filter(category=>category.active&&category.id!=='sale');
-  const categorySection=categoryRows.length?`<section class="category-section container" id="categories"><div class="section-heading"><div><span class="section-eyebrow">کالکشن‌های فروشگاه</span><h2>دسته‌بندی‌های طوبی</h2><p>برای دیدن محصولات و جزئیات هر دسته‌بندی، انتخاب کنید.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="cat-tile-row">${categoryCards()}</div></section>`:'';
+  const categorySection=categoryRows.length?`<section class="category-section container" id="categories"><div class="section-heading"><div><span class="section-eyebrow">کالکشن‌های فروشگاه</span><h2>دسته‌بندی‌های طوبی</h2><p>برای دیدن محصولات و جزئیات هر دسته‌بندی، انتخاب کنید.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="cat-row-wrap"><button class="cat-arrow cat-arrow-start" type="button" aria-label="دسته‌بندی‌های قبلی" title="دسته‌بندی‌های قبلی" onclick="scrollCatRow(-1)">${uiIcon('chev-r')}</button><div class="cat-tile-row" id="cat-tile-row">${categoryCards()}</div><button class="cat-arrow cat-arrow-end" type="button" aria-label="دیدن دسته‌بندی‌های بیشتر" title="دیدن دسته‌بندی‌های بیشتر" onclick="scrollCatRow(1)">${uiIcon('chev-l')}</button></div></section>`:'';
 
   return `${header()}<main>
   <section class="lux-hero" aria-label="${esc(heroTitle)}">
@@ -654,6 +676,16 @@ const __stage3Detail=window.detail;
 window.detail=productDetailWithSticky;
 window.cartPage=cartPage;
 window.categoryCards=categoryCards;
+window.scrollCatRow=scrollCatRow;
+(function hookCategoryArrows(){
+  window.updateCatArrows=updateCatArrows;
+  window.addEventListener('resize',updateCatArrows,{passive:true});
+  let base=window.render;
+  if(typeof base==='function'&&!base.__catArrows){
+    let wrapped=function(){base.apply(this,arguments);requestAnimationFrame(updateCatArrows)};
+    wrapped.__catArrows=1;window.render=wrapped;
+  }
+})();
 window.header=header;
 window.home=home;
 window.toggleFav=toggleFav;

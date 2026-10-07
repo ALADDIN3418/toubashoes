@@ -1641,13 +1641,13 @@ body.storefront-mode .chf-note{color:var(--touba-muted)}
 body.storefront-mode .chf input[type=color]{border-color:var(--touba-border)}
 
 /* ==========================================================================
-   Home category row (v1.0.7) — ONE horizontal strip showing ONLY the
+   Home category row (v1.0.8) — ONE horizontal strip showing ONLY the
    registered categories, in the admin's own table order. No auto-carousel,
    no clones: the artwork sits on a transparent stage (no frame, no white
-   matte) with the category name centered underneath, and the operator
-   swipes it by hand (touch snap keeps it tidy). Sizes: 136/150/208px media
-   across the phone/default/desktop tiers. Emoji tile only until an image
-   is set for the category.
+   matte) with the category name centered underneath; edge arrows (shown
+   only when the row overflows) page through it, plus hand-swipe with snap.
+   Sizes: 136/150/208px media across the phone/default/desktop tiers.
+   Emoji tile only until an image is set for the category.
    ========================================================================== */
 .cat-tile-row{display:flex;align-items:flex-start;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:4px 2px 16px;margin:14px -2px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .cat-tile-row::-webkit-scrollbar{display:none}
@@ -1676,4 +1676,18 @@ body.storefront-mode[data-theme="dark"] .cat-tile-emoji{background:color-mix(in 
 .cat-tile-media{width:136px;height:136px;border-radius:24px}
 .cat-tile-emoji i{font-size:46px}
 .cat-tile-name{font-size:13.5px}
+}
+.cat-row-wrap{position:relative}
+.cat-arrow{display:none;position:absolute;top:96px;transform:translateY(-50%);z-index:6;width:38px;height:38px;border-radius:50%;place-items:center;padding:0;border:1px solid var(--touba-border,rgba(38,56,42,.12));background:var(--touba-surface-raised,#ffffff);color:var(--touba-text,#253329);box-shadow:0 6px 18px rgba(10,18,12,.16);cursor:pointer;transition:transform .18s cubic-bezier(.16,1,.3,1),color .2s ease,box-shadow .2s ease}
+.cat-row-wrap.has-overflow .cat-arrow{display:grid}
+.cat-arrow svg{width:19px;height:19px}
+.cat-arrow-start{inset-inline-start:2px}
+.cat-arrow-end{inset-inline-end:2px}
+.cat-arrow:hover{color:var(--touba-brand,#5e743f);transform:translateY(-50%) scale(1.1);box-shadow:0 10px 24px rgba(10,18,12,.24)}
+.cat-arrow:active{transform:translateY(-50%) scale(.94)}
+@media (min-width:720px){
+.cat-arrow{width:44px;height:44px;top:124px}
+.cat-arrow svg{width:22px;height:22px}
+.cat-arrow-start{inset-inline-start:-16px}
+.cat-arrow-end{inset-inline-end:-16px}
 }
