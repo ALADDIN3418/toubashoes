@@ -185,7 +185,7 @@ async function main() {
     assert(css.includes('body.admin-body input:-webkit-autofill'), 'admin forms need the autofill fix too');
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(!st4.includes('db.categories.slice(0,6)'), 'homepage must show ALL active categories, not a capped six');
-    assert(st4.includes("background-image:url('${esc(style.bg)}')"), 'category card image stays escaped');
+    assert(st4.includes("background-image:url('${esc(c.imageUrl)}')"), 'category chip image stays escaped');
   }
 
   // v1.0.1: category images, admin-tunable card color dots, release hygiene.
@@ -197,12 +197,23 @@ async function main() {
     assert(st3.includes('obj.specifications.__colorHexes=hx'), 'saveProduct must persist admin color-dot hexes');
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(st4.includes('p.specifications.__colorHexes'), 'product card dots must honor admin-configured hexes');
-    assert(st4.includes("if(c.imageUrl)style={...style,bg:c.imageUrl,pos:'center'}"), 'category cards must show admin-set image');
-    assert(st4.includes("background-image:url('${esc(style.bg)}')"), 'category background url must be escaped');
+    assert(st4.includes('cat-chip-thumb is-image'), 'category chips must show admin-set image when imageUrl is set');
+    assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'category chips must carry a name-matched auto icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.1', 'package version must be 1.0.1');
+    assert(pkg.version === '1.0.2', 'package version must be 1.0.2');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
+  }
+
+  // v1.0.2: homepage categories redesigned as compact icon chips (icon tile + name, reference-style).
+  {
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+    assert(!st4.includes('CATEGORY_STYLES'), 'old full-cover category showcase must be retired');
+    assert(st4.includes('cat-chip-row') && st4.includes('class=\"cat-chip\"'), 'category section must render the chip row');
+    assert(st4.includes('cat-chip-sale'), 'sale tile must join the chip row');
+    for (const needle of ['.cat-chip-row{','.cat-chip-thumb{','.cat-chip-name{','.cat-chip-thumb.is-image','.cat-chip-off{'])
+      assert(themeCss.includes(needle), `chip styles missing from storefront-theme.css: ${needle}`);
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.

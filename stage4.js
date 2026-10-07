@@ -174,43 +174,40 @@ function footer(){
 }
 
 /* Category cards styled with the same beauty and structure as luxury Product Cards */
-const CATEGORY_STYLES = {
-  men: { bg: '/product-shoes.jpg', pos: '100% 0', kicker: 'انتخاب‌های مردانه', tag: 'کالکشن مردانه' },
-  women: { bg: '/product-shoes.jpg', pos: '0 100%', kicker: 'انتخاب‌های زنانه', tag: 'کالکشن زنانه' },
-  sport: { bg: '/product-shoes.jpg', pos: '0 0', kicker: 'مدل‌های اسپرت', tag: 'برای تحرک روزانه' },
-  formal: { bg: '/hero-shoe.jpg', pos: 'center', kicker: 'مدل‌های رسمی', tag: 'استایل رسمی' },
-  sandal: { bg: '/product-shoes.jpg', pos: '100% 100%', kicker: 'مدل‌های تابستانی', tag: 'صندل‌ها' },
-  accessories: { bg: '/touba-bag-editorial.jpg', pos: 'center', kicker: 'اکسسوری‌ها', tag: 'کالکشن جانبی' },
-  slipper: { bg: '/product-shoes.jpg', pos: '100% 100%', kicker: 'مدل‌های راحتی', tag: 'راحتی روزمره' },
-  sale: { bg: '/touba-hero-editorial.jpg', pos: 'center', kicker: 'پیشنهادهای فعال', tag: 'تخفیف‌ها' }
-};
+/* Homepage category chips v1.0.2: compact icon tile + name (reference-style), auto icon matched to the category name. */
+const CATEGORY_ICON_RULES=[
+  [/تخفیف|حراج|sale|discount/i,'🏷️'],
+  [/بچگانه|بچه|کودک|مدرسه|نوجوان|kid|child|school|student/i,'🎒'],
+  [/کوله|پشتی|backpack/i,'🎒'],
+  [/کیف|bag|handbag|messenger/i,'👜'],
+  [/جوراب|sock/i,'🧦'],
+  [/شال|روسری|scarf/i,'🧣'],
+  [/عینک|sunglass/i,'🕶️'],
+  [/زیور|جواهر|اکسسوری|accessor|کمربند|belt/i,'👒'],
+  [/بوت|چکمه|boot/i,'👢'],
+  [/صندل|سندل|sandal/i,'👡'],
+  [/دمپایی|راحتی|slipper/i,'🩴'],
+  [/کتانی|اسپرت|ورزش|sport|sneaker|runner|daily|فوتبال|والیبال|دویدن/i,'👟'],
+  [/رسمی|مجلسی|چرم|اداری|formal|classi/i,'👞'],
+  [/زنانه|بانوان|خانم|women|ladies/i,'👠'],
+  [/مردانه|آقایان|men|gentleman/i,'👞'],
+  [/کفش|shoe/i,'👟']
+];
+const CATEGORY_TINTS=['#b9cf8e','#e5c9a2','#9ec4c9','#e3aeb1','#c2b4e8','#a7d3b5'];
+function categoryIconFor(c){let hay=`${c.id||''} ${c.slug||''} ${c.name||''}`;for(let[re,em]of CATEGORY_ICON_RULES)if(re.test(hay))return em;return '👟'}
+function categoryChipThumb(c,idx){
+  let adminIcon=String(c.icon||'').trim();
+  let emoji=adminIcon&&adminIcon!=='◈'?adminIcon:categoryIconFor(c);
+  let tint=CATEGORY_TINTS[idx%CATEGORY_TINTS.length];
+  return c.imageUrl?`<span class="cat-chip-thumb is-image" style="--cat-tint:${tint};background-image:url('${esc(c.imageUrl)}')" role="img" aria-label="${esc(c.name)}"></span>`:`<span class="cat-chip-thumb" style="--cat-tint:${tint}" aria-hidden="true"><i>${emoji}</i></span>`;
+}
 
 function categoryCards(){
   let cms=db.settings.homepage||{};
   let configured=Array.isArray(cms.categoryIds)&&cms.categoryIds.length?cms.categoryIds.slice():null;
   let chosen=configured?configured.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale'):db.categories.filter(c=>c.active&&c.id!=='sale');
   if(!configured&&chosen.length>1){let order=['women','men','accessories','sport','formal','sandal'];chosen.sort((a,b)=>{let ia=order.indexOf(a.id),ib=order.indexOf(b.id);return (ia<0?99:ia)-(ib<0?99:ib)});}
-  return chosen.map(c=>{
-    let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;if(c.imageUrl)style={...style,bg:c.imageUrl,pos:'center'};
-    let count=db.products.filter(p=>p.active&&p.category===c.id).length;
-    let url=`/category/${encodeURIComponent(c.slug||c.id)}`;
-    return `<a href="${url}" class="lux-category-card" aria-label="مشاهده دسته‌بندی ${esc(c.name)}">
-      <div class="category-image-visual" style="background-image:url('${esc(style.bg)}');background-position:${style.pos}"></div>
-      <div class="category-card-overlay"></div>
-      <div class="category-card-top">
-        <span class="category-tag-badge">${esc(style.tag)}</span>
-        <span class="category-count-badge">${count?`${count.toLocaleString('fa-IR')} مدل`:'کالکشن جدید'}</span>
-      </div>
-      <div class="category-card-bottom-info">
-        <span class="category-card-kicker">${esc(style.kicker)}</span>
-        <h3 class="lux-category-title">${esc(c.name)}</h3>
-        <div class="category-card-cta">
-          <span>مشاهده محصولات</span>
-          ${uiIcon('arrow')}
-        </div>
-      </div>
-    </a>`;
-  }).join('');
+  return chosen.map((c,idx)=>`<a href="/category/${encodeURIComponent(c.slug||c.id)}" class="cat-chip" aria-label="دسته‌بندی ${esc(c.name)}">${categoryChipThumb(c,idx)}<b class="cat-chip-name">${esc(c.name)}</b></a>`).join('');
 }
 
 function card(p){
@@ -358,12 +355,8 @@ function home(){
   let heroImage=(!cms.heroImage||cms.heroImage==='/hero-shoe.jpg'||cms.heroImage==='hero-shoe.jpg'||cms.heroImage==='/touba-hero.jpg')?'/touba-hero-editorial.jpg':cms.heroImage,banner=promo[0],bannerImage=(!banner?.imageUrl||banner.imageUrl==='/hero-shoe.jpg'||banner.imageUrl==='/touba-hero.jpg')?heroImage:banner.imageUrl;
   let freeShippingThreshold=Number(db.settings.shippingOptions?.freeFrom??db.settings.freeShipping??0),freeShippingActive=Number.isFinite(freeShippingThreshold)&&freeShippingThreshold>0;
   const categoryRows=db.categories.filter(category=>category.active&&category.id!=='sale');
-  const saleCard=saleProducts.length?`<a href="/shop?category=sale" class="lux-category-card sale-cat-card" aria-label="مشاهده محصولات دارای تخفیف">
-    <div class="category-image-visual" style="background-image:url('${esc(heroImage)}');background-position:center"></div><div class="category-card-overlay"></div>
-    <div class="category-card-top"><span class="category-tag-badge special-sale">تا ${saleDiscount.toLocaleString('fa-IR')}٪ تخفیف</span><span class="category-count-badge">${saleProducts.length.toLocaleString('fa-IR')} محصول</span></div>
-    <div class="category-card-bottom-info"><span class="category-card-kicker" style="color:#fcd34d">پیشنهادهای فعال</span><h3 class="lux-category-title">تخفیف‌های طوبی</h3><div class="category-card-cta"><span>مشاهده محصولات</span>${uiIcon('arrow')}</div></div>
-  </a>`:'';
-  const categorySection=categoryRows.length||saleProducts.length?`<section class="category-section container" id="categories"><div class="section-heading"><div><span class="section-eyebrow">کالکشن‌های فروشگاه</span><h2>دسته‌بندی‌های طوبی</h2><p>برای دیدن محصولات و جزئیات هر دسته‌بندی، انتخاب کنید.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="lux-category-grid">${categoryCards()}${saleCard}</div></section>`:'';
+  const saleCard=saleProducts.length?`<a href="/shop?category=sale" class="cat-chip cat-chip-sale" aria-label="مشاهده محصولات دارای تخفیف"><span class="cat-chip-thumb" style="--cat-tint:#e0a099" aria-hidden="true"><i>🏷️</i><em class="cat-chip-off">تا ${saleDiscount.toLocaleString('fa-IR')}٪</em></span><b class="cat-chip-name">تخفیف‌های طوبی</b></a>`:'';
+  const categorySection=categoryRows.length||saleProducts.length?`<section class="category-section container" id="categories"><div class="section-heading"><div><span class="section-eyebrow">کالکشن‌های فروشگاه</span><h2>دسته‌بندی‌های طوبی</h2><p>برای دیدن محصولات و جزئیات هر دسته‌بندی، انتخاب کنید.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="cat-chip-row">${categoryCards()}${saleCard}</div></section>`:'';
 
   return `${header()}<main>
   <section class="lux-hero" aria-label="${esc(heroTitle)}">
