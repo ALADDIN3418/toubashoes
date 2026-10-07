@@ -1029,3 +1029,34 @@ function modernContentPage(type) {
     </div>
   </main>${footer()}`;
 }
+
+/* ==========================================================================
+   Category swipe carousel v1.0.5 — the category row glides to the next
+   tile every few seconds like a marquee carousel, then loops back to the
+   start. It pauses while the pointer or a finger is on it, respects the
+   reduced-motion preference, and stays idle when all tiles already fit.
+   ========================================================================== */
+if(typeof document!=='undefined'&&document.addEventListener){
+  (function startCategoryCarousel(){
+    const reduceMotion=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let paused=false,touchResume=null;
+    const ms=Number((typeof db!=='undefined'&&db.settings&&db.settings.homepage&&db.settings.homepage.catCarouselMs)||0)||3400;
+    const inRow=node=>node&&node.closest?node.closest('.cat-tile-row'):null;
+    document.addEventListener('pointerover',e=>{if(inRow(e.target))paused=true});
+    document.addEventListener('pointerout',e=>{const row=inRow(e.target);if(row&&!(e.relatedTarget&&inRow(e.relatedTarget)))paused=false});
+    document.addEventListener('touchstart',()=>{paused=true;clearTimeout(touchResume);touchResume=setTimeout(()=>{paused=false},7000)},{passive:true});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)paused=true;else if(!touchResume)paused=false});
+    function nearestCenterIndex(row){
+      let rc=row.getBoundingClientRect(),mid=rc.left+rc.width/2,best=0,bd=Number.POSITIVE_INFINITY;
+      for(let i=0;i<row.children.length;i++){let r=row.children[i].getBoundingClientRect();let d=Math.abs(r.left+r.width/2-mid);if(d<bd){bd=d;best=i}}
+      return best;
+    }
+    setInterval(()=>{
+      if(paused||reduceMotion||!document.body)return;
+      const row=document.querySelector('.cat-tile-row');
+      if(!row||row.children.length<3||row.scrollWidth<=row.clientWidth+12)return;
+      const next=(nearestCenterIndex(row)+1)%row.children.length;
+      try{row.children[next].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})}catch(error){}
+    },ms);
+  })();
+}

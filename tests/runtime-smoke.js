@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.4', 'package version must be 1.0.4');
+    assert(pkg.version === '1.0.5', 'package version must be 1.0.5');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,7 +231,19 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.4', 'package version must be 1.0.4');
+    assert(pkg.version === '1.0.5', 'package version must be 1.0.5');
+  }
+
+  // v1.0.5: bigger tiles + auto-rotating category carousel.
+  {
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+    assert(st4.includes('startCategoryCarousel') && st4.includes("scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})"), 'the category row must auto-glide like a carousel');
+    assert(st4.includes('prefers-reduced-motion'), 'carousel must respect reduced-motion');
+    assert(st4.includes('pointerover') && st4.includes('touchstart'), 'carousel must pause on hover and touch');
+    assert(st4.includes('row.scrollWidth<=row.clientWidth+12'), 'carousel must idle when all tiles already fit');
+    assert(themeCss.includes('width:134px;height:134px') && themeCss.includes('width:182px;height:182px') && themeCss.includes('width:122px;height:122px'), 'tiles must be the enlarged v1.0.5 sizes');
+    assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('font-size:13.5px'), 'name under the image stays readable');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
