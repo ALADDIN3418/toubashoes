@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.6', 'package version must be 1.0.6');
+    assert(pkg.version === '1.0.7', 'package version must be 1.0.7');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,19 +231,18 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.6', 'package version must be 1.0.6');
+    assert(pkg.version === '1.0.7', 'package version must be 1.0.7');
   }
 
-  // v1.0.5/1.0.6: enlarged tiles, endless loop marquee, admin-driven order.
+  // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
   {
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
-    assert(st4.includes('startCategoryCarousel') && st4.includes('cat-tile-ghost') && st4.includes('requestAnimationFrame'), 'carousel must loop seamlessly via a cloned set + rAF marquee, never jump back');
-    assert(st4.includes('prefers-reduced-motion'), 'carousel must respect reduced-motion');
-    assert(st4.includes('pointerover') && st4.includes('touchstart'), 'carousel must pause on hover and touch');
-    assert(st4.includes('catCarouselPxPerSec'), 'carousel speed must be overridable via homepage.catCarouselPxPerSec');
-    assert(themeCss.includes('width:150px;height:150px') && themeCss.includes('width:208px;height:208px') && themeCss.includes('width:136px;height:136px'), 'tiles must be the further enlarged v1.0.6 sizes');
-    assert(themeCss.includes('.cat-tile-set{') && themeCss.includes('margin-inline-end:16px'), 'set wrapper + per-tile margin make the wrap math exact');
+    for (const dead of ['startCategoryCarousel','cat-tile-ghost','requestAnimationFrame','catCarouselPxPerSec','cat-tile-set'])
+      assert(!st4.includes(dead), `carousel/clone leftover must not exist in stage4.js: ${dead}`);
+    assert(!themeCss.includes('cat-tile-ghost') && !themeCss.includes('.cat-tile-set{'), 'no clone leftovers in the theme css');
+    assert(themeCss.includes('scroll-snap-type:x proximity') && themeCss.includes('scroll-snap-align:start'), 'manual swipe keeps snap');
+    assert(themeCss.includes('width:150px;height:150px') && themeCss.includes('width:208px;height:208px') && themeCss.includes('width:136px;height:136px'), 'enlarged tile sizes stay');
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('font-size:14px'), 'name under the image stays readable');
   }
 
