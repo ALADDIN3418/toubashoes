@@ -217,9 +217,11 @@ async function shrinkImageTo(dataUrl,maxSide,quality){
     canvas.width=Math.max(1,Math.round((img.naturalWidth||maxSide)*scale));
     canvas.height=Math.max(1,Math.round((img.naturalHeight||maxSide)*scale));
     const ctx=canvas.getContext('2d');if(!ctx)return dataUrl;
-    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+    // Never bake a white matte behind transparent artwork: PNG/WebP inputs re-encode as WebP (keeps alpha); only opaque JPEGs get the white fill + JPEG output.
+    const keepAlpha=/^data:image\/(png|webp)[;,]/i.test(dataUrl);
+    if(!keepAlpha){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)}
     ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    return canvas.toDataURL('image/jpeg',quality)||dataUrl;
+    return canvas.toDataURL(keepAlpha?'image/webp':'image/jpeg',quality)||dataUrl;
   }catch{return dataUrl}
 }
 function buildVariantEditor(){let f=$('#product-edit-form'),sizes=[...new Set(f.elements.sizes.value.split(',').map(s=>s.trim()).filter(Boolean))],colors=[...new Set(f.elements.colors.value.split(',').map(s=>s.trim()).filter(Boolean))],old=[...$('#variant-editor').querySelectorAll('tr')].map(r=>({size:r.querySelector('.v-size').value,color:r.querySelector('.v-color').value,sku:r.querySelector('.v-sku').value,stock:r.querySelector('.v-stock').value}));syncSizeSpecification(f,sizes);$('#variant-editor').innerHTML=sizes.flatMap(size=>colors.map(color=>{let found=old.find(x=>x.size===size&&x.color===color);return variantEditorRow(found||{size,color,sku:`${f.elements.sku.value}-${sizes.indexOf(size)+1}${colors.indexOf(color)+1}`,stock:0})})).join('')}

@@ -174,8 +174,9 @@ function footer(){
 }
 
 /* Category cards styled with the same beauty and structure as luxury Product Cards */
-/* Homepage category tiles v1.0.3: ONE horizontal swipe row of pure admin artwork (no buttons, no labels).
-   Until the admin uploads an image, a quiet name-matched emoji tile fills in so the row never breaks. */
+/* Homepage category tiles v1.0.4: ONE horizontal swipe row; the tile shows the admin artwork as-is
+   (transparent stays transparent — no white matte) with the category name under it.
+   Until an image is set, a quiet name-matched emoji fills in so the row never breaks. */
 const CATEGORY_ICON_RULES=[
   [/تخفیف|حراج|sale|discount/i,'🏷️'],
   [/بچگانه|بچه|کودک|مدرسه|نوجوان|kid|child|school|student/i,'🎒'],
@@ -203,10 +204,10 @@ function categoryCards(){
   if(!configured&&chosen.length>1){let order=['women','men','accessories','sport','formal','sandal'];chosen.sort((a,b)=>{let ia=order.indexOf(a.id),ib=order.indexOf(b.id);return (ia<0?99:ia)-(ib<0?99:ib)});}
   return chosen.map((c,idx)=>{
     let url=`/category/${encodeURIComponent(c.slug||c.id)}`;
-    if(c.imageUrl)return `<a href="${url}" class="cat-tile" aria-label="دسته‌بندی ${esc(c.name)}"><img src="${esc(c.imageUrl)}" alt="${esc(c.name)}" loading="lazy" width="160" height="160"></a>`;
+    if(c.imageUrl)return `<a href="${url}" class="cat-tile" aria-label="دسته‌بندی ${esc(c.name)}"><span class="cat-tile-media"><img src="${esc(c.imageUrl)}" alt="${esc(c.name)}" loading="lazy" width="160" height="160"></span><b class="cat-tile-name">${esc(c.name)}</b></a>`;
     let adminIcon=String(c.icon||'').trim();
     let emoji=adminIcon&&adminIcon!=='◈'?adminIcon:categoryIconFor(c);
-    return `<a href="${url}" class="cat-tile cat-tile-emoji" style="--cat-tint:${CATEGORY_TINTS[idx%CATEGORY_TINTS.length]}" aria-label="دسته‌بندی ${esc(c.name)}"><i>${emoji}</i></a>`;
+    return `<a href="${url}" class="cat-tile" style="--cat-tint:${CATEGORY_TINTS[idx%CATEGORY_TINTS.length]}" aria-label="دسته‌بندی ${esc(c.name)}"><span class="cat-tile-media cat-tile-emoji" aria-hidden="true"><i>${emoji}</i></span><b class="cat-tile-name">${esc(c.name)}</b></a>`;
   }).join('');
 }
 

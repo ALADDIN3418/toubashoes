@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.3', 'package version must be 1.0.3');
+    assert(pkg.version === '1.0.4', 'package version must be 1.0.4');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -214,9 +214,24 @@ async function main() {
     assert(!st4.includes('saleCard'), 'sale button must not join the category row');
     assert(st4.includes('alt="${esc(c.name)}"'), 'the tile image keeps the category name for screen readers only');
     assert(st4.includes('cat-tile-emoji'), 'image-less categories get the quiet emoji fallback');
-    for (const needle of ['.cat-tile-row{','overflow-x:auto','scrollbar-width:none','.cat-tile img{','object-fit:contain'])
+    for (const needle of ['.cat-tile-row{','overflow-x:auto','scrollbar-width:none','.cat-tile-media img{','object-fit:contain'])
       assert(themeCss.includes(needle), `scroll row style missing: ${needle}`);
     assert(!themeCss.includes('cat-chip') && !themeCss.includes('cat-chip-off'), 'no button chrome left in the theme css');
+  }
+
+  // v1.0.4: transparent-safe uploads + the category name under each tile.
+  {
+    const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+    assert(enh.includes("const keepAlpha=/^data:image\\/(png|webp)[;,]/i.test(dataUrl);"), 'shrink must detect alpha inputs');
+    assert(enh.includes("if(!keepAlpha){ctx.fillStyle='#fff'"), 'white matte must never paint transparent art');
+    assert(enh.includes("canvas.toDataURL(keepAlpha?'image/webp':'image/jpeg',quality)"), 'transparent art must re-encode as WebP, not JPEG');
+    assert(st4.includes('cat-tile-media') && st4.includes('<b class="cat-tile-name">${esc(c.name)}</b>'), 'every tile shows the escaped category name under the image');
+    assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
+    assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
+    const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+    assert(pkg.version === '1.0.4', 'package version must be 1.0.4');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
