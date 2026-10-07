@@ -1128,7 +1128,7 @@
       const error = g.__TOUBA_DATABASE_ERROR || g.DataProvider?.state?.error;
       if (g.document.body?.classList) g.document.body.classList.remove('storefront-mode','admin-body','has-commerce-sticky');
       if (app) app.innerHTML = loading
-        ? dbLoadingScreen()
+        ? (g.document.getElementById?.('boot-splash') && !g.document.getElementById('boot-splash').dataset.out ? '' : dbLoadingScreen())
         : `<main class="page container"><section class="auth-card" role="alert" style="max-width:720px;text-align:center;margin:48px auto"><h1>فروشگاه موقتاً در دسترس نیست</h1><p class="muted">${esc(error?.message || 'اتصال یا آماده‌سازی پایگاه داده انجام نشد.')}</p><div class="notice" style="text-align:right">برای ادامه، تنظیمات Supabase و اجرای migrationهای عملیاتی پروژه را بررسی کنید. برنامه عمداً به دادهٔ Demo یا ذخیره‌سازی محلی برنمی‌گردد.</div><button class="btn" type="button" onclick="location.reload()">تلاش دوباره</button></section></main>`;
       return;
     }
@@ -1173,6 +1173,14 @@
       if (mainContent && !mainContent.id) mainContent.id = 'main-content';
       __isAuthRendering = false;
     }
+  };
+
+  const __singleLoaderRender = g.render;
+  g.render = function () {
+    __singleLoaderRender();
+    const st = g.DataProvider?.state || {};
+    const stillLoading = !g.__TOUBA_DATABASE_READY && (st.status === 'loading' || st.status === 'disconnected' || (!st.status && !g.__TOUBA_DATABASE_ERROR && !st.error));
+    if (!stillLoading) g.toubaDismissBootSplash?.(); // one loader only: lift the splash once data is in (or failed)
   };
 
   (async function initializeApplication() {

@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.8', 'package version must be 1.0.8');
+    assert(pkg.version === '1.0.9', 'package version must be 1.0.9');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,7 +231,7 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.8', 'package version must be 1.0.8');
+    assert(pkg.version === '1.0.9', 'package version must be 1.0.9');
   }
 
   // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
@@ -276,6 +276,21 @@ async function main() {
     assert(themeCss.includes('.cat-arrow{') && themeCss.includes('.cat-row-wrap.has-overflow .cat-arrow{display:grid}') && themeCss.includes('.cat-arrow-start{inset-inline-start:2px}'), 'arrows hidden until overflow, RTL-aware placement');
     assert(html.includes('class="initial"') && html.includes('initial-ring') && html.includes('<img src="/touba-logo.png" alt="طوبی">'), 'splash must show the Touba logo in the ring');
     assert(baseCss.includes('.initial-ring:after') && baseCss.includes('@keyframes initial-spin') && baseCss.includes('prefers-reduced-motion'), 'splash spinner defined and motion-safe');
+  }
+
+  // v1.0.9: exactly ONE boot loader — the logo splash itself covers the whole data-load, then lifts.
+  {
+    const html = fs.readFileSync(path.join(root,'index.html'),'utf8');
+    const baseCss = fs.readFileSync(path.join(root,'styles.css'),'utf8');
+    const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+    assert(html.includes('id="boot-splash"') && html.includes('<div id="app"></div>'), 'splash must be a standalone overlay above an empty app shell');
+    assert(html.includes('toubaDismissBootSplash') && html.includes('setTimeout(window.toubaDismissBootSplash,14000)'), 'inline dismiss helper + 14s failsafe exist');
+    assert(!html.includes('<div class="initial">طوبی</div>'), 'legacy text-only splash inside #app is gone');
+    assert(baseCss.includes('.initial{position:fixed') && baseCss.includes('.initial.boot-out{'), 'overlay + fade-out styles exist');
+    assert(authUi.includes('__singleLoaderRender') && authUi.includes("toubaDismissBootSplash?.()"), 'render pipeline lifts the splash when data is ready or the load failed');
+    assert(authUi.includes("!g.document.getElementById('boot-splash').dataset.out ? '' : dbLoadingScreen()"), 'the skeleton loader paints only as fallback when no splash exists');
+    const stage4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    assert(!stage4.includes('dbLoadingScreen'), 'the storefront module stays out of the loading story');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
