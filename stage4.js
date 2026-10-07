@@ -201,7 +201,7 @@ function categoryCards(){
   let cms=db.settings.homepage||{};
   let configured=Array.isArray(cms.categoryIds)&&cms.categoryIds.length?cms.categoryIds.slice():null;
   let chosen=configured?configured.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale'):db.categories.filter(c=>c.active&&c.id!=='sale');
-  if(!configured&&chosen.length>1){let order=['women','men','accessories','sport','formal','sandal'];chosen.sort((a,b)=>{let ia=order.indexOf(a.id),ib=order.indexOf(b.id);return (ia<0?99:ia)-(ib<0?99:ib)});}
+  if(!configured)chosen=chosen.slice().sort((a,b)=>(Number(a.sortOrder)||0)-(Number(b.sortOrder)||0)); // v1.0.6: the admin's table order IS the display order
   return chosen.map((c,idx)=>{
     let url=`/category/${encodeURIComponent(c.slug||c.id)}`;
     if(c.imageUrl)return `<a href="${url}" class="cat-tile" aria-label="دسته‌بندی ${esc(c.name)}"><span class="cat-tile-media"><img src="${esc(c.imageUrl)}" alt="${esc(c.name)}" loading="lazy" width="160" height="160"></span><b class="cat-tile-name">${esc(c.name)}</b></a>`;
@@ -1031,32 +1031,60 @@ function modernContentPage(type) {
 }
 
 /* ==========================================================================
-   Category swipe carousel v1.0.5 — the category row glides to the next
-   tile every few seconds like a marquee carousel, then loops back to the
-   start. It pauses while the pointer or a finger is on it, respects the
-   reduced-motion preference, and stays idle when all tiles already fit.
+   Category loop carousel v1.0.6 — the strip tiles its artwork set once more
+   (an aria-hidden ghost copy), then glides at a constant speed forever; the
+   moment the offset crosses one set the scroll snaps back by exactly that
+   width, so the loop is invisible — a true endless marquee, not a jump to
+   the start. Pauses under a pointer or a finger (then resumes from wherever
+   the user left it), stops for reduced-motion / hidden tabs. Speed override
+   without code: homepage.catCarouselPxPerSec in the CMS settings.
    ========================================================================== */
 if(typeof document!=='undefined'&&document.addEventListener){
   (function startCategoryCarousel(){
     const reduceMotion=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let paused=false,touchResume=null;
-    const ms=Number((typeof db!=='undefined'&&db.settings&&db.settings.homepage&&db.settings.homepage.catCarouselMs)||0)||3400;
+    const speed=Number((typeof db!=='undefined'&&db.settings&&db.settings.homepage&&db.settings.homepage.catCarouselPxPerSec)||0)||42;
+    const state={row:null,pos:0,last:0,model:0};
+    const pause={hover:false,touchUntil:0};
     const inRow=node=>node&&node.closest?node.closest('.cat-tile-row'):null;
-    document.addEventListener('pointerover',e=>{if(inRow(e.target))paused=true});
-    document.addEventListener('pointerout',e=>{const row=inRow(e.target);if(row&&!(e.relatedTarget&&inRow(e.relatedTarget)))paused=false});
-    document.addEventListener('touchstart',()=>{paused=true;clearTimeout(touchResume);touchResume=setTimeout(()=>{paused=false},7000)},{passive:true});
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)paused=true;else if(!touchResume)paused=false});
-    function nearestCenterIndex(row){
-      let rc=row.getBoundingClientRect(),mid=rc.left+rc.width/2,best=0,bd=Number.POSITIVE_INFINITY;
-      for(let i=0;i<row.children.length;i++){let r=row.children[i].getBoundingClientRect();let d=Math.abs(r.left+r.width/2-mid);if(d<bd){bd=d;best=i}}
-      return best;
+    document.addEventListener('pointerover',e=>{if(inRow(e.target))pause.hover=true});
+    document.addEventListener('pointerout',e=>{if(inRow(e.target)&&!inRow(e.relatedTarget))pause.hover=false});
+    document.addEventListener('touchstart',()=>{pause.touchUntil=Date.now()+7000},{passive:true});
+    document.addEventListener('wheel',()=>{pause.touchUntil=Date.now()+4000},{passive:true});
+    function ensure(row){
+      if(!(row.firstElementChild&&row.firstElementChild.classList.contains('cat-tile-set'))){
+        const set=document.createElement('div');set.className='cat-tile-set';
+        while(row.firstElementChild)set.appendChild(row.firstElementChild);
+        row.appendChild(set);
+        const ghost=set.cloneNode(true);
+        ghost.className='cat-tile-set cat-tile-ghost';ghost.setAttribute('aria-hidden','true');
+        for(const link of ghost.querySelectorAll('a'))link.tabIndex=-1;
+        row.appendChild(ghost);
+        state.pos=0;
+      }
+      if(state.row!==row){
+        row.scrollLeft=1;state.model=row.scrollLeft===1?1:-1;row.scrollLeft=0;
+        state.row=row;state.pos=0;state.last=0;
+      }
     }
-    setInterval(()=>{
-      if(paused||reduceMotion||!document.body)return;
+    function frame(ts){
+      requestAnimationFrame(frame);
+      if(reduceMotion)return;
       const row=document.querySelector('.cat-tile-row');
-      if(!row||row.children.length<3||row.scrollWidth<=row.clientWidth+12)return;
-      const next=(nearestCenterIndex(row)+1)%row.children.length;
-      try{row.children[next].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})}catch(error){}
-    },ms);
+      if(!row||!row.isConnected)return;
+      ensure(row);
+      const set=row.firstElementChild;
+      const setW=set?set.getBoundingClientRect().width:0;
+      if(!(setW>0))return;
+      const paused=pause.hover||Date.now()<pause.touchUntil||document.hidden;
+      if(paused){
+        const cur=state.model===-1?-row.scrollLeft:row.scrollLeft; // resume where the user left the strip
+        if(Number.isFinite(cur)&&Math.abs(cur-state.pos)>6)state.pos=((cur%setW)+setW)%setW;
+        state.last=ts;return;
+      }
+      const dt=state.last?Math.min(80,ts-state.last):16.7;state.last=ts;
+      state.pos=(state.pos+speed*dt/1000)%setW;
+      row.scrollLeft=state.model===-1?-state.pos:state.pos;
+    }
+    requestAnimationFrame(frame);
   })();
 }

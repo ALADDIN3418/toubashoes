@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.5', 'package version must be 1.0.5');
+    assert(pkg.version === '1.0.6', 'package version must be 1.0.6');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,19 +231,35 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.5', 'package version must be 1.0.5');
+    assert(pkg.version === '1.0.6', 'package version must be 1.0.6');
   }
 
-  // v1.0.5: bigger tiles + auto-rotating category carousel.
+  // v1.0.5/1.0.6: enlarged tiles, endless loop marquee, admin-driven order.
   {
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
-    assert(st4.includes('startCategoryCarousel') && st4.includes("scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})"), 'the category row must auto-glide like a carousel');
+    assert(st4.includes('startCategoryCarousel') && st4.includes('cat-tile-ghost') && st4.includes('requestAnimationFrame'), 'carousel must loop seamlessly via a cloned set + rAF marquee, never jump back');
     assert(st4.includes('prefers-reduced-motion'), 'carousel must respect reduced-motion');
     assert(st4.includes('pointerover') && st4.includes('touchstart'), 'carousel must pause on hover and touch');
-    assert(st4.includes('row.scrollWidth<=row.clientWidth+12'), 'carousel must idle when all tiles already fit');
-    assert(themeCss.includes('width:134px;height:134px') && themeCss.includes('width:182px;height:182px') && themeCss.includes('width:122px;height:122px'), 'tiles must be the enlarged v1.0.5 sizes');
-    assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('font-size:13.5px'), 'name under the image stays readable');
+    assert(st4.includes('catCarouselPxPerSec'), 'carousel speed must be overridable via homepage.catCarouselPxPerSec');
+    assert(themeCss.includes('width:150px;height:150px') && themeCss.includes('width:208px;height:208px') && themeCss.includes('width:136px;height:136px'), 'tiles must be the further enlarged v1.0.6 sizes');
+    assert(themeCss.includes('.cat-tile-set{') && themeCss.includes('margin-inline-end:16px'), 'set wrapper + per-tile margin make the wrap math exact');
+    assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('font-size:14px'), 'name under the image stays readable');
+  }
+
+  // v1.0.6: admin reorders categories; the homepage follows the table order.
+  {
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+    assert(authUi.includes('g.moveCategoryRow = async function'), 'admin must own a persistent category move handler');
+    assert(authUi.includes("categories.update(a.id, { sortOrder: vb })") && authUi.includes("categories.update(b.id, { sortOrder: va })"), 'reorder must persist both sortOrder values');
+    assert(authUi.includes("'ترتیب نمایش']"), 'category table shows the display-order column');
+    assert(authUi.includes('moveCategoryRow(\'${esc(c.id)}\',-1)'), 'up button wired per row');
+    assert(st4.includes('Number(a.sortOrder)||0)-(Number(b.sortOrder)||0)'), 'homepage sorts categories by admin sortOrder');
+    assert(!st4.includes("['women','men','accessories','sport','formal','sandal']"), 'no hardcoded editorial order left');
+    assert(st4.includes('cms.categoryIds'), 'manual homepage.categoryIds override still wins');
+    const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
+    assert(css.includes('body.admin-body .cat-order-move{'), 'move buttons styled inside the admin skin scope');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.

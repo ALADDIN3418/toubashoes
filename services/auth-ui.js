@@ -367,6 +367,33 @@
     catch (error) { showActionError(error, 'حذف دسته‌بندی انجام نشد. اگر محصولی به آن متصل است، ابتدا آن را جابه‌جا کنید.'); }
   };
 
+  g.moveCategoryRow = async function (id, dir) {
+    const database = getDb();
+    const list = (database && database.categories) || [];
+    const i = list.findIndex(c => String(c.id) === String(id));
+    const j = i + Number(dir);
+    if (i < 0 || j < 0 || j >= list.length) return;
+    const so = c => Number(c.sortOrder || 0);
+    const a = list[i], b = list[j];
+    try {
+      if (so(a) === so(b)) {
+        const fixes = [];
+        list.forEach((c, k) => { const want = (k + 1) * 10; if (so(c) !== want) { c.sortOrder = want; fixes.push(g.DataRepositories.categories.update(c.id, { sortOrder: want })); } });
+        await Promise.all(fixes);
+      }
+      const va = so(a), vb = so(b);
+      a.sortOrder = vb; b.sortOrder = va;
+      await g.DataRepositories.categories.update(a.id, { sortOrder: vb });
+      await g.DataRepositories.categories.update(b.id, { sortOrder: va });
+      list.splice(j, 0, list.splice(i, 1)[0]);
+      await refreshAdminData('categories');
+      g.toast('ترتیب نمایش دسته‌بندی ذخیره شد؛ صفحه اصلی هم همین ترتیب را دارد.');
+    } catch (error) {
+      showActionError(error, 'تغییر ترتیب دسته‌بندی ذخیره نشد.');
+      await refreshAdminData('categories').catch(() => {});
+    }
+  };
+
   g.deleteCoupon = async function (code) {
     if (!confirm('آیا از حذف این کوپن تخفیف اطمینان دارید؟')) return;
     try {
@@ -743,7 +770,7 @@
           <div class="admin-bulk-controls"><label>وضعیت<select id="bulk-category-active"><option value="">بدون تغییر</option><option value="true">فعال‌سازی</option><option value="false">غیرفعال‌سازی</option></select></label><label>آیکون مشترک (اختیاری)<input id="bulk-category-icon" maxlength="12" placeholder="مثلاً 👟"></label><button class="btn small" type="button" onclick="ToubaAuthUI.bulkApplyCategories()">اعمال به دسته‌های انتخاب‌شده</button></div>
         </section>`;
         target.innerHTML = `<div class="admin-catalog-toolbar"><div><h2 style="font-size:18px;margin:0">دسته‌بندی‌های فروشگاه (${cats.length})</h2><p class="muted" style="margin:4px 0 0">دسته‌های موجود حفظ می‌شوند؛ می‌توانید چند مورد را هم‌زمان فعال/غیرفعال یا آیکون‌گذاری کنید.</p><p class="notice" style="margin:6px 0 0">دسته‌بندی‌ها از جدول Supabase خوانده می‌شوند؛ تغییر وضعیت، افزودن و حذف فقط پس از موفقیت پایگاه داده اعمال می‌شود.</p></div><button class="btn small" onclick="categoryModal()">＋ دسته‌بندی جدید</button></div>${bulk}`
-        + adminTable(['انتخاب','آیکون','نام دسته‌بندی','شناسه لاتین','محصولات','وضعیت','عملیات'], cats.map(c => `<tr><td><input type="checkbox" data-bulk-category value="${esc(c.id)}" aria-label="انتخاب دسته ${esc(c.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('category')"></td><td style="font-size:20px">${esc(c.icon || '◈')}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td>${(database?.products||[]).filter(p=>p.category===c.id).length.toLocaleString('fa-IR')}</td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="categoryModal('${esc(c.id)}')">ویرایش</button> <button class="action danger" onclick="deleteCategory('${esc(c.id)}')">حذف</button></td></tr>`).join(''));
+        + adminTable(['انتخاب','آیکون','نام دسته‌بندی','شناسه لاتین','محصولات','وضعیت','ترتیب نمایش'], cats.map((c, idx) => `<tr><td><input type="checkbox" data-bulk-category value="${esc(c.id)}" aria-label="انتخاب دسته ${esc(c.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('category')"></td><td style="font-size:20px">${esc(c.icon || '◈')}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td>${(database?.products||[]).filter(p=>p.category===c.id).length.toLocaleString('fa-IR')}</td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><div class="cat-order-move"><button class="action" onclick="moveCategoryRow('${esc(c.id)}',-1)" ${idx===0?'disabled':''} title="انتقال به بالا" aria-label="بالا بردن ${esc(c.name)}">▲</button><span class="cat-order-pos">${(idx+1).toLocaleString('fa-IR')}</span><button class="action" onclick="moveCategoryRow('${esc(c.id)}',1)" ${idx===cats.length-1?'disabled':''} title="انتقال به پایین" aria-label="پایین بردن ${esc(c.name)}">▼</button></div></td></tr>`).join(''));
         return;
       }
       if (section === 'coupons') {

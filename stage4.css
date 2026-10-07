@@ -7142,3 +7142,9 @@ body.admin-body .img-tag{background:rgba(156,194,90,.16);color:var(--adm-brand-s
 body.admin-body .auth-touba-mark{filter:drop-shadow(0 0 16px rgba(156,194,90,.28)) brightness(1.15)}
 body.admin-body .tab,body.admin-body .data-table .muted{color:var(--adm-muted)}
 body.admin-body ::selection{background:rgba(156,194,90,.35)}
+
+/* — رتبه‌بندی دسته‌بندی‌ها v1.0.6 (پنل: ستون «ترتیب نمایش») — */
+body.admin-body .cat-order-move{display:inline-flex;align-items:center;gap:5px}
+body.admin-body .cat-order-pos{min-width:22px;text-align:center;font-weight:800;font-size:11.5px;color:var(--adm-muted,#93a197)}
+body.admin-body .cat-order-move .action{padding:4px 9px;line-height:1;font-size:11px}
+body.admin-body .cat-order-move .action:disabled{opacity:.3;cursor:not-allowed}
