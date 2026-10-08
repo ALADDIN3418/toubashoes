@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.9', 'package version must be 1.0.9');
+    assert(pkg.version === '1.1.0', 'package version must be 1.1.0');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,7 +231,7 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.0.9', 'package version must be 1.0.9');
+    assert(pkg.version === '1.1.0', 'package version must be 1.1.0');
   }
 
   // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
@@ -291,6 +291,21 @@ async function main() {
     assert(authUi.includes("!g.document.getElementById('boot-splash').dataset.out ? '' : dbLoadingScreen()"), 'the skeleton loader paints only as fallback when no splash exists');
     const stage4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(!stage4.includes('dbLoadingScreen'), 'the storefront module stays out of the loading story');
+  }
+
+  // v1.1.0: dedicated password-recovery landing page (email link → set new password).
+  {
+    const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+    const sbAuth = fs.readFileSync(path.join(root,'services/supabase-auth.js'),'utf8');
+    const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+    const doc = fs.readFileSync(path.join(root,'PRODUCTION_READINESS.md'),'utf8');
+    assert(authUi.includes('function passwordRecoveryPage()') && authUi.includes('rp-steps'), 'recovery page shows the three-step flow with the brand mark');
+    assert(authUi.includes('authTogglePw'), 'password visibility toggle is wired on both fields');
+    assert(authUi.includes('ToubaAuthUI.resetPassword(this)') && authUi.includes('معتبر نیست یا مهلتش گذشته است'), 'a stale or manual visit offers a fresh-link request, not a dead end');
+    assert(sbAuth.includes("if (g.location.pathname !== '/reset-password')") && sbAuth.includes("replaceState"), 'PASSWORD_RECOVERY lands on the recovery screen even if the email redirect dropped elsewhere');
+    assert(sbAuth.includes('redirectTo: `${g.location.origin}/reset-password`'), 'reset emails keep redirecting to the recovery page');
+    assert(themeCss.includes('.rp-steps{') && themeCss.includes('.rp-eye{'), 'recovery styling exists under the storefront scope');
+    assert(doc.includes('URL Configuration') && doc.includes('/reset-password'), 'operator docs explain the Supabase redirect setup (no DB table needed)');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.

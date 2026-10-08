@@ -129,8 +129,22 @@
   }
 
   function passwordRecoveryPage() {
-    return `${g.header()}<main class="page container"><section class="auth-card"><h1>تعیین رمز عبور جدید</h1><p class="muted">رمز عبور جدید باید دست‌کم ۱۲ نویسه داشته باشد.</p><form onsubmit="event.preventDefault();ToubaAuthUI.updatePassword(this)"><div class="field"><label for="new-password">رمز عبور جدید</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required></div><div class="field"><label for="new-password-confirm">تکرار رمز عبور</label><input id="new-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="12" required></div><button class="btn">ذخیره رمز جدید</button></form><div id="auth-message"></div></section></main>${g.footer()}`;
+    const steps = `<div class="rp-steps" aria-hidden="true"><span class="rp-step done"><i>✓</i>۱ · درخواست</span><span class="rp-step ${g.ToubaAuth?.passwordRecovery ? 'done' : 'active'}"><i>۲</i>پیوند ایمیل</span><span class="rp-step ${g.ToubaAuth?.passwordRecovery ? 'active' : ''}"><i>۳</i>رمز جدید</span></div>`;
+    const mark = '<div style="text-align:center"><img class="auth-touba-mark" src="/touba-logo.png" alt="نشانِ طوبی" width="76" height="114"></div>';
+    if (!g.ToubaAuth?.passwordRecovery) {
+      return `${g.header()}<main class="page container"><section class="auth-card">${mark}<h1>بازیابی رمز عبور</h1>${steps}<p class="muted">نشانی پیوند ایمیل شما در این صفحه معتبر نیست یا مهلتش گذشته است. ایمیل حسابتان را بزنید تا پیوند تازه برایتان ارسال شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.resetPassword(this)"><div class="field"><label for="reset-email">ایمیل حساب</label><input id="reset-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="مثلاً you@example.com"></div><button class="btn" style="width:100%">ارسال پیوند بازیابی</button></form><p style="text-align:center"><a class="text-link" href="/login">بازگشت به ورود ←</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+    }
+    return `${g.header()}<main class="page container"><section class="auth-card">${mark}<h1>تعیین رمز عبور جدید</h1>${steps}<p class="muted">پیوند ایمیل باز شد و در حالت بازیابی هستید — برای حساب <b>${esc(g.ToubaAuth?.currentUser?.email || 'کاربر طوبی')}</b> رمز تازه‌ای با دست‌کم ۱۲ نویسه بگذارید.</p><form onsubmit="event.preventDefault();ToubaAuthUI.updatePassword(this)"><div class="field"><label for="new-password">رمز عبور جدید</label><div class="rp-pw-row"><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required><button class="rp-eye" type="button" onclick="authTogglePw('new-password',this)" aria-label="نمایش رمز">نمایش</button></div></div><div class="field"><label for="new-password-confirm">تکرار رمز عبور</label><div class="rp-pw-row"><input id="new-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="12" required><button class="rp-eye" type="button" onclick="authTogglePw('new-password-confirm',this)" aria-label="نمایش تکرار رمز">نمایش</button></div></div><button class="btn" style="width:100%">ذخیره رمز جدید و ورود به حساب</button></form><p class="muted" style="font-size:12px;text-align:center">پس از ذخیره، خودکار به حساب کاربری می‌روید.</p><div id="auth-message"></div></section></main>${g.footer()}`;
   }
+
+  g.authTogglePw = function (id, btn) {
+    const el = g.document.getElementById(id);
+    if (!el) return;
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    if (btn) { btn.textContent = show ? 'پنهان' : 'نمایش'; btn.setAttribute('aria-pressed', String(show)); }
+    el.focus();
+  };
 
   async function updatePassword(form) {
     const data = new FormData(form);
