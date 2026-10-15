@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.1.0', 'package version must be 1.1.0');
+    assert(pkg.version === '1.1.1', 'package version must be 1.1.1');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,7 +231,7 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.1.0', 'package version must be 1.1.0');
+    assert(pkg.version === '1.1.1', 'package version must be 1.1.1');
   }
 
   // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
@@ -306,6 +306,21 @@ async function main() {
     assert(sbAuth.includes('redirectTo: `${g.location.origin}/reset-password`'), 'reset emails keep redirecting to the recovery page');
     assert(themeCss.includes('.rp-steps{') && themeCss.includes('.rp-eye{'), 'recovery styling exists under the storefront scope');
     assert(doc.includes('URL Configuration') && doc.includes('/reset-password'), 'operator docs explain the Supabase redirect setup (no DB table needed)');
+  }
+
+  // v1.1.1: official eNamad trust seal in the footer, linking to the verified seal page.
+  {
+    const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    assert(st4.includes("href=\"https://trustseal.enamad.ir/?id=8043803&amp;Code=KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE\""), 'seal must link to the exact enamad verify page');
+    assert(st4.includes("src=\"https://trustseal.enamad.ir/logo.aspx?id=8043803&amp;Code=KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE\""), 'seal image must come from trustseal.enamad.ir live');
+    assert(st4.includes("code=\"KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE\"") && st4.includes('referrerpolicy="origin"'), "enamad's required code attribute + referrerpolicy stay intact");
+    assert(st4.includes('target="_blank" rel="noopener noreferrer"'), 'external seal opens safely in a new tab');
+    assert(st4.includes("this.src='/enamad-logo.png'"), 'offline/preview fallback paints the local eNamad mark');
+    assert(fs.existsSync(path.join(root,'enamad-logo.png')), 'local fallback logo file must exist');
+    const build = fs.readFileSync(path.join(root,'scripts/build-vercel.js'),'utf8');
+    assert(build.includes("'enamad-logo.png'"), 'fallback logo must ship in the Vercel static build');
+    const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
+    assert(themeCss.includes('.store-footer .enamad-seal{'), 'seal card styling exists');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
