@@ -573,7 +573,8 @@
       shipping:Math.max(0,Number(g.document.getElementById('adm-set-shipping')?.value)||0),
       freeShipping:Math.max(0,Number(g.document.getElementById('adm-set-free')?.value)||0),
       metaDescription:g.document.getElementById('adm-set-meta')?.value.trim()||'',
-      about:g.document.getElementById('adm-set-about')?.value.trim()||''
+      about:g.document.getElementById('adm-set-about')?.value.trim()||'',
+      enamad:{id:g.document.getElementById('adm-set-enamad-id')?.value.trim()||'',code:g.document.getElementById('adm-set-enamad-code')?.value.trim()||''}
     };
     settings.shippingOptions={...(database?.settings?.shippingOptions||{}),normal:settings.shipping,express:Math.max(0,Number(g.document.getElementById('adm-set-express')?.value)||0),freeFrom:settings.freeShipping};
     try {
@@ -916,6 +917,10 @@
             <div class="field"><label>حداقل خرید برای ارسال رایگان (تومان)</label><input id="adm-set-free" type="number" min="0" value="${Number(st.freeShipping ?? 0)}"></div>
             <div class="field full"><label>معرفی فروشگاه</label><textarea id="adm-set-about">${esc(st.about || '')}</textarea></div>
             <div class="field full"><label>توضیحات SEO</label><textarea id="adm-set-meta">${esc(st.metaDescription || '')}</textarea></div>
+            <div class="field full" style="margin-top:6px"><b style="font-size:13px">نماد اعتماد الکترونیکی (اینماد)</b></div>
+            <div class="field"><label>شناسهٔ نماد (id)</label><input id="adm-set-enamad-id" value="${esc(st.enamad?.id || '')}" placeholder="8043803" dir="ltr"></div>
+            <div class="field"><label>کد لوگو (Code)</label><input id="adm-set-enamad-code" value="${esc(st.enamad?.code || '')}" placeholder="کد ۳۲ رقمی پنل اینماد" dir="ltr"></div>
+            <div class="field full"><p class="muted" style="font-size:11.5px;margin:2px 0 0">این کد باید از پنل اینماد (بخش «دریافت لوگو») برای همین دامنهٔ سایت گرفته شود؛ با تغییر دامنه یا تمدید نماد، کد تازه را همین‌جا جایگزین کنید — بدون نیاز به تغییر کد سایت. خالی = مقدار پیش‌فرض فعلی.</p></div>
           </div>
           <button class="btn" style="margin-top:16px" onclick="saveStoreSettings()">ذخیره تنظیمات</button>
         </div>`;

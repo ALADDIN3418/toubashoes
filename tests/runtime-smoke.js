@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.1.2', 'package version must be 1.1.2');
+    assert(pkg.version === '1.1.3', 'package version must be 1.1.3');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,7 +231,7 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.1.2', 'package version must be 1.1.2');
+    assert(pkg.version === '1.1.3', 'package version must be 1.1.3');
   }
 
   // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
@@ -308,21 +308,28 @@ async function main() {
     assert(doc.includes('URL Configuration') && doc.includes('/reset-password'), 'operator docs explain the Supabase redirect setup (no DB table needed)');
   }
 
-  // v1.1.1: official eNamad trust seal in the footer, linking to the verified seal page.
+  // v1.1.1→v1.1.3: eNamad trust seal — verbatim-official link contract, admin-swappable code.
   {
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
-    assert(st4.includes("href=\"https://trustseal.enamad.ir/?id=8043803&amp;Code=KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE\""), 'seal must link to the exact enamad verify page');
-    assert(st4.includes('src="/enamad-logo.png"'), 'seal shows the transparent local logo first — no card, no background');
-    assert(st4.includes("this.src='https://trustseal.enamad.ir/logo.aspx?id=8043803&amp;Code=KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE'"), 'remote live seal stays as the image fallback');
-    assert(st4.includes("code=\"KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE\"") && st4.includes('referrerpolicy="origin"'), "enamad's required code attribute + referrerpolicy stay intact");
-    assert(st4.includes('target="_blank" rel="noopener noreferrer"'), 'external seal opens safely in a new tab');
+    const start = st4.indexOf('class="enamad-seal"');
+    assert(start>0, 'seal anchor exists');
+    const seal = st4.slice(start, st4.indexOf('</a>', start));
     assert(st4.includes('<div class="footer-enamad">'), 'seal sits in its own corner row under the footer');
-    assert(fs.existsSync(path.join(root,'enamad-logo.png')), 'local fallback logo file must exist');
-    const build = fs.readFileSync(path.join(root,'scripts/build-vercel.js'),'utf8');
-    assert(build.includes("'enamad-logo.png'"), 'fallback logo must ship in the Vercel static build');
+    assert(seal.includes('referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id='), 'anchor: official trustseal href + referrer policy, no extra attrs');
+    assert(!seal.includes('noreferrer'), 'rel=noreferrer must NEVER decorate the enamad link (it strips the Referer and breaks domain-bound verification → error 102)');
+    assert(!seal.includes('rel='), 'official snippet keeps rel untouched');
+    assert(seal.includes('src="https://trustseal.enamad.ir/logo.aspx?id='), 'the LIVE dynamic enamad image is primary (their verification requires it)');
+    assert(seal.includes("this.src='/enamad-logo.png'"), 'background-free local mark stays as offline fallback');
+    assert(seal.includes('code="${esc(eCode)}"') && seal.includes('loading="lazy"') && seal.includes('style="cursor:pointer"'), 'code attribute + lazy + cursor kept');
+    assert(st4.includes('db.settings.enamad') && seal.includes('${esc(eId)}') && seal.includes('${esc(eCode)}'), 'seal id/Code resolve from admin settings');
+    const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
+    assert(authUi.includes('adm-set-enamad-id') && authUi.includes('adm-set-enamad-code'), 'admin settings expose the enamad id + code fields');
+    assert(authUi.includes("enamad:{id:g.document.getElementById('adm-set-enamad-id')?.value.trim()||'',code:g.document.getElementById('adm-set-enamad-code')?.value.trim()||''}"), 'settings save persists the enamad pair');
     const themeCss = fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8');
-    assert(themeCss.includes('.store-footer .enamad-seal{display:block;padding:0;border:0;background:none'), 'seal must be background-free');
-    assert(themeCss.includes('.store-footer .footer-enamad{display:flex;justify-content:flex-end'), 'seal row aligns to the corner');
+    assert(themeCss.includes('.store-footer .enamad-seal{display:block;padding:0;border:0;background:none'), 'seal renders background-free');
+    assert(themeCss.includes('height:150px;width:auto;max-width:150px'), 'dynamic seal image sized by height (star-strip ratio varies)');
+    const doc = fs.readFileSync(path.join(root,'PRODUCTION_READINESS.md'),'utf8');
+    assert(doc.includes('خطای ۱۰') && doc.includes('noreferrer'), 'docs explain the 102 root cause and the rel rule');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
