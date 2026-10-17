@@ -976,19 +976,30 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   }
   section('environment templates');
 
-  /* 21) route wiring: five functions, vercel.json, local server and the CSP-safe script tag */
+  /* 21) route wiring: one dispatcher function per gateway (Vercel Hobby caps a
+     deployment at 12 serverless functions), same URL contract, vercel.json,
+     local server and the CSP-safe script tag */
   const routes = ['request', 'receipt', 'status', 'callback', 'notify'];
+  const dispatcher = fs.readFileSync(path.join(ROOT, 'api', 'payment', 'blupal', '[action].js'), 'utf8');
+  for (const stale of ['request', 'receipt', 'status', 'callback', 'notify'])
+    assert.ok(!fs.existsSync(path.join(ROOT, 'api', 'payment', 'blupal', `${stale}.js`)), `${stale}.js must be folded into the dispatcher`);
   for (const route of routes) {
-    const file = path.join(ROOT, 'api', 'payment', 'blupal', `${route}.js`);
-    const source = fs.readFileSync(file, 'utf8');
-    assert.match(source, new RegExp(`require\\('\\.\\./\\.\\./\\.\\./lib/blupal\\.js'\\)\\.${route}`), `${route} shim must re-export lib/blupal.js#${route}`);
-    if (route !== 'status') assert.match(source, /bodyParser/, `${route} must pin its body limit`);
+    assert.ok(dispatcher.includes(`${route}: blupal.${route}`), `dispatcher must map /${route} to lib/blupal.js#${route}`);
   }
+  assert.match(dispatcher, /segments\[2\] !== 'blupal'/, 'the dispatcher may only answer its own gateway prefix');
+  assert.match(dispatcher, /statusCode = 404/, 'unknown actions must 404 instead of reaching a handler');
+  assert.match(dispatcher, /sizeLimit: '64kb'/, 'the body cap must stay at the notify ceiling');
+  const bitDispatcher = fs.readFileSync(path.join(ROOT, 'api', 'payment', 'bitpay', '[action].js'), 'utf8');
+  for (const route of ['request', 'verify', 'status', 'callback']) {
+    assert.ok(bitDispatcher.includes(`${route}: bitpay.${route}`), `bitpay dispatcher must map /${route} to lib/bitpay.js#${route}`);
+  }
+  const functionFiles = fs.readdirSync(path.join(ROOT, 'api', 'payment')).reduce((n, dir) => n + fs.readdirSync(path.join(ROOT, 'api', 'payment', dir)).filter(f => f.endsWith('.js')).length, 0);
+  assert.ok(functionFiles <= 2, 'payment routes must stay inside the hobby-plan function budget');
   const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
-  for (const route of ['request', 'receipt', 'callback', 'notify']) {
-    assert.ok(Object.keys(vercel.functions || {}).includes(`api/payment/blupal/${route}.js`), `${route} needs a function entry`);
-  }
-  assert.ok(!Object.keys(vercel.functions || {}).some(key => /balepay|zarinpal|bluepal/i.test(key)));
+  const fnKeys = Object.keys(vercel.functions || {});
+  assert.ok(fnKeys.includes('api/payment/blupal/[action].js'), 'the function config must target the dispatcher file');
+  assert.ok(!fnKeys.some(k => /^api\/payment\/(blupal|bitpay)\/[a-z]+\.js$/.test(k)), 'per-action function entries must be gone');
+  assert.ok(!fnKeys.some(key => /balepay|zarinpal|bluepal/i.test(key)));
   const localServer = fs.readFileSync(path.join(ROOT, 'local-server.js'), 'utf8');
   for (const route of routes) assert.ok(localServer.includes(`/api/payment/blupal/${route}`), `local-server must mount /api/payment/blupal/${route}`);
   assert.ok(!/readBody\(req, 256/.test(localServer), 'the notify cap must match the function config');

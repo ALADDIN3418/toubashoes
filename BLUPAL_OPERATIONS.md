@@ -26,11 +26,14 @@
 | فایل | نقش |
 |---|---|
 | `lib/blupal.js` | کل منطق درگاه: ساخت فاکتور، استعلام وضعیت، وب‌هوک، رسید امضاشده، گیت‌های پیکربندی |
-| `api/payment/blupal/request.js` | `POST` ساخت فاکتور برای سفارشِ در انتظار پرداخت |
-| `api/payment/blupal/receipt.js` | `POST` پرس‌وجوی وضعیت (صفحهٔ نتیجه از این استفاده می‌کند) |
-| `api/payment/blupal/status.js` | `GET` سلامت/پیکربندی برای پنل مدیر |
-| `api/payment/blupal/callback.js` | `GET` بازگشت مرورگر از صفحهٔ پرداخت (هدایت به `/payment/result/<uuid>`) |
-| `api/payment/blupal/notify.js` | `POST` وب‌هوک بلوپال (جایی که در پنل ثبت می‌کنید) |
+| `api/payment/blupal/[action].js` → `/request` | `POST` ساخت فاکتور برای سفارشِ در انتظار پرداخت |
+| `api/payment/blupal/[action].js` → `/receipt` | `POST` پرس‌وجوی وضعیت (صفحهٔ نتیجه از این استفاده می‌کند) |
+| `api/payment/blupal/[action].js` → `/status` | `GET` سلامت/پیکربندی برای پنل مدیر |
+| `api/payment/blupal/[action].js` → `/callback` | `GET` بازگشت مرورگر از صفحهٔ پرداخت (هدایت به `/payment/result/<uuid>`) |
+| `api/payment/blupal/[action].js` → `/notify` | `POST` وب‌هوک بلوپال (جایی که در پنل ثبت می‌کنید) |
+
+> **سقف ۱۲ تابع در طرح Hobby ورسل:** هر درگاه (بلوپال و بیت‌پی) فقط **یک** تابع دارد؛ مسیرهای واقعی همان
+> `/api/payment/<gateway>/<action>` هستند. افزودن اکشن تازه = یک سطر در `HANDLERS` همان فایل، نه تابع جدید.
 | `services/blupal-pay.js` | پل مرورگر: هیچ رازی ندارد، فقط با سرور خودمان حرف می‌زند و مشتری را به `payment_link` می‌برد |
 | `supabase/migrations/202610050001_blupal_provider.sql` | جدول پرداخت‌ها + سه RPC: `attach_blupal_payment`، `settle_blupal_payment`، `expire_stale_blupal_checkouts` |
 | `scripts/blupal-cli.js` | ابزار عیب‌یابی و آزمون (تنها جایی که `simulate` قابل استفاده است) |

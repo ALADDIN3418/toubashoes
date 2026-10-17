@@ -335,10 +335,10 @@ async function main() {
   // v1.2.0: BitPay direct gateway — parallel to BluPal, docs BP_PGW_DOC 2.2, browser never settles.
   {
     const lib = fs.readFileSync(path.join(root,'lib/bitpay.js'),'utf8');
-    assert(fs.existsSync(path.join(root,'api/payment/bitpay/request.js'))
-      && fs.existsSync(path.join(root,'api/payment/bitpay/callback.js'))
-      && fs.existsSync(path.join(root,'api/payment/bitpay/verify.js'))
-      && fs.existsSync(path.join(root,'api/payment/bitpay/status.js')), 'four bitpay api routes exist');
+    const bitDispatcher = fs.readFileSync(path.join(root,'api/payment/bitpay/[action].js'),'utf8');
+    for (const route of ['request','verify','status','callback'])
+      assert(bitDispatcher.includes(`${route}: bitpay.${route}`), `bitpay dispatcher maps ${route} (hobby 12-function budget folds routes into one file)`);
+    assert(!fs.existsSync(path.join(root,'api/payment/bitpay/request.js')), 'per-action bitpay files must be gone — dispatcher only');
     assert(lib.includes("SEND_ENDPOINT = '/payment/gateway-send'") && lib.includes("RESULT_ENDPOINT = '/payment/gateway-result-second'"), 'uses the two documented gateway endpoints');
     assert(lib.includes('gateway-${idGet}-get'), 'buyer is redirected to the documented gateway-<id_get>-get address');
     assert(lib.includes('MIN_AMOUNT_RIAL = 5000'), 'rial minimum per docs (5000 IRR)');
@@ -370,7 +370,9 @@ async function main() {
     assert(fs.readFileSync(path.join(root,'scripts/build-vercel.js'),'utf8').includes("'services/bitpay-pay.js'"), 'bridge is whitelisted for the vercel build');
     assert(fs.readFileSync(path.join(root,'local-server.js'),'utf8').includes('/api/payment/bitpay/request'), 'local server routes bitpay endpoints');
     const vercelJson = JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
-    assert(vercelJson.functions['api/payment/bitpay/request.js'] && vercelJson.functions['api/payment/blupal/request.js'], 'vercel functions cover both gateways');
+    assert(vercelJson.functions['api/payment/bitpay/[action].js'] && vercelJson.functions['api/payment/blupal/[action].js'], 'one dispatcher entry per gateway fits the Vercel hobby function budget');
+    const totalFunctions = require('child_process').execSync(`find ${'.'} api -name '*.js' -path 'api/*'`,{cwd:root}).toString().trim().split('\n').length;
+    assert(totalFunctions <= 12, `api/ must stay within the hobby plan's 12 serverless functions (found ${totalFunctions})`);
     const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
     assert(authUi.includes('checkBitPayStatus'), 'admin panel can probe the bitpay configuration');
     const doc = fs.readFileSync(path.join(root,'PRODUCTION_READINESS.md'),'utf8');

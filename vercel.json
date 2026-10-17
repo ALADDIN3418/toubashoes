@@ -4,17 +4,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
-    "api/payment/blupal/request.js": {
-      "maxDuration": 30
-    },
-    "api/payment/blupal/receipt.js": {
-      "maxDuration": 30
-    },
-    "api/payment/blupal/callback.js": {
-      "maxDuration": 30
-    },
-    "api/payment/blupal/notify.js": {
-      "maxDuration": 30
+    "api/ai/describe.js": {
+      "maxDuration": 60
     },
     "api/ai/product-photo.js": {
       "maxDuration": 120
@@ -22,16 +13,10 @@
     "api/ai/studio/generate.js": {
       "maxDuration": 120
     },
-    "api/ai/describe.js": {
-      "maxDuration": 60
-    },
-    "api/payment/bitpay/request.js": {
+    "api/payment/bitpay/[action].js": {
       "maxDuration": 30
     },
-    "api/payment/bitpay/verify.js": {
-      "maxDuration": 30
-    },
-    "api/payment/bitpay/callback.js": {
+    "api/payment/blupal/[action].js": {
       "maxDuration": 30
     }
   },
