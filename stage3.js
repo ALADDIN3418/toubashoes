@@ -47,7 +47,7 @@ function couponValid(c,subtotal){if(!c||!c.active)return false;let parts=new Int
 async function applyCoupon(){let code=$('#coupon-code')?.value.trim(),subtotal=db.cart.reduce((n,x)=>n+(product(x.id)?.price||0)*x.qty,0),result=await StoreServices.coupons.validate(code,subtotal);if(!result.valid){toast(result.reason);return}db.coupon={code:result.coupon.code,discount:result.discount};save();render();toast('کد تخفیف اعمال شد')}
 async function applyCheckoutCoupon(){let code=$('#checkout-coupon').value.trim(),subtotal=db.cart.reduce((n,x)=>n+(product(x.id)?.price||0)*x.qty,0),result=await StoreServices.coupons.validate(code,subtotal);if(!result.valid){toast(result.reason);return}db.coupon={code:result.coupon.code,discount:result.discount};save();render();toast('کد تخفیف اعمال شد')}
 function checkoutTotals(method='normal'){let base=getCartTotals(),shipping=StoreServices.shipping.quote(method,base.subtotal);return{...base,shipping,total:base.subtotal-base.discount+shipping}}
-function checkout(){if(!db.cart.length){go('/cart');return ''}if(!db.currentUser||db.currentUser.authProvider!=='supabase'){return `${header()}<main class="page container"><section class="auth-card" style="max-width:640px;text-align:center"><h1>برای ثبت سفارش وارد شوید</h1><p>ثبت سفارش، حفظ سبد خرید و پیگیری پرداخت به حساب معتبر و فعال مشتری نیاز دارد.</p><a class="btn" href="/login">ورود به حساب مشتری</a> <a class="btn outline" href="/login?mode=signup">ساخت حساب</a></section></main>${footer()}`}if(db.currentUser.role!=='customer'){return `${header()}<main class="page container"><div class="notice">برای ثبت سفارش با حساب مشتری وارد شوید.</div><a class="btn" href="/account">بازگشت به حساب</a></main>${footer()}`}let tot=checkoutTotals('normal'),options=StoreServices.shipping.options(tot.subtotal);return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required minlength="3" name="name" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><select required name="province"><option value="">انتخاب استان</option>${['تهران','البرز','اصفهان','فارس','خراسان رضوی','گیلان','مازندران','آذربایجان شرقی'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>شهر *</label><input required minlength="2" name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required minlength="10" name="address"></textarea></div><div class="field"><label>کد پستی *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal"></div><div class="field"><label>توضیحات</label><input name="note"></div></div><div class="detail-row"><b>روش ارسال</b>${options.map(x=>`<label class="shipping-option"><input type="radio" name="shippingMethod" value="${x.id}" ${x.id==='normal'?'checked':''} ${x.available?'':'disabled'} onchange="refreshCheckoutTotals()"> ${x.name} ${x.id==='free'&&!x.available?'(با خرید بیشتر فعال می‌شود)':`— ${x.cost?toman(x.cost):'رایگان'}`}</label>`).join('')}</div><div class="detail-row"><b>روش پرداخت</b><label class="shipping-option"><input type="radio" name="paymentMethod" value="blupal" checked required> پرداخت کارت‌به‌کارت از طریق بلوپال</label></div></section><aside class="cart-summary" id="checkout-summary"><h3>خلاصه سفارش (${db.cart.length} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div id="checkout-totals"><div class="summary-line"><span>جمع محصولات</span><b>${toman(tot.subtotal)}</b></div>${tot.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(tot.discount)}</b></div>`:''}<div class="summary-line"><span>ارسال</span><b id="ship-total">${toman(tot.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(tot.total)}</b></div></div><button class="btn" style="width:100%;margin-top:12px">پرداخت امن بلوپال</button><small class="muted">پس از ثبت سفارش، شمارهٔ کارت مقصد و «مبلغ دقیق قابل واریز» را می‌بینید؛ شماره کارت و رمز بانکی خود را هرگز در این سایت وارد نمی‌کنید.</small></aside></form></main>${footer()}`}
+function checkout(){if(!db.cart.length){go('/cart');return ''}if(!db.currentUser||db.currentUser.authProvider!=='supabase'){return `${header()}<main class="page container"><section class="auth-card" style="max-width:640px;text-align:center"><h1>برای ثبت سفارش وارد شوید</h1><p>ثبت سفارش، حفظ سبد خرید و پیگیری پرداخت به حساب معتبر و فعال مشتری نیاز دارد.</p><a class="btn" href="/login">ورود به حساب مشتری</a> <a class="btn outline" href="/login?mode=signup">ساخت حساب</a></section></main>${footer()}`}if(db.currentUser.role!=='customer'){return `${header()}<main class="page container"><div class="notice">برای ثبت سفارش با حساب مشتری وارد شوید.</div><a class="btn" href="/account">بازگشت به حساب</a></main>${footer()}`}let tot=checkoutTotals('normal'),options=StoreServices.shipping.options(tot.subtotal);return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required minlength="3" name="name" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><select required name="province"><option value="">انتخاب استان</option>${['تهران','البرز','اصفهان','فارس','خراسان رضوی','گیلان','مازندران','آذربایجان شرقی'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label>شهر *</label><input required minlength="2" name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required minlength="10" name="address"></textarea></div><div class="field"><label>کد پستی *</label><input required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal"></div><div class="field"><label>توضیحات</label><input name="note"></div></div><div class="detail-row"><b>روش ارسال</b>${options.map(x=>`<label class="shipping-option"><input type="radio" name="shippingMethod" value="${x.id}" ${x.id==='normal'?'checked':''} ${x.available?'':'disabled'} onchange="refreshCheckoutTotals()"> ${x.name} ${x.id==='free'&&!x.available?'(با خرید بیشتر فعال می‌شود)':`— ${x.cost?toman(x.cost):'رایگان'}`}</label>`).join('')}</div><div class="detail-row"><b>روش پرداخت</b><label class="shipping-option"><input type="radio" name="paymentMethod" value="blupal" checked required> پرداخت کارت‌به‌کارت از طریق بلوپال</label><label class="shipping-option"><input type="radio" name="paymentMethod" value="bitpay"> پرداخت مستقیم بانکی — درگاه بیت‌پی</label></div></section><aside class="cart-summary" id="checkout-summary"><h3>خلاصه سفارش (${db.cart.length} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div id="checkout-totals"><div class="summary-line"><span>جمع محصولات</span><b>${toman(tot.subtotal)}</b></div>${tot.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(tot.discount)}</b></div>`:''}<div class="summary-line"><span>ارسال</span><b id="ship-total">${toman(tot.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(tot.total)}</b></div></div><button class="btn" style="width:100%;margin-top:12px">ثبت سفارش و پرداخت</button><small class="muted">در روش بلوپال، شمارهٔ کارت مقصد و «مبلغ دقیق قابل واریز» را می‌بینید؛ در روش بیت‌پی مستقیماً به صفحهٔ امن بانک هدایت می‌شوید. شماره کارت و رمز بانکی خود را هرگز در این سایت وارد نمی‌کنید.</small></aside></form></main>${footer()}`}
 function refreshCheckoutTotals(){let method=document.querySelector('[name="shippingMethod"]:checked')?.value||'normal';try{let t=checkoutTotals(method);$('#ship-total').textContent=t.shipping?toman(t.shipping):'رایگان';$('#checkout-totals').querySelector('.total b').textContent=toman(t.total)}catch(e){toast(e.message)}}
 function checkoutIdempotencyKey(){
   if(!window.__checkoutIdempotencyKey){
@@ -66,7 +66,7 @@ function bindForms(){
     const fd=new FormData(form),phone=st3Num(fd.get('phone')),postal=st3Num(fd.get('postal'));
     if(!/^09\d{9}$/.test(phone)){toast('شماره موبایل معتبر نیست');return}
     if(!/^\d{10}$/.test(postal)){toast('کد پستی باید ۱۰ رقم باشد');return}
-    if((fd.get('paymentMethod')||'blupal')!=='blupal'){toast('تنها پرداخت کارت‌به‌کارت بلوپال برای این فروشگاه فعال است');return}
+    const paymentMethod=fd.get('paymentMethod')||'blupal';if(paymentMethod!=='blupal'&&paymentMethod!=='bitpay'){toast('روش پرداخت نامعتبر است');return}
     const submitButton=form.querySelector?.('button[type="submit"]');if(submitButton)submitButton.disabled=true;
     let orderId='';
     try{
@@ -85,6 +85,16 @@ function bindForms(){
       if(!orderId)throw new Error('پایگاه داده شناسهٔ سفارش برنگرداند.');
       window.__checkoutOrderId=orderId;
       await DataProvider.refresh(STORE,db);
+      if(paymentMethod==='bitpay'){
+        if(!window.ToubaBitPay)throw new Error('پل پرداخت بیت‌پی بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
+        // سرور id_get را از gateway-send می‌گیرد و به سفارش وصل می‌کند؛ نشانی بانک را همین سرور
+        // از apiBase رسمی می‌سازد (gateway-<id_get>-get طبق مستندات 2.2).
+        const gateway=await ToubaBitPay.requestGateway(orderId);
+        window.__checkoutIdempotencyKey=null;
+        if(!gateway.paymentUrl)throw new Error('درگاه بیت‌پی نشانی صفحهٔ پرداخت را برنگرداند.');
+        ToubaBitPay.openPayment(gateway);
+        return;
+      }
       if(!window.ToubaBluPal)throw new Error('پل پرداخت بلوپال بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
       // سرور فاکتور بلوپال را می‌سازد (invoice_id) و پیوند صفحهٔ پرداخت + مبلغ دقیق واریز را می‌دهد؛
       // مشتری بی‌واسطه به همان صفحهٔ رسمی درگاه هدایت می‌شود (کارت و مبلغ دقیق آنجا نمایش داده می‌شود).
@@ -102,20 +112,32 @@ function bindForms(){
         }catch(cancelError){console.warn('Pending checkout will expire automatically:',cancelError?.message||cancelError)}
       }
       if(submitButton)submitButton.disabled=false;
-      toast(`آغاز پرداخت بلوپال انجام نشد: ${error.message||'خطای نامشخص'}`);
+      toast(`آغاز پرداخت انجام نشد: ${error.message||'خطای نامشخص'}`);
     }
   };
   if(path()==='/shop'||path()==='/search'||path().startsWith('/category/')){const select=$('#shop-sort');if(select)select.value=shopState.sort;renderShopResults()}
   const resultMatch=/^\/payment\/result\/([^/]+)$/.exec(path());
   if(resultMatch){
     const orderId=decodeURIComponent(resultMatch[1]);
-    const receiptKey=ToubaBluPal?.receiptFor(orderId)||`poll:${orderId}`;
-    if(window.__blupalReceiptKey!==receiptKey){
-      window.__blupalReceiptKey=receiptKey;
-      window.__blupalReceiptPromise=processBluPalReceipt(orderId);
+    const orderRow=db.orders.find(x=>String(x.id)===String(orderId));
+    const viaBitPay=orderRow?.paymentProvider==='bitpay'||/[?&]gw=bitpay/.test(location.search||'')||ToubaBitPay?.isPending(orderId);
+    if(viaBitPay){
+      const bitKey=`verify:${orderId}`;
+      if(window.__bitPayVerifyKey!==bitKey){
+        window.__bitPayVerifyKey=bitKey;
+        window.__bitPayVerifyPromise=processBitPayVerification(orderId);
+      }
+      // کاربر از صفحهٔ بانک برگشته است؛ نشانگر «بیت‌پی باز» پاک می‌شود.
+      ToubaBitPay?.clearPending(orderId);
+    }else{
+      const receiptKey=ToubaBluPal?.receiptFor(orderId)||`poll:${orderId}`;
+      if(window.__blupalReceiptKey!==receiptKey){
+        window.__blupalReceiptKey=receiptKey;
+        window.__blupalReceiptPromise=processBluPalReceipt(orderId);
+      }
+      // کاربر از صفحهٔ بانک برگشته است؛ نشانگر «سفارش باز» پاک می‌شود.
+      ToubaBluPal?.clearPending(orderId);
     }
-    // کاربر از صفحهٔ بانک برگشته است؛ نشانگر «سفارش باز» پاک می‌شود.
-    ToubaBluPal?.clearPending(orderId);
   }
 }
 
@@ -179,13 +201,66 @@ function retryBluPalReceipt(){
   window.__blupalReceiptKey='';
   window.__blupalReceiptPromise=processBluPalReceipt(orderId,ToubaBluPal.receiptFor(orderId));
 }
+// صفحهٔ نتیجهٔ بیت‌پی: سرور با trans_id ذخیره‌شده gateway-result-second را تکرار می‌کند؛
+// ادعای مرورگر هرگز پرداخت نیست و تسویه در SQL یک‌مصرف است، پس تکرار این فراخوانی بی‌ضرر است.
+async function processBitPayVerification(orderId){
+  const statusElement=$('#payment-receipt-status');
+  if(statusElement)statusElement.textContent='در حال تأیید تراکنش نزد درگاه بیت‌پی…';
+  try{
+    const result=await ToubaBitPay.pollVerification(orderId,{
+      attempts:4,
+      intervalMs:6000,
+      onTick:(row,tick)=>{if(statusElement)statusElement.textContent=`هنوز در انتظار تأیید استعلام از بیت‌پی… (تلاش ${tick+1})`;}
+    });
+    if(!result)throw new Error('وضعیت پرداخت از سرور دریافت نشد؛ دوباره تلاش کنید.');
+    await DataProvider.refresh(STORE,db);
+    if(result.outcome==='paid'){
+      db.coupon=null;
+      if(window.history?.replaceState&&window.location?.pathname&&window.location?.search)window.history.replaceState({},'',window.location.pathname);
+      window.__bitPayVerifyKey='';
+      render();
+    }else if(statusElement){
+      statusElement.textContent='بیت‌پی هنوز تراکنش را تأیید نکرده است. اگر مبلغ کسر شده ولی اینجا تأیید نمی‌شود، چند لحظه دیگر «بررسی دوباره» را بزنید؛ در صورت تداوم شمارهٔ رهگیری بانک را برای پشتیبانی بفرستید.';
+    }
+    return result;
+  }catch(error){
+    if(statusElement)statusElement.textContent=`نتیجهٔ پرداخت هنوز تأیید نشد: ${error.message||'خطای ارتباط'}`;
+    return{success:false,error};
+  }
+}
+
+function retryBitPayVerify(){
+  const resultMatch=/^\/payment\/result\/([^/]+)$/.exec(path());
+  if(!resultMatch)return;
+  const orderId=decodeURIComponent(resultMatch[1]);
+  window.__bitPayVerifyKey='';
+  window.__bitPayVerifyPromise=processBitPayVerification(orderId);
+}
+
+async function resumeBitPayPayment(orderId){
+  const user=db.currentUser;
+  if(!user||user.authProvider!=='supabase'||user.role!=='customer')return false;
+  const order=db.orders.find(x=>String(x.id)===String(orderId));
+  if(!order||order.paymentStatus!=='PENDING')return false;
+  await ToubaBitPay.retryPayment(orderId);
+  return true;
+}
+
+async function retryBitPayPayment(orderId){
+  try{
+    const target=orderId||ToubaBitPay.pendingOrderId();
+    if(!target)throw new Error('سفارش بازی برای پرداخت پیدا نشد.');
+    await resumeBitPayPayment(target);
+  }catch(error){toast(`آغاز دوبارهٔ پرداخت بیت‌پی انجام نشد: ${error.message||'خطای ارتباط'}`);}
+}
+
 function paymentResult(orderId){
   const order=db.orders.find(x=>String(x.id)===String(orderId));
   if(!order)return notFound();
-  const paid=order.paymentStatus==='PAID',pending=order.paymentStatus==='PENDING',cancelled=order.paymentOutcome==='CANCELLED';
-  const title=paid?'پرداخت با موفقیت انجام شد':pending?'در انتظار شناسایی واریز (بلوپال)':cancelled?'فاکتور پرداخت لغو شد':'پرداخت تأیید نشد';
+  const paid=order.paymentStatus==='PAID',pending=order.paymentStatus==='PENDING',cancelled=order.paymentOutcome==='CANCELLED',isBit=order.paymentProvider==='bitpay';
+  const title=paid?'پرداخت با موفقیت انجام شد':pending?(isBit?'در انتظار تأیید تراکنش (بیت‌پی)':'در انتظار شناسایی واریز (بلوپال)'):cancelled?'فاکتور پرداخت لغو شد':'پرداخت تأیید نشد';
   const icon=paid?'✓':pending?'…':'×';
-  return `${header()}<main class="page container" style="max-width:680px;margin:30px auto"><div class="auth-card" style="text-align:center;padding:32px 24px;border-radius:18px"><div class="payment-result-icon ${paid?'success':pending?'pending':'failure'}">${icon}</div><h1 style="margin:16px 0 8px;font-size:22px">${title}</h1><div style="margin-bottom:20px"><span class="badge info" style="font-size:12px;padding:4px 12px;border-radius:8px">BluPal · درگاه بلوپال</span></div><div class="summary-line"><span>شماره سفارش:</span><b>${esc(order.number)}</b></div><div class="summary-line"><span>کد رهگیری فروشگاه:</span><b>${esc(order.trackingCode)}</b></div>${order.paymentRef?`<div class="summary-line"><span>شماره مرجع بانک:</span><code>${esc(order.paymentRef)}</code></div>`:''}${order.authority?`<div class="summary-line"><span>شناسهٔ فاکتور بلوپال:</span><code>${esc(order.authority)}</code></div>`:''}<div class="summary-line"><span>مبلغ سفارش:</span><b>${toman(order.total)}</b></div><div class="summary-line"><span>وضعیت:</span><b>${paid?'پرداخت‌شده':pending?'در انتظار تأیید':cancelled?'لغوشده':'ناموفق'}</b></div>${pending?'<p id="payment-receipt-status" class="notice">در حال تأیید تراکنش نزد درگاه بلوپال…</p><button class="btn outline" type="button" onclick="retryBluPalReceipt()">بررسی دوبارهٔ پرداخت</button> <button class="btn outline" type="button" onclick="retryBluPalPayment()">دریافت فاکتور جدید و ادامهٔ پرداخت</button>':''}${!paid&&!pending?'<div class="notice error-notice" style="margin:16px 0">پرداخت تأیید نشد؛ مبلغی به حساب فروشگاه وارد نشده است و سبد خرید شما برای تلاش دوباره حفظ شده است.</div>':''}<div style="display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap"><a class="btn" href="/tracking">پیگیری سفارش</a>${paid?'<a class="btn outline" href="/shop">ادامه خرید</a>':'<a class="btn outline" href="/checkout">تلاش دوباره برای پرداخت</a>'}</div></div></main>${footer()}`;
+  return `${header()}<main class="page container" style="max-width:680px;margin:30px auto"><div class="auth-card" style="text-align:center;padding:32px 24px;border-radius:18px"><div class="payment-result-icon ${paid?'success':pending?'pending':'failure'}">${icon}</div><h1 style="margin:16px 0 8px;font-size:22px">${title}</h1><div style="margin-bottom:20px"><span class="badge info" style="font-size:12px;padding:4px 12px;border-radius:8px">${isBit?'BitPay · درگاه مستقیم بانک':'BluPal · درگاه بلوپال'}</span></div><div class="summary-line"><span>شماره سفارش:</span><b>${esc(order.number)}</b></div><div class="summary-line"><span>کد رهگیری فروشگاه:</span><b>${esc(order.trackingCode)}</b></div>${order.paymentRef?`<div class="summary-line"><span>شماره مرجع بانک:</span><code>${esc(order.paymentRef)}</code></div>`:''}${order.authority?`<div class="summary-line"><span>${isBit?'شناسهٔ تراکنش بیت‌پی:':'شناسهٔ فاکتور بلوپال:'}</span><code>${esc(order.authority)}</code></div>`:''}<div class="summary-line"><span>مبلغ سفارش:</span><b>${toman(order.total)}</b></div><div class="summary-line"><span>وضعیت:</span><b>${paid?'پرداخت‌شده':pending?'در انتظار تأیید':cancelled?'لغوشده':'ناموفق'}</b></div>${pending?(isBit?'<p id="payment-receipt-status" class="notice">در حال تأیید تراکنش نزد درگاه بیت‌پی…</p><button class="btn outline" type="button" onclick="retryBitPayVerify()">بررسی دوبارهٔ پرداخت</button> <button class="btn outline" type="button" onclick="retryBitPayPayment()">ورود دوباره به صفحهٔ بانک</button>':'<p id="payment-receipt-status" class="notice">در حال تأیید تراکنش نزد درگاه بلوپال…</p><button class="btn outline" type="button" onclick="retryBluPalReceipt()">بررسی دوبارهٔ پرداخت</button> <button class="btn outline" type="button" onclick="retryBluPalPayment()">دریافت فاکتور جدید و ادامهٔ پرداخت</button>'):''}${!paid&&!pending?'<div class="notice error-notice" style="margin:16px 0">پرداخت تأیید نشد؛ مبلغی به حساب فروشگاه وارد نشده است و سبد خرید شما برای تلاش دوباره حفظ شده است.</div>':''}<div style="display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap"><a class="btn" href="/tracking">پیگیری سفارش</a>${paid?'<a class="btn outline" href="/shop">ادامه خرید</a>':'<a class="btn outline" href="/checkout">تلاش دوباره برای پرداخت</a>'}</div></div></main>${footer()}`;
 }
 
 function tracking(){return `${header()}<main class="page container"><form class="auth-card" onsubmit="event.preventDefault();trackOrder(this)"><h1>پیگیری سفارش</h1><p>شماره سفارش و موبایل ثبت‌شده را وارد کنید.</p><div class="field"><label>شماره سفارش</label><input name="number" required placeholder="TB-..."></div><div class="field"><label>شماره موبایل</label><input name="phone" required pattern="[0-9۰-۹٠-٩]{11}" placeholder="09123456789"></div><button class="btn">پیگیری سفارش</button><div id="tracking-result"></div></form></main>${footer()}`}
@@ -206,7 +281,7 @@ async function couponToggle(code){let c=db.coupons.find(x=>x.code===code);if(c){
 function orderDetails(id){let o=db.orders.find(x=>x.id===id);if(!o)return;showModal(`<h2>سفارش ${esc(o.number||o.id)}</h2><div class="notice">مشتری: ${esc(o.customer)} · ${esc(o.phone)}<br>نشانی: ${esc(o.province||'')}، ${esc(o.city||'')}، ${esc(o.address||'')} · ${esc(o.postal||'—')}<br>تاریخ: ${esc(o.date||'')}<br>کد پیگیری: <b>${esc(o.trackingCode||'—')}</b></div><h3>اقلام سفارش</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>محصول</th><th>واریانت</th><th>قیمت واحد</th><th>تعداد</th><th>جمع</th></tr></thead><tbody>${(o.itemsList||[]).map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.variantLabel||`سایز ${i.size}، ${i.color}`)}</td><td>${toman(i.unitPrice)}</td><td>${i.quantity}</td><td>${toman(i.unitPrice*i.quantity)}</td></tr>`).join('')}</tbody></table></div><div class="summary-line"><span>جمع اقلام</span><b>${toman(o.subtotal??o.total)}</b></div><div class="summary-line"><span>تخفیف</span><b>− ${toman(o.discount)}</b></div><div class="summary-line"><span>هزینه ارسال</span><b>${toman(o.shipping)}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(o.total)}</b></div><p>وضعیت: ${ST3_STATUS[o.status]||o.status} · پرداخت: ${o.paymentStatus==='PAID'?'پرداخت شده':o.paymentStatus==='FAILED'?'ناموفق':'در انتظار پرداخت'}</p>`)}
 async function orderStatus(id,status){try{await StoreServices.orders.update(id,{status});await DataProvider.refresh(STORE,db);render();toast('وضعیت سفارش در پایگاه داده ذخیره شد')}catch(error){toast(error.message||'به‌روزرسانی وضعیت سفارش انجام نشد.')}}
 function render(){document.body.classList.remove('admin-body');let p=path(),html;if(p==='/')html=(typeof window.home==='function'?window.home():home());else if(p==='/shop'||p==='/search')html=(typeof window.shop==='function'?window.shop():shop());else if(p.startsWith('/category/')){let slug=decodeURIComponent(p.split('/')[2]),c=db.categories.find(x=>x.id===slug||x.slug===slug||x.name===slug);html=(typeof window.shop==='function'?window.shop(c?c.id:slug):(c?shop(c.id):shop()))}else if(p.startsWith('/product/'))html=(typeof window.detail==='function'?window.detail(decodeURIComponent(p.split('/')[2])):detail(decodeURIComponent(p.split('/')[2])));else if(p==='/cart')html=(typeof window.cartPage==='function'?window.cartPage():cartPage());else if(p==='/checkout')html=(typeof window.checkout==='function'?window.checkout():checkout());else if(p==='/login')html=login();else if(p==='/account')html=account();else if(p==='/account/orders')html=ordersPage();else if(p==='/tracking')html=(typeof window.tracking==='function'?window.tracking():tracking());else if(p.startsWith('/payment/result/'))html=paymentResult(decodeURIComponent(p.split('/')[3]));else if(p==='/about'||p==='/contact'||p==='/terms'||p==='/privacy')html=(typeof window.contentPage==='function'?window.contentPage(p.slice(1)):contentPage(p.slice(1)));else if(p==='/admin'||p.startsWith('/admin/')){document.body.classList.remove('admin-body');html=admin()}else html=notFound();$('#app').innerHTML=html;bindForms();window.scrollTo(0,0)}
-window.__stage3AdminSection=adminSection;window.__stage3BindForms=bindForms;window.__stage3Render=render;window.processBluPalReceipt=processBluPalReceipt;window.retryBluPalReceipt=retryBluPalReceipt;window.retryBluPalPayment=retryBluPalPayment;window.resumeBluPalPayment=resumeBluPalPayment;
+window.__stage3AdminSection=adminSection;window.__stage3BindForms=bindForms;window.__stage3Render=render;window.processBluPalReceipt=processBluPalReceipt;window.retryBluPalReceipt=retryBluPalReceipt;window.retryBluPalPayment=retryBluPalPayment;window.resumeBluPalPayment=resumeBluPalPayment;window.processBitPayVerification=processBitPayVerification;window.retryBitPayVerify=retryBitPayVerify;window.retryBitPayPayment=retryBitPayPayment;window.resumeBitPayPayment=resumeBitPayPayment;
 
 // بازگشت از صفحهٔ پرداخت: /api/payment/blupal/callback مشتری را به همین مسیر /payment/result/<id>
 // هدایت می‌کند؛ تأیید نهایی فقط با GET /v1/invoices/{invoice_id} (وضعیت PAID) انجام شده است،

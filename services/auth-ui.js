@@ -594,6 +594,17 @@
     } catch { g.toast('وضعیت بلوپال دریافت نشد؛ API سایت را بررسی کنید.');return null; }
   };
 
+  g.checkBitPayStatus = async function () {
+    g.toast('در حال بررسی پیکربندی درگاه بیت‌پی…');
+    try {
+      const response=await fetch('/api/payment/bitpay/status',{cache:'no-store'}),data=await response.json();
+      if(data?.paymentEnabled)g.toast('بیت‌پی آماده است؛ مشتریان می‌توانند در تسویه «پرداخت مستقیم بانکی» را انتخاب کنند.');
+      else if(data && data.missingServerKeys && data.missingServerKeys.length)g.toast('متغیرهای سرور کامل نیست: '+data.missingServerKeys.join('، '));
+      else g.toast('پیکربندی بیت‌پی کامل نیست؛ کلید ۵۲ کاراکتری پنل را در متغیرهای محیطی Vercel (BITPAY_API_KEY) تنظیم کنید.');
+      return data;
+    } catch { g.toast('وضعیت بیت‌پی دریافت نشد؛ API سایت را بررسی کنید.');return null; }
+  };
+
   g.mediaAddModal = function () {
     g.showModal(`<form onsubmit="event.preventDefault();saveNewMedia(this)"><h3>افزودن تصویر به کتابخانهٔ پایگاه داده</h3><div class="field"><label>URL تصویر *</label><input name="url" type="url" required placeholder="https://..." dir="ltr"></div><div class="field"><label>متن جایگزین تصویر</label><input name="alt" maxlength="500"></div><button class="btn" style="margin-top:14px">ذخیره در کتابخانه</button></form>`);
   };
@@ -880,7 +891,7 @@
               <div class="field full"><label>«Webhook درگاه» که باید در پنل ثبت شود</label><input readonly dir="ltr" value="${esc(notifyUrl)}"></div>
               <div class="field full"><label>محدودهٔ مبلغ هر فاکتور</label><input readonly dir="ltr" value="${esc(`حداقل ${Number(paymentStatus.minAmountToman || 10000).toLocaleString('fa-IR')} تومان — ${(paymentStatus.errorCodes || ['amount_too_low','amount_too_high']).slice(0, 5).join(' · ')}`)}"></div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBluPalStatus()">بررسی پیکربندی</button></div>
+            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBluPalStatus()">بررسی پیکربندی</button><button class="btn outline" type="button" onclick="ToubaAuthUI.checkBitPayStatus()">بررسی درگاه بیت‌پی (موازی)</button></div>
           </div>
           <div class="panel" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:16px;padding:22px">
             <h3 style="margin:0 0 10px">تنظیم امن در Vercel → Settings → Environment Variables</h3>
@@ -1067,6 +1078,7 @@
     bulkApplyProducts,
     bulkApplyCategories,
     checkBluPalStatus:g.checkBluPalStatus,
+    checkBitPayStatus:g.checkBitPayStatus,
     selectAllCatalogRows,
     updateCatalogSelectionCount,
     switchAdminSection,

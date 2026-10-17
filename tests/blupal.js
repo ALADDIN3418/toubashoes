@@ -926,8 +926,12 @@ async function runHandler(handler, { state, request, env: extraEnv = {}, gateway
   const cliJs = fs.readFileSync(path.join(ROOT, 'scripts', 'blupal-cli.js'), 'utf8');
   assert.deepEqual([...new Set(rpcNames)].sort(), ['attach_blupal_payment', 'settle_blupal_payment'], 'the gateway core only attaches and settles');
   assert.ok(cliJs.includes("'expire_stale_blupal_checkouts'"), 'the ops CLI uses the SQL expiry sweep');
-  assert.deepEqual([...serverJs.matchAll(/^  '([a-z_]+)',?$/gm)].map(m => m[1]).sort(), ['attach_blupal_payment', 'expire_stale_blupal_checkouts', 'settle_blupal_payment'], 'the service RPC allow-list is exactly the BluPal set');
-  assert.equal((serverJs.match(/provider:\s*'eq\.blupal'/g) || []).length, 2, 'every payment read must be provider-scoped');
+  assert.deepEqual(
+    [...serverJs.matchAll(/^  '([a-z_]+)',?$/gm)].map(m => m[1]).sort(),
+    ['attach_bitpay_payment', 'attach_blupal_payment', 'expire_stale_bitpay_checkouts', 'expire_stale_blupal_checkouts', 'record_bitpay_trans_id', 'settle_bitpay_payment', 'settle_blupal_payment'],
+    'the service RPC allow-list is exactly the two live gateways: BluPal untouched + BitPay (v1.2.0)');
+  assert.equal((serverJs.match(/provider = 'blupal'/g) || []).length, 2, 'both payment selectors still default to the blupal provider — the BluPal path is byte-for-byte unchanged');
+  assert.equal((serverJs.match(/\('provider',`eq\.\$\{provider\}`\)/g) || []).length, 2, 'provider scoping is applied by every payment read (skippable only for the bitpay pre-invoice flip)');
   assert.ok(!/eq\.balepay|eq\.zarinpal|eq\.bluepal/.test(serverJs), 'no retired provider filter may remain');
   assert.match(serverJs, /A-Za-z0-9_-\]\{1,64\}/, 'short invoice ids must be lookup-able by authority');
   assert.ok(!/A-Za-z0-9_-\]\{6,64\}/.test(serverJs), 'the old six-character floor would reject invoice id 123');

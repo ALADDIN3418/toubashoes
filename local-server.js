@@ -19,6 +19,7 @@ const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const blupal = require('./lib/blupal.js');
+const bitpay = require('./lib/bitpay.js');
 const { looksLikeSecretKey } = require('./lib/supabase-server.js');
 
 function loadLocalEnv() {
@@ -133,6 +134,16 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/payment/blupal/request' || pathname === '/api/payment/blupal/receipt') {
     const handler = pathname.endsWith('/request') ? blupal.request : blupal.receipt;
+    if (req.method !== 'POST') return handler(req, res);
+    try { req.body = await readBody(req, 32 * 1024); }
+    catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
+    return handler(req, res);
+  }
+
+  if (pathname === '/api/payment/bitpay/status') return bitpay.status(req, res);
+  if (pathname === '/api/payment/bitpay/callback') return bitpay.callback(req, res);
+  if (pathname === '/api/payment/bitpay/request' || pathname === '/api/payment/bitpay/verify') {
+    const handler = pathname.endsWith('/request') ? bitpay.request : bitpay.verify;
     if (req.method !== 'POST') return handler(req, res);
     try { req.body = await readBody(req, 32 * 1024); }
     catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
