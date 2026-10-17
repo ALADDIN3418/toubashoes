@@ -94,7 +94,7 @@ function fakeClient() {
       banners:[],page_contents:[],reviews:[],media:[],profiles:[{id:ids.admin,email:'owner@example.test',display_name:'مدیر',phone:'09120000000',role:'super_admin',is_active:true,created_at:'2026-10-01T00:00:00.000Z'}],
       orders:[{id:ids.order,number:'TB-TEST-1',user_id:ids.admin,status:'CONFIRMED',shipping_method:'normal',tracking_code:'TRK-1',status_history:[],coupon_code_snapshot:null,address_snapshot:{recipient:'مدیر',phone:'09120000000',province:'تهران',city:'تهران',address:'آدرس ثبت‌شده',postal_code:'1234567890'},subtotal_toman:1250000,shipping_toman:80000,discount_toman:0,total_toman:1330000,created_at:'2026-10-01T00:00:00.000Z'}],
       order_items:[{id:'70000000-0000-4000-8000-000000000001',order_id:ids.order,product_id:ids.product,variant_id:ids.variant,product_name_snapshot:'کفش ثبت‌شده',sku_snapshot:'TB-DB-1',variant_label_snapshot:'سایز ۴۰، مشکی',unit_price_toman:1250000,quantity:1}],
-      payments:[{id:'80000000-0000-4000-8000-000000000001',order_id:ids.order,provider:'zarinpal',status:'verified',amount_toman:1330000,authority:'A123',provider_reference:'9001',provider_code:'100',failure_reason:null,created_at:'2026-10-01T00:00:00.000Z'}],
+      payments:[{id:'80000000-0000-4000-8000-000000000001',order_id:ids.order,provider:'blupal',status:'verified',amount_toman:1330000,authority:'123',provider_reference:'9001',provider_code:'PAID',failure_reason:null,created_at:'2026-10-01T00:00:00.000Z'}],
       addresses:[],coupons:[],user_favorites:[],carts:[],cart_items:[],newsletter_subscribers:[]
     },
     from(table) { return new FakeQuery(this,table); },

@@ -4,30 +4,69 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
-    "api/payment/zarinpal/request.js": { "maxDuration": 30 },
-    "api/payment/zarinpal/callback.js": { "maxDuration": 30 },
-    "api/payment/zarinpal/receipt.js": { "maxDuration": 30 },
-    "api/ai/product-photo.js": { "maxDuration": 120 },
-    "api/ai/studio/generate.js": { "maxDuration": 120 },
-    "api/ai/describe.js": { "maxDuration": 60 }
+    "api/ai/describe.js": {
+      "maxDuration": 60
+    },
+    "api/ai/product-photo.js": {
+      "maxDuration": 120
+    },
+    "api/ai/studio/generate.js": {
+      "maxDuration": 120
+    },
+    "api/payment/bitpay/[action].js": {
+      "maxDuration": 30
+    },
+    "api/payment/blupal/[action].js": {
+      "maxDuration": 30
+    }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/22342065.txt", "destination": "/22342065.txt" },
-    { "source": "/22274320.txt", "destination": "/22274320.txt" },
-    { "source": "/22084634.txt", "destination": "/22084634.txt" },
-    { "source": "/20838126.txt", "destination": "/20838126.txt" },
-    { "source": "/18887070.txt", "destination": "/18887070.txt" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/22342065.txt",
+      "destination": "/22342065.txt"
+    },
+    {
+      "source": "/22274320.txt",
+      "destination": "/22274320.txt"
+    },
+    {
+      "source": "/22084634.txt",
+      "destination": "/22084634.txt"
+    },
+    {
+      "source": "/20838126.txt",
+      "destination": "/20838126.txt"
+    },
+    {
+      "source": "/18887070.txt",
+      "destination": "/18887070.txt"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

@@ -18,7 +18,9 @@ const MODEL = DEFAULT_PIPELINE;
 const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
-const zarinpal = require('./lib/zarinpal.js');
+const blupal = require('./lib/blupal.js');
+const bitpay = require('./lib/bitpay.js');
+const { looksLikeSecretKey } = require('./lib/supabase-server.js');
 
 function loadLocalEnv() {
   try {
@@ -109,7 +111,8 @@ const server = http.createServer(async (req, res) => {
     let url = '';
     try { const parsed = new URL(rawUrl); if (parsed.protocol === 'https:' && !parsed.username && !parsed.password && parsed.pathname === '/' && !parsed.search && !parsed.hash) url = parsed.origin; } catch { /* keep config disabled */ }
     const anonKey = String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
-    const safeKey = anonKey && anonKey.length < 4096 ? anonKey : '';
+    // یک کلید secret هرگز نباید به مرورگر برسد، حتی اگر در متغیر عمومی اشتباهی گذاشته شده باشد
+    const safeKey = anonKey && anonKey.length < 4096 && !looksLikeSecretKey(anonKey) ? anonKey : '';
     const publicConfig = { configured:Boolean(url || safeKey), enabled:Boolean(url && safeKey), url, anonKey:safeKey };
     res.writeHead(200, { 'Content-Type':'application/javascript; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
     return res.end(`window.TOUBA_PUBLIC_CONFIG=Object.freeze(${JSON.stringify(publicConfig)});`);
@@ -126,22 +129,33 @@ const server = http.createServer(async (req, res) => {
     return json(res, 410, { error:'مسیرهای ذخیره‌سازی JSON و ورود/سفارش نمایشی غیرفعال شده‌اند؛ از Supabase Auth و RPCهای امن فروشگاه استفاده کنید.' });
   }
 
-  if (pathname === '/api/payment/zarinpal/status') return zarinpal.status(req, res);
+  if (pathname === '/api/payment/blupal/status') return blupal.status(req, res);
+  if (pathname === '/api/payment/blupal/callback') return blupal.callback(req, res);
 
-  if (pathname === '/api/payment/zarinpal/request') {
-    if (req.method !== 'POST') return zarinpal.request(req, res);
+  if (pathname === '/api/payment/blupal/request' || pathname === '/api/payment/blupal/receipt') {
+    const handler = pathname.endsWith('/request') ? blupal.request : blupal.receipt;
+    if (req.method !== 'POST') return handler(req, res);
     try { req.body = await readBody(req, 32 * 1024); }
     catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
-    return zarinpal.request(req, res);
+    return handler(req, res);
   }
 
-  if (pathname === '/api/payment/zarinpal/callback') return zarinpal.callback(req, res);
-
-  if (pathname === '/api/payment/zarinpal/receipt') {
-    if (req.method !== 'POST') return zarinpal.receipt(req, res);
+  if (pathname === '/api/payment/bitpay/status') return bitpay.status(req, res);
+  if (pathname === '/api/payment/bitpay/callback') return bitpay.callback(req, res);
+  if (pathname === '/api/payment/bitpay/request' || pathname === '/api/payment/bitpay/verify') {
+    const handler = pathname.endsWith('/request') ? bitpay.request : bitpay.verify;
+    if (req.method !== 'POST') return handler(req, res);
     try { req.body = await readBody(req, 32 * 1024); }
     catch (err) { return json(res, Number(err.status) || 400, { error:err.message }); }
-    return zarinpal.receipt(req, res);
+    return handler(req, res);
+  }
+
+  // سرور بلوپال نتیجهٔ هر تراکنش را به این مسیر ارسال می‌کند؛ بدون Origin و بدون کوکی است.
+  if (pathname === '/api/payment/blupal/notify') {
+    if (req.method !== 'POST') return blupal.notify(req, res);
+    try { req.body = await readBody(req, 64 * 1024); }
+    catch (err) { return json(res, Number(err.status) || 400, { ok:false, error:err.message }); }
+    return blupal.notify(req, res);
   }
 
   if ((pathname === '/api/ai/status' || pathname === '/api/ai/studio/status') && req.method === 'GET') {

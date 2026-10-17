@@ -18,7 +18,9 @@ function uiIcon(name){
     moon:'<path d="M20.8 14.2A8.5 8.5 0 0 1 9.8 3.2 8.5 8.5 0 1 0 20.8 14.2Z"/>',
     trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
     check:'<path d="M20 6 9 17l-5-5"/>',
-    sparkle:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>'
+    sparkle:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9z"/>',
+    'chev-r':'<path d="m9 6 6 6-6 6"/>',
+    'chev-l':'<path d="m15 6-6 6 6 6"/>'
   };
   return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p[name]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
 }
@@ -170,52 +172,69 @@ if(typeof window !== 'undefined' && typeof document !== 'undefined' && typeof do
 
 function footer(){
   let cms=db.settings.homepage||{},categories=db.categories.filter(c=>c.active&&c.id!=='sale').slice(0,5);
-  return `<footer class="store-footer"><div class="container"><div class="footer-main"><div class="footer-brand-col"><a class="store-brand footer-brand" href="/"><span class="brand-emblem">${brandLogoImg()}</span><span>${esc(db.settings.storeName||'کفش طوبی')}</span></a><p>قدم‌هایی مطمئن، با انتخابی که هر روز همراه شماست. کیفیت، راحتی و طراحی ماندگار؛ امضای طوبی.</p></div><div><h3>دسترسی سریع</h3><a href="/shop">فروشگاه</a><a href="/about">درباره ما</a><a href="/contact">تماس با ما</a><a href="/tracking">پیگیری سفارش</a></div><div><h3>دسته‌بندی‌ها</h3>${categories.map(c=>`<a href="/category/${encodeURIComponent(c.slug||c.id)}">${esc(c.name)}</a>`).join('')}</div><div><h3>راهنمای مشتریان</h3><a href="/terms">قوانین و شرایط</a><a href="/privacy">حریم خصوصی</a><a href="/account/orders">سفارش‌های من</a><a href="/login">ورود به حساب</a></div><div><h3>با ما در ارتباط باشید</h3>${db.settings.phone?`<p dir="ltr">${esc(db.settings.phone)}</p>`:''}${db.settings.email?`<p dir="ltr">${esc(db.settings.email)}</p>`:''}${db.settings.address?`<p>${esc(db.settings.address)}</p>`:''}${db.settings.phone||db.settings.email||db.settings.address?'':'<p>اطلاعات تماس پس از ثبت در تنظیمات فروشگاه نمایش داده می‌شود.</p>'}<span class="footer-trust">${uiIcon('shield')} خرید از طوبی</span></div></div><div class="footer-bottom"><span>${esc(cms.footerText||'تمامی حقوق برای فروشگاه کفش طوبی محفوظ است.')}</span><span>© ۱۴۰۵　·　ساخته‌شده با توجه به هر قدم</span></div></div></footer><nav class="mobile-bottom-nav" aria-label="میانبرهای فروشگاه"><a class="${navActive('/')?'active':''}" ${navActive('/')?'aria-current="page"':''} href="/">${uiIcon('home')}<span>خانه</span></a><a class="${navActive('/shop')||path().startsWith('/category/')?'active':''}" ${navActive('/shop')||path().startsWith('/category/')?'aria-current="page"':''} href="/shop">${uiIcon('grid')}<span>دسته‌ها</span></a><a class="${navActive('/wishlist')?'active':''}" ${navActive('/wishlist')?'aria-current="page"':''} href="/wishlist">${uiIcon('heart')}<span>علاقه‌مندی</span></a><a class="${navActive('/account')||navActive('/login')?'active':''}" ${navActive('/account')||navActive('/login')?'aria-current="page"':''} href="${db.currentUser?'/account':'/login'}">${uiIcon('user')}<span>حساب من</span></a></nav>`;
+  return `<footer class="store-footer"><div class="container"><div class="footer-main"><div class="footer-brand-col"><a class="store-brand footer-brand" href="/"><span class="brand-emblem">${brandLogoImg()}</span><span>${esc(db.settings.storeName||'کفش طوبی')}</span></a><p>قدم‌هایی مطمئن، با انتخابی که هر روز همراه شماست. کیفیت، راحتی و طراحی ماندگار؛ امضای طوبی.</p></div><div><h3>دسترسی سریع</h3><a href="/shop">فروشگاه</a><a href="/about">درباره ما</a><a href="/contact">تماس با ما</a><a href="/tracking">پیگیری سفارش</a></div><div><h3>دسته‌بندی‌ها</h3>${categories.map(c=>`<a href="/category/${encodeURIComponent(c.slug||c.id)}">${esc(c.name)}</a>`).join('')}</div><div><h3>راهنمای مشتریان</h3><a href="/terms">قوانین و شرایط</a><a href="/privacy">حریم خصوصی</a><a href="/account/orders">سفارش‌های من</a><a href="/login">ورود به حساب</a></div><div><h3>با ما در ارتباط باشید</h3>${db.settings.phone?`<p dir="ltr">${esc(db.settings.phone)}</p>`:''}${db.settings.email?`<p dir="ltr">${esc(db.settings.email)}</p>`:''}${db.settings.address?`<p>${esc(db.settings.address)}</p>`:''}${db.settings.phone||db.settings.email||db.settings.address?'':'<p>اطلاعات تماس پس از ثبت در تنظیمات فروشگاه نمایش داده می‌شود.</p>'}<span class="footer-trust">${uiIcon('shield')} خرید از طوبی</span></div></div>${(()=>{let em=db.settings.enamad||{},eId=String(em.id||'').trim()||'8043803',eCode=String(em.code||'').trim()||'KwnE0Oqncs7Kf5559g7IyC9IHDlTnDEE';return `<div class="footer-enamad"><a class="enamad-seal" referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id=${esc(eId)}&amp;Code=${esc(eCode)}" title="نماد اعتماد الکترونیکی — طوبی در اینماد" aria-label="استعلام نماد اعتماد الکترونیکی فروشگاه طوبی"><img referrerpolicy="origin" src="https://trustseal.enamad.ir/logo.aspx?id=${esc(eId)}&amp;Code=${esc(eCode)}" alt="" code="${esc(eCode)}" loading="lazy" style="cursor:pointer" onerror="this.onerror=null;this.src='/enamad-logo.png'"></a></div>`})()}<div class="footer-bottom"><span>${esc(cms.footerText||'تمامی حقوق برای فروشگاه کفش طوبی محفوظ است.')}</span><span>© ۱۴۰۵　·　ساخته‌شده با توجه به هر قدم</span></div></div></footer><nav class="mobile-bottom-nav" aria-label="میانبرهای فروشگاه"><a class="${navActive('/')?'active':''}" ${navActive('/')?'aria-current="page"':''} href="/">${uiIcon('home')}<span>خانه</span></a><a class="${navActive('/shop')||path().startsWith('/category/')?'active':''}" ${navActive('/shop')||path().startsWith('/category/')?'aria-current="page"':''} href="/shop">${uiIcon('grid')}<span>دسته‌ها</span></a><a class="${navActive('/wishlist')?'active':''}" ${navActive('/wishlist')?'aria-current="page"':''} href="/wishlist">${uiIcon('heart')}<span>علاقه‌مندی</span></a><a class="${navActive('/account')||navActive('/login')?'active':''}" ${navActive('/account')||navActive('/login')?'aria-current="page"':''} href="${db.currentUser?'/account':'/login'}">${uiIcon('user')}<span>حساب من</span></a></nav>`;
 }
 
 /* Category cards styled with the same beauty and structure as luxury Product Cards */
-const CATEGORY_STYLES = {
-  men: { bg: '/product-shoes.jpg', pos: '100% 0', kicker: 'انتخاب‌های مردانه', tag: 'کالکشن مردانه' },
-  women: { bg: '/product-shoes.jpg', pos: '0 100%', kicker: 'انتخاب‌های زنانه', tag: 'کالکشن زنانه' },
-  sport: { bg: '/product-shoes.jpg', pos: '0 0', kicker: 'مدل‌های اسپرت', tag: 'برای تحرک روزانه' },
-  formal: { bg: '/hero-shoe.jpg', pos: 'center', kicker: 'مدل‌های رسمی', tag: 'استایل رسمی' },
-  sandal: { bg: '/product-shoes.jpg', pos: '100% 100%', kicker: 'مدل‌های تابستانی', tag: 'صندل‌ها' },
-  accessories: { bg: '/touba-bag-editorial.jpg', pos: 'center', kicker: 'اکسسوری‌ها', tag: 'کالکشن جانبی' },
-  slipper: { bg: '/product-shoes.jpg', pos: '100% 100%', kicker: 'مدل‌های راحتی', tag: 'راحتی روزمره' },
-  sale: { bg: '/touba-hero-editorial.jpg', pos: 'center', kicker: 'پیشنهادهای فعال', tag: 'تخفیف‌ها' }
-};
-
+/* Homepage category tiles v1.0.4: ONE horizontal swipe row; the tile shows the admin artwork as-is
+   (transparent stays transparent — no white matte) with the category name under it.
+   Until an image is set, a quiet name-matched emoji fills in so the row never breaks. */
+const CATEGORY_ICON_RULES=[
+  [/تخفیف|حراج|sale|discount/i,'🏷️'],
+  [/بچگانه|بچه|کودک|مدرسه|نوجوان|kid|child|school|student/i,'🎒'],
+  [/کوله|پشتی|backpack/i,'🎒'],
+  [/کیف|bag|handbag|messenger/i,'👜'],
+  [/جوراب|sock/i,'🧦'],
+  [/شال|روسری|scarf/i,'🧣'],
+  [/عینک|sunglass/i,'🕶️'],
+  [/زیور|جواهر|اکسسوری|accessor|کمربند|belt/i,'👒'],
+  [/بوت|چکمه|boot/i,'👢'],
+  [/صندل|سندل|sandal/i,'👡'],
+  [/دمپایی|راحتی|slipper/i,'🩴'],
+  [/کتانی|اسپرت|ورزش|sport|sneaker|runner|daily|فوتبال|والیبال|دویدن/i,'👟'],
+  [/رسمی|مجلسی|چرم|اداری|formal|classi/i,'👞'],
+  [/زنانه|بانوان|خانم|women|ladies/i,'👠'],
+  [/مردانه|آقایان|men|gentleman/i,'👞'],
+  [/کفش|shoe/i,'👟']
+];
+const CATEGORY_TINTS=['#b9cf8e','#e5c9a2','#9ec4c9','#e3aeb1','#c2b4e8','#a7d3b5'];
+function categoryIconFor(c){let hay=`${c.id||''} ${c.slug||''} ${c.name||''}`;for(let[re,em]of CATEGORY_ICON_RULES)if(re.test(hay))return em;return '👟'}
 function categoryCards(){
-  let cms=db.settings.homepage||{},categoryIds=Array.isArray(cms.categoryIds)?cms.categoryIds.slice():db.categories.slice(0,6).map(c=>c.id);
-  let legacyDefault=['men','women','sport','formal','sandal','slipper'];
-  if(categoryIds.length===legacyDefault.length&&legacyDefault.every(id=>categoryIds.includes(id)))categoryIds=['women','men','accessories','sport','formal','sandal'];
-  let chosen=categoryIds.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale');
-  if(!chosen.length)chosen=db.categories.filter(c=>c.active&&c.id!=='sale').slice(0,6);
-  return chosen.map(c=>{
-    let style=CATEGORY_STYLES[c.id]||CATEGORY_STYLES.men;
-    let count=db.products.filter(p=>p.active&&p.category===c.id).length;
+  let cms=db.settings.homepage||{};
+  let configured=Array.isArray(cms.categoryIds)&&cms.categoryIds.length?cms.categoryIds.slice():null;
+  let chosen=configured?configured.map(id=>db.categories.find(c=>c.id===id)).filter(c=>c?.active&&c.id!=='sale'):db.categories.filter(c=>c.active&&c.id!=='sale');
+  if(!configured)chosen=chosen.slice().sort((a,b)=>(Number(a.sortOrder)||0)-(Number(b.sortOrder)||0)); // v1.0.6: the admin's table order IS the display order
+  return chosen.map((c,idx)=>{
     let url=`/category/${encodeURIComponent(c.slug||c.id)}`;
-    return `<a href="${url}" class="lux-category-card" aria-label="مشاهده دسته‌بندی ${esc(c.name)}">
-      <div class="category-image-visual" style="background-image:url('${style.bg}');background-position:${style.pos}"></div>
-      <div class="category-card-overlay"></div>
-      <div class="category-card-top">
-        <span class="category-tag-badge">${esc(style.tag)}</span>
-        <span class="category-count-badge">${count?`${count.toLocaleString('fa-IR')} مدل`:'کالکشن جدید'}</span>
-      </div>
-      <div class="category-card-bottom-info">
-        <span class="category-card-kicker">${esc(style.kicker)}</span>
-        <h3 class="lux-category-title">${esc(c.name)}</h3>
-        <div class="category-card-cta">
-          <span>مشاهده محصولات</span>
-          ${uiIcon('arrow')}
-        </div>
-      </div>
-    </a>`;
+    if(c.imageUrl)return `<a href="${url}" class="cat-tile" aria-label="دسته‌بندی ${esc(c.name)}"><span class="cat-tile-media"><img src="${esc(c.imageUrl)}" alt="${esc(c.name)}" loading="lazy" width="160" height="160"></span><b class="cat-tile-name">${esc(c.name)}</b></a>`;
+    let adminIcon=String(c.icon||'').trim();
+    let emoji=adminIcon&&adminIcon!=='◈'?adminIcon:categoryIconFor(c);
+    return `<a href="${url}" class="cat-tile" style="--cat-tint:${CATEGORY_TINTS[idx%CATEGORY_TINTS.length]}" aria-label="دسته‌بندی ${esc(c.name)}"><span class="cat-tile-media cat-tile-emoji" aria-hidden="true"><i>${emoji}</i></span><b class="cat-tile-name">${esc(c.name)}</b></a>`;
   }).join('');
 }
+/* Category row edge arrows v1.0.8: hint that more categories exist. They appear
+   only when the row actually overflows; one tap = one tile, RTL-safe via
+   scrollIntoView (no scrollLeft sign math). */
+function scrollCatRow(dir){
+  let row=document.getElementById('cat-tile-row');
+  if(!row)return;
+  let tiles=Array.prototype.slice.call(row.children);
+  if(tiles.length<2)return;
+  let rc=row.getBoundingClientRect(),mid=rc.left+rc.width/2,idx=0,best=Number.POSITIVE_INFINITY;
+  for(let i=0;i<tiles.length;i++){let r=tiles[i].getBoundingClientRect();let d=Math.abs(r.left+r.width/2-mid);if(d<best){best=d;idx=i}}
+  let next=Math.max(0,Math.min(tiles.length-1,idx+(Number(dir)>0?1:-1)));
+  try{tiles[next].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})}catch(error){row.scrollBy({left:(Number(dir)||1)*180,behavior:'smooth'})}
+}
+function updateCatArrows(){
+  for(let wrap of document.querySelectorAll('.cat-row-wrap')){
+    let row=wrap.querySelector('.cat-tile-row');
+    if(row)wrap.classList.toggle('has-overflow',row.scrollWidth>row.clientWidth+8);
+  }
+}
+
 
 function card(p){
-  let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||0),0)/reviews.length:0,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorMap[c]||'#64748b'};border:1px solid rgba(0,0,0,0.15)" title="${esc(c)}"></span>`}).join('');
+  let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||0),0)/reviews.length:0,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${(()=>{let m=p.specifications&&p.specifications.__colorHexes;let h=m&&m[c];return /^#[0-9a-fA-F]{6}$/.test(String(h||''))?h:(colorMap[c]||'#64748b')})()};border:1px solid rgba(125,135,125,.6)" title="${esc(c)}"></span>`}).join('');
   let stockMarkup = stock === 1
     ? `<span class="stock-indicator last-one" title="تنها ۱ عدد باقی مانده است"><i></i>تنها ۱ عدد باقی مانده</span>`
     : stock > 1
@@ -318,7 +337,7 @@ function cartPage(){
       <aside class="cart-summary compact-summary-panel">
         <h3 class="summary-heading">خلاصه سفارش</h3>
         <div class="summary-line"><span>جمع اقلام (${totalCount.toLocaleString('fa-IR')} عدد)</span><b>${toman(sub)}</b></div>
-        <div class="summary-line"><span>هزینه ارسال</span><b>${shipping?toman(shipping):'<span style="color:#10b981;font-weight:700">رایگان</span>'}</b></div>
+        <div class="summary-line"><span>هزینه ارسال</span><b>${shipping?toman(shipping):'<span style="color:var(--touba-brand,#10b981);font-weight:700">رایگان</span>'}</b></div>
         ${discount?`<div class="summary-line discount-line"><span>تخفیف</span><b style="color:#ef4444">− ${toman(discount)}</b></div>`:''}
         <div class="summary-line total"><span>مبلغ قابل پرداخت</span><b class="final-price">${toman(finalTotal)}</b></div>
 
@@ -327,7 +346,7 @@ function cartPage(){
         </a>
 
         <div class="cart-security-badge">
-          ${uiIcon('shield')} پرداخت امن از طریق درگاه رسمی زرین‌پال
+          ${uiIcon('shield')} پرداخت امن کارت‌به‌کارت با درگاه بلوپال
         </div>
       </aside>
     </div>
@@ -359,12 +378,7 @@ function home(){
   let heroImage=(!cms.heroImage||cms.heroImage==='/hero-shoe.jpg'||cms.heroImage==='hero-shoe.jpg'||cms.heroImage==='/touba-hero.jpg')?'/touba-hero-editorial.jpg':cms.heroImage,banner=promo[0],bannerImage=(!banner?.imageUrl||banner.imageUrl==='/hero-shoe.jpg'||banner.imageUrl==='/touba-hero.jpg')?heroImage:banner.imageUrl;
   let freeShippingThreshold=Number(db.settings.shippingOptions?.freeFrom??db.settings.freeShipping??0),freeShippingActive=Number.isFinite(freeShippingThreshold)&&freeShippingThreshold>0;
   const categoryRows=db.categories.filter(category=>category.active&&category.id!=='sale');
-  const saleCard=saleProducts.length?`<a href="/shop?category=sale" class="lux-category-card sale-cat-card" aria-label="مشاهده محصولات دارای تخفیف">
-    <div class="category-image-visual" style="background-image:url('${esc(heroImage)}');background-position:center"></div><div class="category-card-overlay"></div>
-    <div class="category-card-top"><span class="category-tag-badge special-sale">تا ${saleDiscount.toLocaleString('fa-IR')}٪ تخفیف</span><span class="category-count-badge">${saleProducts.length.toLocaleString('fa-IR')} محصول</span></div>
-    <div class="category-card-bottom-info"><span class="category-card-kicker" style="color:#fcd34d">پیشنهادهای فعال</span><h3 class="lux-category-title">تخفیف‌های طوبی</h3><div class="category-card-cta"><span>مشاهده محصولات</span>${uiIcon('arrow')}</div></div>
-  </a>`:'';
-  const categorySection=categoryRows.length||saleProducts.length?`<section class="category-section container" id="categories"><div class="section-heading"><div><span class="section-eyebrow">کالکشن‌های فروشگاه</span><h2>دسته‌بندی‌های طوبی</h2><p>برای دیدن محصولات و جزئیات هر دسته‌بندی، انتخاب کنید.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="lux-category-grid">${categoryCards()}${saleCard}</div></section>`:'';
+  const categorySection=categoryRows.length?`<section class="category-section container" id="categories"><div class="section-heading"><div><span class="section-eyebrow">کالکشن‌های فروشگاه</span><h2>دسته‌بندی‌های طوبی</h2><p>برای دیدن محصولات و جزئیات هر دسته‌بندی، انتخاب کنید.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="cat-row-wrap"><button class="cat-arrow cat-arrow-start" type="button" aria-label="دسته‌بندی‌های قبلی" title="دسته‌بندی‌های قبلی" onclick="scrollCatRow(-1)">${uiIcon('chev-r')}</button><div class="cat-tile-row" id="cat-tile-row">${categoryCards()}</div><button class="cat-arrow cat-arrow-end" type="button" aria-label="دیدن دسته‌بندی‌های بیشتر" title="دیدن دسته‌بندی‌های بیشتر" onclick="scrollCatRow(1)">${uiIcon('chev-l')}</button></div></section>`:'';
 
   return `${header()}<main>
   <section class="lux-hero" aria-label="${esc(heroTitle)}">
@@ -413,7 +427,7 @@ function home(){
     <div class="container trust-grid lux-cream-trust-grid">
       <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1"/></svg>
-        <div><b>پرداخت امن</b><span>در درگاه معتبر زرین‌پال</span></div>
+        <div><b>پرداخت امن</b><span>با تأیید خودکار واریز در بلوپال</span></div>
       </div>
       <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M4 13h3v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 1-2Zm16 0h-3v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-1-2Z"/></svg>
@@ -662,6 +676,16 @@ const __stage3Detail=window.detail;
 window.detail=productDetailWithSticky;
 window.cartPage=cartPage;
 window.categoryCards=categoryCards;
+window.scrollCatRow=scrollCatRow;
+(function hookCategoryArrows(){
+  window.updateCatArrows=updateCatArrows;
+  window.addEventListener('resize',updateCatArrows,{passive:true});
+  let base=window.render;
+  if(typeof base==='function'&&!base.__catArrows){
+    let wrapped=function(){base.apply(this,arguments);requestAnimationFrame(updateCatArrows)};
+    wrapped.__catArrows=1;window.render=wrapped;
+  }
+})();
 window.header=header;
 window.home=home;
 window.toggleFav=toggleFav;
@@ -895,22 +919,22 @@ function modernCheckout() {
 
         <div class="panel checkout-panel" style="margin-top:18px">
           <div class="panel-head-row">
-            <h3>درگاه پرداخت اینترنتی</h3>
-            <span class="panel-step-badge">زرین‌پال · شاپرک</span>
+            <h3>پرداخت آنلاین</h3>
+            <span class="panel-step-badge">BluPal · بلوپال</span>
           </div>
           <div class="checkout-payment-methods">
             <label class="payment-method-card active-method">
               <div class="pm-head">
-                <input type="radio" name="paymentMethod" value="zarinpal" checked required>
+                <input type="radio" name="paymentMethod" value="blupal" checked required>
                 <div>
-                  <b>درگاه پرداخت زرین‌پال</b>
-                  <small>پرداخت با کارت‌های عضو شبکهٔ شتاب؛ پس از ثبت سفارش به صفحهٔ امن زرین‌پال منتقل می‌شوید.</small>
+                  <b>پرداخت کارت‌به‌کارت (بلوپال)</b>
+                  <small>پس از ثبت سفارش، شمارهٔ کارت مقصد و «مبلغ دقیق قابل واریز» به شما نشان داده می‌شود؛ همان عدد را (بدون کم‌وزیاد) به‌صورت کارت‌به‌کارت واریز کنید. بلوپال پس از شناسایی واریز، سفارش را تأیید می‌کند. حداقل مبلغ سفارش ۱۰٬۰۰۰ تومان است.</small>
                 </div>
               </div>
-              <span class="pm-logo">ZarinPal</span>
+              <span class="pm-logo">بلوپال</span>
             </label>
           </div>
-          <small class="muted">شماره کارت و رمز بانکی فقط در صفحهٔ رسمی زرین‌پال وارد می‌شود.</small>
+          <small class="muted">شمارهٔ کارت و رمز بانکی خود را هرگز در این سایت وارد نمی‌کنید؛ بلوپال فقط کارت مقصد و مبلغ دقیق را نشان می‌دهد و تطبیق واریز سمت سرور انجام می‌شود.</small>
         </div>
 
       </section>
@@ -963,6 +987,8 @@ function modernCheckout() {
         <button type="submit" class="btn checkout-submit-btn" style="width:100%;margin-top:16px">
           ادامه به درگاه پرداخت امن ←
         </button>
+
+        <p class="muted" style="font-size:11.5px;line-height:1.9;margin:10px 2px 0">پس از ثبت سفارش، مستقیم به صفحهٔ رسمی بلوپال می‌روید؛ همان‌جا شمارهٔ کارت و <b>مبلغ دقیق قابل واریز</b> نوشته شده است. مبلغ درگاه چند ریال با مبلغ این سایت فرق دارد — همان چند ریال کد تشخیص واریز شماست، پس واریز باید <b>رقم‌به‌رقم همان عددِ صفحهٔ درگاه</b> باشد. شماره کارتِ خودتان، CVV2 یا رمز دوم را هرگز در این سایت وارد نکنید.</p>
 
         <div class="checkout-trust-features">
           <span>${uiIcon("shield")} ۷ روز گارانتی تعویض سایز رایگان</span>

@@ -45,35 +45,187 @@ function removeCart(index){db.cart.splice(index,1);save();render();toast('محص
 function couponValid(c,subtotal){if(!c||!c.active)return false;let parts=new Intl.DateTimeFormat('fa-IR-u-ca-persian',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),today=`${latinDigits(parts.find(x=>x.type==='year')?.value)}-${latinDigits(parts.find(x=>x.type==='month')?.value).padStart(2,'0')}-${latinDigits(parts.find(x=>x.type==='day')?.value).padStart(2,'0')}`;const toISO=s=>{let n=latinDigits(s||'').replaceAll('/','-');let a=n.split('-');return a.length===3?`${a[0]}-${a[1].padStart(2,'0')}-${a[2].padStart(2,'0')}`:n};let start=toISO(c.start),end=toISO(c.end);if(start&&/^\d{4}-\d\d-\d\d$/.test(start)&&today<start)return false;if(end&&/^\d{4}-\d\d-\d\d$/.test(end)&&today>end)return false;if(subtotal<(Number(c.min)||0))return false;if(c.limit&&c.used>=c.limit)return false;return true}
 function applyCoupon(){let code=$('#coupon-code')?.value.trim().toUpperCase(),c=db.coupons.find(x=>x.code.toUpperCase()===code),subtotal=db.cart.reduce((n,i)=>n+(product(i.id)?.price||0)*i.qty,0);if(!c){toast('کد تخفیف معتبر نیست');return}if(!couponValid(c,subtotal)){toast('کد منقضی، غیرفعال است یا حداقل خرید آن رعایت نشده');return}let discount=c.type==='درصدی'?Math.round(subtotal*Number(c.amount)/100):Number(c.amount);db.coupon={code:c.code,discount,amount:discount};save();render();toast('کد تخفیف با موفقیت اعمال شد')}
 function removeCoupon(){db.coupon=null;save();render();toast('کد تخفیف حذف شد')}
-function checkout(){if(!db.cart.length){go('/cart');return ''}let totals=getCartTotals();return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required name="name" minlength="3" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required name="phone" inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><input required name="province"></div><div class="field"><label>شهر *</label><input required name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required name="address" minlength="10"></textarea></div><div class="field"><label>کد پستی *</label><input required name="postal" inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10"></div><div class="field"><label>روش ارسال</label><select name="ship"><option>ارسال عادی</option><option>ارسال سریع</option></select></div><div class="field full"><label>توضیحات سفارش</label><textarea name="note"></textarea></div></div><div class="detail-row"><b>روش پرداخت</b><label style="display:block;margin-top:10px"><input type="radio" name="paymentMethod" value="zarinpal" checked required> پرداخت امن از طریق درگاه رسمی زرین‌پال</label><small class="muted">پس از ثبت سفارش به صفحهٔ امن زرین‌پال منتقل می‌شوید.</small></div></section><aside class="cart-summary"><h3>خلاصه سفارش (${db.cart.reduce((n,i)=>n+i.qty,0)} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div class="summary-line"><span>جمع محصولات</span><b>${toman(totals.subtotal)}</b></div>${totals.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(totals.discount)}</b></div>`:''}<div class="summary-line"><span>هزینه ارسال</span><b>${totals.shipping?toman(totals.shipping):'رایگان'}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(totals.total)}</b></div><button class="btn" style="width:100%;margin-top:12px">ادامه به پرداخت زرین‌پال</button><small class="muted">شماره کارت و رمز بانکی فقط در صفحهٔ رسمی زرین‌پال وارد می‌شود.</small></aside></form></main>${footer()}`}
+function checkout(){if(!db.cart.length){go('/cart');return ''}let totals=getCartTotals();return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required name="name" minlength="3" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required name="phone" inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><input required name="province"></div><div class="field"><label>شهر *</label><input required name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required name="address" minlength="10"></textarea></div><div class="field"><label>کد پستی *</label><input required name="postal" inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10"></div><div class="field"><label>روش ارسال</label><select name="ship"><option>ارسال عادی</option><option>ارسال سریع</option></select></div><div class="field full"><label>توضیحات سفارش</label><textarea name="note"></textarea></div></div><div class="detail-row"><b>روش پرداخت</b><label style="display:block;margin-top:10px"><input type="radio" name="paymentMethod" value="blupal" checked required> پرداخت کارت‌به‌کارت از طریق بلوپال</label><small class="muted">پس از ثبت سفارش، شمارهٔ کارت مقصد و مبلغ دقیق قابل واریز نمایش داده می‌شود.</small></div></section><aside class="cart-summary"><h3>خلاصه سفارش (${db.cart.reduce((n,i)=>n+i.qty,0)} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div class="summary-line"><span>جمع محصولات</span><b>${toman(totals.subtotal)}</b></div>${totals.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(totals.discount)}</b></div>`:''}<div class="summary-line"><span>هزینه ارسال</span><b>${totals.shipping?toman(totals.shipping):'رایگان'}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(totals.total)}</b></div><button class="btn" style="width:100%;margin-top:12px">پرداخت امن بلوپال</button><small class="muted">شماره کارت و رمز بانکی خود را هرگز در این سایت وارد نمی‌کنید؛ واریز را از اپلیکیشن بانک خود انجام می‌دهید و بلوپال آن را تطبیق می‌کند.</small></aside></form></main>${footer()}`}
 function applyCheckoutCoupon(){let input=$('#checkout-coupon');if($('#coupon-code'))$('#coupon-code').value=input.value;else{let c=input.value.trim().toUpperCase(),obj=db.coupons.find(x=>x.code===c),subtotal=db.cart.reduce((n,i)=>n+(product(i.id)?.price||0)*i.qty,0);if(!obj||!couponValid(obj,subtotal)){toast('کد معتبر نیست یا شرایط آن رعایت نشده');return}let discount=obj.type==='درصدی'?Math.round(subtotal*obj.amount/100):obj.amount;db.coupon={code:obj.code,discount};save();render();toast('کد تخفیف اعمال شد')}}
 function bindForms(){if(path()==='/shop'||path()==='/search'||path().startsWith('/category/')){let sel=$('#shop-sort');if(sel)sel.value=shopState.sort;renderShopResults()}}
-function productModal(id){let p=id?product(id):{id:'',name:'',category:db.categories[0]?.id,price:0,oldPrice:0,sku:'',brand:'طوبی',stock:0,sizes:['۳۸','۳۹','۴۰'],colors:['مشکی'],desc:'',shortDesc:'',longDesc:'',images:[],features:[],specifications:{},featured:false,bestSeller:false,active:true,image:0,variants:[]};let initialVariants=p.variants?.length?p.variants:p.sizes.flatMap((size,i)=>p.colors.map((color,j)=>({size,color,sku:`${p.sku||'SKU'}-${i+1}${j+1}`,stock:0}))),variantRows=initialVariants.map(v=>variantEditorRow(v)).join('');showModal(`<form id="product-edit-form" onsubmit="event.preventDefault();saveProduct(this,'${id||''}')"><div class="form-grid"><div class="field full"><label>نام محصول *</label><input name="name" required value="${esc(p.name)}"></div><div class="field"><label>Slug (خالی = خودکار)</label><input name="slug" value="${esc(p.slug||'')}"></div><div class="field"><label>کد محصول / SKU *</label><input name="sku" required value="${esc(p.sku||'TB-'+Date.now().toString().slice(-5))}"></div><div class="field"><label>دسته‌بندی</label><select name="category">${db.categories.filter(c=>c.id!=='sale').map(c=>`<option value="${c.id}" ${p.category===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>برند</label><input name="brand" value="${esc(p.brand||'طوبی')}"></div><div class="field"><label>قیمت (تومان)</label><input type="number" min="0" name="price" required value="${p.price}"></div><div class="field"><label>قیمت قبل از تخفیف</label><input type="number" min="0" name="oldPrice" value="${p.oldPrice||''}"></div><div class="field full"><label>توضیح کوتاه</label><input name="shortDesc" maxlength="180" value="${esc(p.shortDesc||p.desc)}"></div><div class="field full"><label>توضیح کامل</label><textarea name="longDesc">${esc(p.longDesc||p.desc)}</textarea></div><div class="field"><label>سایزها (با ویرگول)</label><input id="variant-sizes" name="sizes" oninput="syncSizeSpecification(this.form)" value="${esc(p.sizes.join(','))}"></div><div class="field"><label>رنگ‌ها (با ویرگول)</label><input id="variant-colors" name="colors" value="${esc(p.colors.join(','))}"></div><div class="field full"><button type="button" class="action" onclick="buildVariantEditor()">بازسازی جدول سایز × رنگ</button><p class="muted">موجودی هر ترکیب به‌صورت مستقل ثبت می‌شود.</p><div class="table-wrap"><table class="data-table"><thead><tr><th>سایز</th><th>رنگ</th><th>SKU واریانت</th><th>موجودی</th></tr></thead><tbody id="variant-editor">${variantRows}</tbody></table></div></div><div class="field full"><label>تصاویر (URL یا مسیر محلی، هر کدام در یک خط)</label><textarea name="images" placeholder="/hero-shoe.jpg">${esc((p.images||[]).join('\n'))}</textarea></div><div class="field full"><label>ویژگی‌ها (هر مورد در یک خط)</label><textarea name="features">${esc((p.features||[]).join('\n'))}</textarea></div><div class="field full"><label>مشخصات (هر خط: نام: مقدار)</label><textarea name="specifications">${esc(Object.entries(p.specifications||{}).map(([k,v])=>`${k}: ${v}`).join('\n'))}</textarea></div><div class="field"><label><input type="checkbox" name="featured" ${p.featured?'checked':''}> محصول ویژه</label></div><div class="field"><label><input type="checkbox" name="bestSeller" ${p.bestSeller?'checked':''}> پرفروش</label></div><div class="field"><label><input type="checkbox" name="active" ${p.active?'checked':''}> منتشر / فعال</label></div><div class="field full"><button class="btn">ذخیره محصول و واریانت‌ها</button></div></div></form>`)}
+function productModal(id){let p=id?product(id):{id:'',name:'',category:db.categories[0]?.id,price:0,oldPrice:0,sku:'',brand:'طوبی',stock:0,sizes:['۳۸','۳۹','۴۰','۴۱','۴۲'],colors:['مشکی'],desc:'',shortDesc:'',longDesc:'',images:[],features:[],specifications:{},featured:false,bestSeller:false,active:true,image:0,variants:[]};let initialVariants=p.variants?.length?p.variants:p.sizes.flatMap((size,i)=>p.colors.map((color,j)=>({size,color,sku:`${p.sku||'TB-'+(p.name||'').trim().slice(0,10).replace(/\s+/g,'-')||'SKU'}-${i+1}${j+1}`,stock:0}))),variantRows=initialVariants.map(v=>variantEditorRow(v)).join('');showModal(`<form id="product-edit-form" onsubmit="event.preventDefault();saveProduct(this,'${id||''}')">
+<div class="pf-section-title"><b>1</b> نام و دسته‌بندی</div>
+<div class="form-grid">
+<div class="field full"><label>نام محصول *</label><input name="name" required maxlength="140" autofocus value="${esc(p.name)}" placeholder="مثلاً کفش روزمره زنانه طوبی مدل ۷۰۳"></div>
+<div class="field"><label>دسته‌بندی *</label><select name="category">${db.categories.filter(c=>c.id!=='sale').map(c=>`<option value="${c.id}" ${p.category===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
+<div class="field"><label>قیمت (تومان) *</label><input type="number" min="0" name="price" required value="${p.price||''}" placeholder="مثلاً ۸۹۹۰۰۰"></div>
+</div>
+<div class="pf-section-title"><b>۲</b> سایز، رنگ و موجودی</div>
+<div class="form-grid">
+<div class="field"><label>رنگ‌بندی (با ویرگول)</label><input id="variant-colors" name="colors" onchange="renderColorHexEditor(this.form)" value="${esc(p.colors.join(','))}" placeholder="مشکی، سفید"></div><div class="field full"><div class="pf-colors-hex" id="color-hex-editor"></div><input type="hidden" name="colorHex" id="color-hex-data" value="${esc(JSON.stringify((p.specifications&&p.specifications.__colorHexes)||{}))}"></div>
+<div class="field"><label>موجودی هر سایز</label><input id="variant-stock-all" type="number" min="0" value="0" onchange="applyStockToAllVariants(this.form)" placeholder="مثلاً ۱۰"></div>
+<div class="field full"><label>سایزها را تیک بزنید (۲۲ تا ۴۸)</label>${sizeGridMarkup(p.sizes)}<p class="pf-hint">یک عدد در «موجودی هر سایز» بنویسید؛ روی همهٔ ترکیب‌های سایز×رنگ تقسیم می‌شود. موجودی دقیق هر ترکیب در تنظیمات پیشرفته است.</p></div>
+<div class="field full"><label>قیمت قبل از تخفیف (اختیاری — برای درج خط‌خورده)</label><input type="number" min="0" name="oldPrice" value="${p.oldPrice||''}"></div>
+</div>
+<div class="pf-section-title"><b>۳</b> تصاویر محصول — چند اسلاید</div>
+<p class="pf-hint" style="margin:0 0 8px">یک‌جا چند فایل انتخاب کنید — مثلاً یک اسلاید برای هر رنگ. اسلاید اول تصویر اصلی است؛ مشتری در صفحهٔ محصول همهٔ اسلایدها را می‌بیند. بدون تصویر هم می‌توانید ذخیره کنید و بعداً اضافه کنید.</p>
+<div class="manual-upload-row"><input type="file" id="manual-image-file" class="file-sr" accept="image/jpeg,image/png,image/webp" multiple onchange="uploadManualProductImage(this)"><button type="button" class="action" onclick="this.form.querySelector('#manual-image-file').click()">⬆️ آپلود چند اسلاید از رایانه/موبایل</button><span class="muted" id="manual-upload-status">JPEG/PNG/WebP — هر فایل تا ۵ مگابایت؛ خودکار فشرده و در فضای ابری طوبی ذخیره می‌شود.</span></div>
+<div class="image-strip" id="image-strip"></div>
+<label class="pf-check"><input type="checkbox" name="active" ${p.active!==false?'checked':''}> <b>منتشر شود</b> (از این پس در فروشگاه دیدنی است)</label>
+<div class="pf-save-row"><button class="btn">${id?'💾 ذخیره تغییرات':'＋ ثبت محصول'}</button><p class="pf-hint">کد SKU، آدرس صفحه (slug) و برند «طوبی» خودکار ساخته می‌شوند؛ جدول واریانت هم هنگام ذخیره همسان‌سازی می‌شود.</p></div>
+<details class="pf-adv"><summary>⚙️ تنظیمات پیشرفته — توضیح‌ها، موجودی تک‌تک ترکیب‌ها، ویژگی‌ها و مشخصات</summary><div class="form-grid">
+<div class="field"><label>Slug (خالی = خودکار)</label><input name="slug" value="${esc(p.slug||'')}"></div>
+<div class="field"><label>کد محصول / SKU</label><input name="sku" value="${esc(p.sku||'TB-'+Date.now().toString().slice(-5))}"></div>
+<div class="field"><label>برند</label><input name="brand" value="${esc(p.brand||'طوبی')}"></div>
+<div class="field"><label>سایزها (با ویرگول — همگام با جدول تیک)</label><input id="variant-sizes" name="sizes" oninput="syncSizeGrid(this.form);syncSizeSpecification(this.form)" value="${esc(p.sizes.join(','))}"></div>
+<div class="field full"><label>توضیح کوتاه</label><input name="shortDesc" maxlength="180" value="${esc(p.shortDesc||p.desc)}" placeholder="خالی = از نام محصول ساخته می‌شود"></div>
+<div class="field full"><label>توضیح کامل</label><textarea name="longDesc">${esc(p.longDesc||p.desc)}</textarea></div>
+<div class="field full"><button type="button" class="action" onclick="buildVariantEditor()">بازسازی جدول سایز × رنگ</button><p class="pf-hint">موجودی هر ترکیب مستقل؛ اگر این جدول را دستی تغییر دهید، همین مقدارها جای «موجودی هر سایز» را می‌گیرند.</p><div class="table-wrap"><table class="data-table"><thead><tr><th>سایز</th><th>رنگ</th><th>SKU واریانت</th><th>موجودی</th></tr></thead><tbody id="variant-editor">${variantRows}</tbody></table></div></div>
+<div class="field full"><label>آدرس تصاویر (هر کدام در یک خط)</label><textarea name="images" oninput="renderImageStrip(this.form)" placeholder="/hero-shoe.jpg">${esc((p.images||[]).join('\n'))}</textarea></div>
+<div class="field full"><label>ویژگی‌ها (هر مورد در یک خط)</label><textarea name="features">${esc((p.features||[]).join('\n'))}</textarea></div>
+<div class="field full"><label>مشخصات (هر خط: نام: مقدار)</label><textarea name="specifications">${esc(Object.entries(p.specifications||{}).filter(([k])=>!String(k).startsWith('__')).map(([k,v])=>`${k}: ${v}`).join('\n'))}</textarea></div>
+<div class="field"><label><input type="checkbox" name="featured" ${p.featured?'checked':''}> محصول ویژه (نمایش در خانه)</label></div>
+<div class="field"><label><input type="checkbox" name="bestSeller" ${p.bestSeller?'checked':''}> پرفروش</label></div>
+</div></details>
+</form>`);const _pf=document.getElementById('product-edit-form');renderImageStrip(_pf);renderColorHexEditor(_pf)}
 function syncSizeSpecification(form,sizeValues){let field=form?.elements?.specifications;if(!field)return '';let raw=Array.isArray(sizeValues)?sizeValues:String(form.elements.sizes?.value||'').split(','),sizes=[...new Set(raw.map(value=>String(value||'').trim()).filter(Boolean))],isSizeLine=/^\s*(?:سایزبندی(?:\s*(?:موجود|کالا|محصول))?|سایز(?:ها)?|اندازه(?:بندی)?|sizes?|size\s*range)\s*:/iu,lines=String(field.value||'').split(/\r?\n/).filter(line=>line.trim()&&!isSizeLine.test(line));if(sizes.length)lines.push(`سایزبندی: ${sizes.join('، ')}`);field.value=lines.join('\n');return field.value}
 function variantEditorRow(v){return `<tr><td><input class="v-size" value="${esc(v.size)}" readonly></td><td><input class="v-color" value="${esc(v.color)}" readonly></td><td><input class="v-sku" value="${esc(v.sku||'')}" aria-label="SKU واریانت"></td><td><input class="v-stock" type="number" min="0" value="${Number(v.stock)||0}" aria-label="موجودی"></td></tr>`}
-function buildVariantEditor(){let f=$('#product-edit-form'),sizes=[...new Set(f.elements.sizes.value.split(',').map(s=>s.trim()).filter(Boolean))],colors=[...new Set(f.elements.colors.value.split(',').map(s=>s.trim()).filter(Boolean))],old=[...$('#variant-editor').querySelectorAll('tr')].map(r=>({size:r.querySelector('.v-size').value,color:r.querySelector('.v-color').value,sku:r.querySelector('.v-sku').value,stock:r.querySelector('.v-stock').value}));syncSizeSpecification(f,sizes);$('#variant-editor').innerHTML=sizes.flatMap(size=>colors.map(color=>{let found=old.find(x=>x.size===size&&x.color===color);return variantEditorRow(found||{size,color,sku:`${f.elements.sku.value}-${sizes.indexOf(size)+1}${colors.indexOf(color)+1}`,stock:0})})).join('')}
-function quickProductModal(){
-  const categories=db.categories.filter(category=>category.active&&category.id!=='sale');
-  showModal(`<form class="quick-product-form" onsubmit="event.preventDefault();saveQuickProduct(this)">
-    <h2>افزودن سریع محصول</h2>
-    <p class="muted">محصول، قیمت و موجودی پس از تأیید در Supabase ذخیره می‌شوند. برای ویرایش کامل از فرم محصول استفاده کنید.</p>
-    <div class="form-grid">
-      <div class="field full"><label>نام محصول *</label><input name="name" required maxlength="140" autofocus placeholder="نام واقعی محصول"></div>
-      <div class="field"><label>دسته‌بندی فعال *</label><select name="category" required><option value="">انتخاب دسته‌بندی</option>${categories.map(category=>`<option value="${esc(category.id)}">${esc(category.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>SKU *</label><input name="sku" required maxlength="64" placeholder="شناسه یکتای محصول"></div>
-      <div class="field"><label>قیمت (تومان) *</label><input name="price" type="number" min="1" required></div>
-      <div class="field"><label>قیمت قبل از تخفیف (اختیاری)</label><input name="oldPrice" type="number" min="0"></div>
-      <div class="field"><label>موجودی کل</label><input name="stock" type="number" min="0" value="0"></div>
-      <div class="field"><label>سایزها با ویرگول</label><input name="sizes" value="۳۸,۳۹,۴۰,۴۱,۴۲"></div>
-      <div class="field"><label>رنگ‌ها با ویرگول</label><input name="colors" value="مشکی"></div>
-      <div class="field full"><label>توضیح کوتاه (اختیاری)</label><input name="shortDesc" maxlength="180"></div>
-      <div class="field full"><label>آدرس تصویر HTTPS (اختیاری)</label><input name="image" type="url" placeholder="https://..."></div>
-      <div class="field"><label><input type="checkbox" name="active" checked> پس از ذخیره منتشر شود</label></div>
-      <div class="field full" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="submit" ${categories.length?'':'disabled'}>ذخیره در پایگاه داده</button><button class="btn outline" type="button" onclick="closeModal();productModal()">رفتن به فرم کامل</button></div>
-    </div>
-  </form>`);
-  if(!categories.length)toast('برای افزودن محصول، ابتدا یک دسته‌بندی فعال در پایگاه داده بسازید.');
+
+const SIZE_TICK_MIN=22,SIZE_TICK_MAX=48;
+function faDigits(n){return String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}
+function sizeGridMarkup(selected){
+  const chosen=new Set((selected||[]).map(v=>Number(latinDigits(String(v)))));
+  let cells='';
+  for(let n=SIZE_TICK_MIN;n<=SIZE_TICK_MAX;n++){const on=chosen.has(n);cells+=`<label class="size-cell${on?' on':''}"><input type="checkbox" value="${n}" ${on?'checked':''} onchange="sizeGridChanged(this.form)"><span>${faDigits(n)}</span></label>`}
+  const range=Array.from({length:SIZE_TICK_MAX-SIZE_TICK_MIN+1},(_,k)=>SIZE_TICK_MIN+k);
+  const optsFrom=range.map(n=>`<option value="${n}">${faDigits(n)}</option>`).join('');
+  const optsTo=range.map(n=>`<option value="${n}"${n===SIZE_TICK_MAX?' selected':''}>${faDigits(n)}</option>`).join('');
+  return `<div class="size-grid-toolbar"><span>بازه:</span><select id="size-range-from" aria-label="سایز شروع">${optsFrom}</select><span>تا</span><select id="size-range-to" aria-label="سایز پایان">${optsTo}</select><button type="button" class="action" onclick="applySizeRange(this.form)">تیک بازه</button><button type="button" class="action" onclick="clearSizeGrid(this.form)">پاک کردن همه</button></div><div class="size-grid" id="size-grid">${cells}</div>`;
 }
+function sizeGridChanged(form){
+  const nums=[...form.querySelectorAll('#size-grid input:checked')].map(cb=>Number(cb.value)).sort((x,y)=>x-y);
+  form.querySelectorAll('#size-grid input').forEach(cb=>cb.closest('.size-cell').classList.toggle('on',cb.checked));
+  const kept=String(form.elements.sizes.value||'').split(',').map(x=>x.trim()).filter(Boolean).filter(x=>{const n=Number(latinDigits(x));return !(Number.isInteger(n)&&n>=SIZE_TICK_MIN&&n<=SIZE_TICK_MAX)});
+  form.elements.sizes.value=[...kept,...nums.map(faDigits)].join(',');
+  if(form.querySelector('#variant-editor'))buildVariantEditor();
+}
+function applySizeRange(form){
+  const from=Number(form.querySelector('#size-range-from').value),to=Number(form.querySelector('#size-range-to').value);
+  const lo=Math.min(from,to),hi=Math.max(from,to);
+  form.querySelectorAll('#size-grid input[type=checkbox]').forEach(cb=>{cb.checked=Number(cb.value)>=lo&&Number(cb.value)<=hi});
+  sizeGridChanged(form);
+}
+function clearSizeGrid(form){
+  form.querySelectorAll('#size-grid input[type=checkbox]').forEach(cb=>cb.checked=false);
+  sizeGridChanged(form);
+}
+function applyStockToAllVariants(form){
+  const each=Math.max(0,Math.floor(Number(form.querySelector('#variant-stock-all')?.value)||0));
+  if(form.querySelector('#variant-editor'))buildVariantEditor();
+  form.querySelectorAll('#variant-editor .v-stock').forEach(inp=>inp.value=each);
+}
+function syncSizeGrid(form){
+  const nums=new Set(String(form.elements.sizes?.value||'').split(',').map(x=>Number(latinDigits(x.trim()))));
+  form.querySelectorAll('#size-grid input[type=checkbox]').forEach(cb=>{const on=nums.has(Number(cb.value));cb.checked=on;cb.closest('.size-cell').classList.toggle('on',on)});
+}
+async function uploadManualProductImage(input){
+  const form=input?.form,status=form?.querySelector('#manual-upload-status'),files=[...(input?.files||[])];
+  if(!files.length)return;
+  const report=msg=>{if(status)status.textContent=msg};
+  if(!window.DataRepositories?.media?.create){report('❌ اتصال Supabase آماده نیست؛ صفحه را تازه‌سازی کنید.');return}
+  const good=[],bad=[];
+  for(const file of files){
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type||'')||file.size>5*1024*1024){bad.push(file.name);continue}
+    try{
+      report(`⏳ آپلود و فشرده‌سازی اسلاید ${good.length+1} از ${files.length}…`);
+      let dataUrl=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(new Error('خواندن فایل انجام نشد.'));fr.readAsDataURL(file)});
+      dataUrl=await shrinkImageTo(dataUrl,1600,.86);
+      const alt=((form.elements.name?.value||'محصول').trim())+` — اسلاید ${good.length+1}`;
+      const media=await DataRepositories.media.create({url:dataUrl,alt});
+      good.push(media.url);
+    }catch{bad.push(file.name)}
+  }
+  if(good.length){
+    const ta=form.elements.images,lines=String(ta?.value||'').split('\n').map(x=>x.trim()).filter(Boolean);
+    for(const url of good)if(!lines.includes(url))lines.push(url);
+    if(ta)ta.value=lines.join('\n');
+  }
+  renderImageStrip(form);
+  report(good.length?`✅ ${good.length} اسلاید آپلود شد${bad.length?` — ${bad.length} فایل نامعتبر رد شد`:''}`:'❌ هیچ فایلی آپلود نشد؛ فقط JPEG/PNG/WebP تا ۵ مگابایت مجاز است.');
+  input.value='';
+}
+function _toubaImageForm(){return document.getElementById('product-edit-form')}
+function readFormImages(form){return String(form?.elements?.images?.value||'').split('\n').map(x=>x.trim()).filter(Boolean)}
+function writeFormImages(form,list){if(form?.elements?.images)form.elements.images.value=list.join('\n');renderImageStrip(form)}
+function renderImageStrip(form){
+  if(!form)form=_toubaImageForm();
+  const strip=document.getElementById('image-strip');if(!strip||!form)return;
+  const list=readFormImages(form);
+  if(!list.length){strip.innerHTML='<span class="muted" style="font-size:11px">هنوز اسلایدی نیست — فایل‌ها را انتخاب کنید تا پیش‌نمایش همین‌جا ساخته شود.</span>';return}
+  strip.innerHTML=list.map((url,i)=>`<figure class="img-slide${i===0?' main':''}">
+<img src="${esc(url)}" alt="اسلاید ${faDigits(i+1)}" loading="lazy" onerror="this.style.opacity=.2">
+<figcaption><span>اسلاید ${faDigits(i+1)}</span>${i===0?'<b class="img-tag">اصلی</b>':''}</figcaption>
+<div class="img-actions">
+${i>0?`<button type="button" title="انتخاب به‌عنوان تصویر اصلی" onclick="imageSetMain(${i})">⭐</button>`:''}
+<button type="button" title="یک قدم جلوتر" onclick="imageMove(${i},-1)"${i===0?' disabled':''}>◂</button>
+<button type="button" title="یک قدم عقب‌تر" onclick="imageMove(${i},1)"${i===list.length-1?' disabled':''}>▸</button>
+<button type="button" class="rm" title="حذف اسلاید" onclick="imageRemove(${i})">✕</button>
+</div></figure>`).join('');
+}
+function imageSetMain(i){const f=_toubaImageForm(),l=readFormImages(f);if(i<1||i>=l.length)return;l.unshift(l.splice(i,1)[0]);writeFormImages(f,l)}
+function imageMove(i,d){const f=_toubaImageForm(),l=readFormImages(f),j=i+d;if(i<0||j<0||j>=l.length)return;[l[i],l[j]]=[l[j],l[i]];writeFormImages(f,l)}
+function imageRemove(i){const f=_toubaImageForm(),l=readFormImages(f);l.splice(i,1);writeFormImages(f,l);toast(l.length?'اسلاید حذف شد':'همهٔ اسلایدها حذف شدند')}
+const DEFAULT_COLOR_HEX={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};
+function renderColorHexEditor(form){
+  const box=form?.querySelector('#color-hex-editor');if(!box)return;
+  const colors=[...new Set(String(form.elements.colors.value||'').split(',').map(x=>x.trim()).filter(Boolean))];
+  let map={};try{map=JSON.parse(form.querySelector('#color-hex-data').value||'{}')||{}}catch{}
+  if(!colors.length){box.innerHTML='<span class="chf-note">اول رنگ‌ها را بنویسید تا نقطهٔ هر رنگ در کارت محصول قابل تنظیم شود.</span>';return}
+  box.innerHTML='<span class="chf-note">رنگ نقطهٔ هر رنگ‌بندی در کارت محصول:</span>'+colors.map(c=>`<label class="chf"><input type="color" data-color="${esc(c)}" value="${/^#[0-9a-fA-F]{6}$/.test(map[c]||'')?map[c]:DEFAULT_COLOR_HEX[c]||'#64748b'}"><span>${esc(c)}</span></label>`).join('');
+  box.querySelectorAll('input[type=color]').forEach(inp=>inp.addEventListener('input',()=>collectColorHexes(form)));
+}
+function collectColorHexes(form){
+  const out={};form.querySelectorAll('#color-hex-editor input[type=color]').forEach(inp=>{out[inp.dataset.color]=inp.value});
+  form.querySelector('#color-hex-data').value=JSON.stringify(out);
+}
+function previewCategoryImage(form){
+  const img=form?.querySelector('#cat-image-preview'),v=String(form.elements.imageUrl?.value||'').trim();
+  if(!img)return;
+  if(v&&/^(\/[^\s]+|https:\/\/[^\s]+)$/.test(v)){img.src=v;img.style.display='block'}else if(!v){img.style.display='none'}
+}
+async function uploadCategoryImage(input){
+  const form=input?.form,status=form?.querySelector('#cat-upload-status'),file=input?.files&&input.files[0];
+  if(!file)return;
+  const report=msg=>{if(status)status.textContent=msg};
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){report('❌ فقط JPEG/PNG/WebP');return}
+  if(file.size>5*1024*1024){report('❌ حجم فایل باید کمتر از ۵ مگابایت باشد.');return}
+  if(!window.DataRepositories?.media?.create){report('❌ اتصال Supabase آماده نیست.');return}
+  report('⏳ در حال آپلود…');
+  try{
+    let dataUrl=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=()=>reject(new Error('خواندن فایل انجام نشد.'));fr.readAsDataURL(file)});
+    dataUrl=await shrinkImageTo(dataUrl,1280,.86);
+    const alt=((form.elements.name?.value||'دسته‌بندی').trim())+' — تصویر دسته';
+    const media=await DataRepositories.media.create({url:dataUrl,alt});
+    if(form.elements.imageUrl)form.elements.imageUrl.value=media.url;
+    previewCategoryImage(form);
+    report('✅ تصویر دسته آپلود شد؛ حالا «ذخیره» را بزنید.');
+  }catch(error){report('❌ '+(error.message||'آپلود انجام نشد.'))}
+  finally{input.value=''}
+}
+async function shrinkImageTo(dataUrl,maxSide,quality){
+  try{
+    if(typeof Image==='undefined')return dataUrl;
+    const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('decode'));i.src=dataUrl});
+    const scale=Math.min(1,maxSide/Math.max(1,img.naturalWidth||1,img.naturalHeight||1));
+    if(scale>=1&&dataUrl.length<1900000)return dataUrl;
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round((img.naturalWidth||maxSide)*scale));
+    canvas.height=Math.max(1,Math.round((img.naturalHeight||maxSide)*scale));
+    const ctx=canvas.getContext('2d');if(!ctx)return dataUrl;
+    // Never bake a white matte behind transparent artwork: PNG/WebP inputs re-encode as WebP (keeps alpha); only opaque JPEGs get the white fill + JPEG output.
+    const keepAlpha=/^data:image\/(png|webp)[;,]/i.test(dataUrl);
+    if(!keepAlpha){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)}
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    return canvas.toDataURL(keepAlpha?'image/webp':'image/jpeg',quality)||dataUrl;
+  }catch{return dataUrl}
+}
+function buildVariantEditor(){let f=$('#product-edit-form'),sizes=[...new Set(f.elements.sizes.value.split(',').map(s=>s.trim()).filter(Boolean))],colors=[...new Set(f.elements.colors.value.split(',').map(s=>s.trim()).filter(Boolean))],old=[...$('#variant-editor').querySelectorAll('tr')].map(r=>({size:r.querySelector('.v-size').value,color:r.querySelector('.v-color').value,sku:r.querySelector('.v-sku').value,stock:r.querySelector('.v-stock').value}));syncSizeSpecification(f,sizes);$('#variant-editor').innerHTML=sizes.flatMap(size=>colors.map(color=>{let found=old.find(x=>x.size===size&&x.color===color);return variantEditorRow(found||{size,color,sku:`${f.elements.sku.value}-${sizes.indexOf(size)+1}${colors.indexOf(color)+1}`,stock:0})})).join('')}
+function quickProductModal(){return productModal()}
 async function saveQuickProduct(form){
   const name=form.elements.name.value.trim(),sku=form.elements.sku.value.trim(),categoryId=form.elements.category.value;
   const sizes=[...new Set(form.elements.sizes.value.split(',').map(value=>value.trim()).filter(Boolean))];

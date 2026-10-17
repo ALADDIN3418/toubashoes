@@ -29,7 +29,7 @@
   --shadow-hover: 0 20px 35px -5px rgba(12, 29, 20, 0.12), 0 10px 15px -5px rgba(12, 29, 20, 0.06);
   --shadow-floating: 0 25px 50px -12px rgba(6, 17, 10, 0.25);
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --font-sans: Vazirmatn, Tahoma, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: IRANSans, Vazirmatn, Tahoma, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Global Reset & Typography */
@@ -6958,3 +6958,193 @@ html, body, #app, main {
   }
 }
 
+
+/* ═══ جدول تیک سایز (۲۲ تا ۴۸) و آپلود مستقیم تصویر — فرم محصول پنل ═══ */
+.size-grid-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:8px}
+.size-grid-toolbar select{padding:5px 8px;border-radius:8px;border:1px solid var(--line,#dfe5dd);background:#fff;color:var(--ink,#142018);font-size:12px}
+.size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;margin-top:8px}
+.size-cell{position:relative;display:flex;align-items:center;justify-content:center;border:1px solid var(--line,#dfe5dd);border-radius:9px;padding:7px 0;font-size:13px;font-weight:700;cursor:pointer;background:#fff;color:var(--ink,#142018);user-select:none;transition:.12s}
+.size-cell:hover{border-color:#8cad4b;background:#f6f9f0}
+.size-cell input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.size-cell.on{background:#8cad4b;border-color:#739340;color:#fff}
+.size-cell.on:hover{background:#7d9c42}
+.manual-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.manual-upload-row .muted{font-size:11px;line-height:1.8}
+.file-sr{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip-path:inset(50%)}
+
+/* ═══ نشانِ مهره‌ای لوگوی طوبی در فرم‌های ورود/ثبت‌نام/حساب ═══ */
+.auth-touba-mark{display:block;width:76px;height:auto;margin:0 auto 10px;filter:drop-shadow(0 10px 22px rgba(18,40,18,.28))}
+.auth-touba-mark.big{width:96px;margin:0 auto 14px}
+.panel .auth-touba-mark,.panel.empty .auth-touba-mark{margin-inline:auto}
+
+/* ═══ فرم یکپارچۀ افزودن محصول — مراحل شمرده + تنظیمات پیشرفتهٔ بسته ═══ */
+.pf-section-title{display:flex;align-items:center;gap:9px;font-weight:800;font-size:13.5px;margin:16px 0 9px;color:var(--ink,#142018)}
+.pf-section-title:first-child{margin-top:2px}
+.pf-section-title b{display:inline-grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#8cad4b;color:#fff;font-size:12px;font-weight:800;flex:none}
+.pf-hint{font-size:11px;color:#7d8b80;margin:6px 2px 0;line-height:1.9}
+.pf-check{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:12px 2px 0;color:var(--ink,#142018)}
+.pf-save-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 2px}
+.pf-save-row .btn{min-width:210px;font-size:14.5px;font-weight:700;padding:13px 22px}
+.pf-save-row .pf-hint{margin:0;flex:1;min-width:220px}
+details.pf-adv{margin-top:16px;border:1px dashed #c6d1b6;border-radius:13px;padding:10px 13px;background:#fafbf5}
+details.pf-adv[open]{padding-bottom:14px}
+details.pf-adv>summary{cursor:pointer;font-weight:700;font-size:12px;color:#54664f;list-style:none;display:flex;align-items:center;gap:6px}
+details.pf-adv>summary::-webkit-details-marker{display:none}
+details.pf-adv>summary:after{content:"▼";font-size:8px;color:#8cad4b;margin-inline-start:4px}
+details.pf-adv[open]>summary:after{content:"▲"}
+
+/* ═══ نوار پیش‌نمایش اسلایدها در فرم محصول (آپلود چندتایی) ═══ */
+.image-strip{display:flex;flex-wrap:wrap;gap:9px;margin-top:10px;min-height:24px}
+.img-slide{width:106px;margin:0;border:1px solid #dfe4d8;border-radius:11px;overflow:hidden;background:#fff;transition:border-color .15s, box-shadow .15s}
+.img-slide.main{border-color:#8cad4b;box-shadow:0 0 0 2px rgba(140,173,75,.28)}
+.img-slide img{width:100%;height:80px;object-fit:cover;display:block}
+.img-slide figcaption{display:flex;justify-content:space-between;align-items:center;gap:4px;font-size:10px;padding:4px 7px;color:#59664f}
+.img-slide .img-tag{background:#eaf4df;color:#45652c;border-radius:8px;padding:1px 8px;font-size:9px;font-weight:700}
+.img-slide .img-actions{display:flex;border-top:1px solid #eef0e9}
+.img-slide .img-actions button{flex:1;min-width:24px;background:none;border:0;border-inline-start:1px solid #eef0e9;font-size:11px;padding:5px 0;color:#3d4c38;cursor:pointer;transition:.13s}
+.img-slide .img-actions button:first-child{border-inline-start:0}
+.img-slide .img-actions button:hover{background:#f1f6e8}
+.img-slide .img-actions button:disabled{opacity:.35;cursor:default;background:none}
+.img-slide .img-actions .rm{color:#a34537}
+.img-slide .img-actions .rm:hover{background:#fbe9e4}
+
+/* ═══ ویرایشگر رنگِ نقطه‌های کارت محصول + پیش‌نمایش تصویر دسته ═══ */
+.pf-colors-hex{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 11px;border:1px dashed #d5ddc8;border-radius:11px;background:#fbfcf7;margin-top:2px}
+.chf-note{font-size:11px;color:#7d8b80}
+.chf{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#33413a;cursor:pointer;user-select:none}
+.chf input[type=color]{width:30px;height:24px;padding:0;border:1px solid #cfd8c4;border-radius:6px;background:none;cursor:pointer}
+.chf input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.chf input[type=color]::-webkit-color-swatch{border:0;border-radius:4px}
+#cat-image-preview{object-fit:cover}
+
+/* ═══════════════════ کنسول مدیریت طوبی — پوستۀ حرفه‌ای v1.0.1 (فقط body.admin-body) ═══════════════════
+   چیدمان و منطق دست‌نخورده؛ فقط پوسته: ذغال سبز‌ته‌رنگ، شیشه‌افکت، جدول‌های چسبان،
+   فرم‌های تیره، مودال/توست هماهنگ و کشوی ناوبری پولیش‌شده. */
+body.admin-body{
+  --adm-bg:#0e1411; --adm-surface:#151d18; --adm-surface-2:#1a241d; --adm-line:#28362c;
+  --adm-text:#e9efe7; --adm-muted:#93a396; --adm-brand:#9cc25a; --adm-brand-strong:#b4d878;
+  --adm-gold:#d3b574; --adm-danger:#ef7a6d;
+  background:radial-gradient(1200px 500px at 80% -10%, rgba(156,194,90,.07), transparent 60%),var(--adm-bg);
+  color:var(--adm-text);
+}
+body.admin-body .page{background:transparent;color:var(--adm-text)}
+body.admin-body .page-title{color:var(--adm-text)}
+body.admin-body .section-eyebrow{color:var(--adm-gold);letter-spacing:.4px}
+body.admin-body .muted,body.admin-body .pf-hint,body.admin-body .manual-upload-row .muted{color:var(--adm-muted)!important}
+
+/* نوار ابزار بالا — چسبان و شیشه‌ای */
+body.admin-body .auth-admin-head{
+  position:sticky;top:8px;z-index:40;display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;padding:14px 18px;margin-bottom:14px;border-radius:18px;
+  background:rgba(21,29,24,.88);border:1px solid var(--adm-line);backdrop-filter:blur(14px) saturate(140%);
+  -webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 14px 34px rgba(0,0,0,.35);
+}
+body.admin-body .auth-admin-head h1{color:var(--adm-text);margin:2px 0 0}
+body.admin-body .auth-admin-head small{color:var(--adm-muted)}
+body.admin-body .auth-admin-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* چیپ ناوبری بخش فعال */
+body.admin-body .admin-nav-bar{margin-bottom:14px}
+body.admin-body .admin-hamburger-btn{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:14px;cursor:pointer;
+  background:var(--adm-surface);border:1px solid var(--adm-line);color:var(--adm-text);font-weight:600;font-size:13px;
+  transition:border-color .15s, background .15s;
+}
+body.admin-body .admin-hamburger-btn:hover{border-color:var(--adm-brand);background:var(--adm-surface-2)}
+body.admin-body .admin-current-chip{color:#152010;background:linear-gradient(135deg,var(--adm-brand),#8ab24c);border-radius:999px;padding:2px 12px;font-size:11px;font-weight:800}
+body.admin-body .hamburger-arrow{color:var(--adm-muted)}
+
+/* کشوی بخش‌ها */
+body.admin-body .admin-categorized-drawer{background:var(--adm-surface);border-color:var(--adm-line);color:var(--adm-text)}
+body.admin-body .drawer-header{border-bottom:1px solid var(--adm-line)}
+body.admin-body .drawer-title h3{color:var(--adm-text)}
+body.admin-body .drawer-close-btn{background:var(--adm-surface-2);color:var(--adm-text);border:1px solid var(--adm-line)}
+body.admin-body .drawer-close-btn:hover{border-color:var(--adm-danger);color:var(--adm-danger)}
+body.admin-body .admin-group-title{color:var(--adm-gold);font-size:10.5px;letter-spacing:.7px}
+body.admin-body .admin-group-item{color:var(--adm-muted);border-radius:11px;transition:background .14s,color .14s}
+body.admin-body .admin-group-item:hover{background:var(--adm-surface-2);color:var(--adm-text)}
+body.admin-body .admin-group-item.active{background:rgba(156,194,90,.14);color:var(--adm-brand-strong);font-weight:700}
+body.admin-body .admin-group-item.active .item-active-dot{background:var(--adm-brand)}
+body.admin-body .drawer-footer{border-top:1px solid var(--adm-line)}
+body.admin-body .drawer-back-link{color:var(--adm-brand-strong)}
+body.admin-body .drawer-logout-btn{background:rgba(239,122,109,.12);color:var(--adm-danger);border:1px solid rgba(239,122,109,.3)}
+body.admin-body .admin-categorized-drawer::-webkit-scrollbar,body.admin-body .table-wrap::-webkit-scrollbar{height:9px;width:9px}
+body.admin-body .admin-categorized-drawer::-webkit-scrollbar-thumb,body.admin-body .table-wrap::-webkit-scrollbar-thumb{background:#2e3d33;border-radius:99px}
+
+/* کارت‌ها و جدول‌ها */
+body.admin-body .panel,body.admin-body .table-wrap,body.admin-body .stat-card,body.admin-body .chart-card,body.admin-body .filter-panel,body.admin-body .cart-summary,body.admin-body .auth-card{
+  background:var(--adm-surface);color:var(--adm-text);border:1px solid var(--adm-line);border-radius:18px;
+}
+body.admin-body .table-wrap{overflow:auto}
+body.admin-body .data-table{background:transparent}
+body.admin-body .data-table th{background:#1b261d;color:#c9d8c4;border-bottom:1px solid var(--adm-line);position:sticky;top:0;z-index:2}
+body.admin-body .data-table td{border-bottom-color:var(--adm-line)}
+body.admin-body .data-table tbody tr{transition:background .12s}
+body.admin-body .data-table tbody tr:nth-child(even){background:rgba(233,239,231,.02)}
+body.admin-body .data-table tbody tr:hover{background:rgba(156,194,90,.07)}
+body.admin-body .stat-card b{color:var(--adm-text)}
+body.admin-body .stat-card span{color:var(--adm-muted)}
+body.admin-body .stat-card i{color:var(--adm-brand)}
+body.admin-body .badge{background:rgba(233,239,231,.08);color:var(--adm-muted)}
+body.admin-body .badge.green{background:rgba(122,222,140,.13);color:#7fd69a}
+body.admin-body .badge.red{background:rgba(239,122,109,.13);color:#f19a91}
+
+/* فرم‌ها */
+body.admin-body input,body.admin-body select,body.admin-body textarea,body.admin-body .select,body.admin-body .field input,body.admin-body .field select,body.admin-body .field textarea{
+  background:#111a15;border:1px solid var(--adm-line);color:var(--adm-text);border-radius:11px;outline:none;
+}
+body.admin-body input:focus,body.admin-body select:focus,body.admin-body textarea:focus,body.admin-body .select:focus{border-color:var(--adm-brand);box-shadow:0 0 0 3px rgba(156,194,90,.18)}
+body.admin-body input::placeholder,body.admin-body textarea::placeholder{color:#5f6f63}
+body.admin-body .field label,body.admin-body .filter-group label{color:#c2cfbd}
+body.admin-body input[type="radio"],body.admin-body input[type="checkbox"],body.admin-body .size-cell input,body.admin-body .chf input[type=color]{accent-color:var(--adm-brand)}
+body.admin-body select option{background:#151d18;color:var(--adm-text)}
+body.admin-body input:-webkit-autofill{box-shadow:0 0 0 1000px #111a15 inset;-webkit-text-fill-color:var(--adm-text);border-radius:11px}
+
+/* دکمه‌ها */
+body.admin-body .btn{background:linear-gradient(135deg,var(--adm-brand),#87ac48);color:#152010;border-radius:11px;font-weight:700;box-shadow:0 6px 18px rgba(140,173,75,.22)}
+body.admin-body .btn:hover{background:linear-gradient(135deg,var(--adm-brand-strong),var(--adm-brand));transform:translateY(-1px)}
+body.admin-body .btn.outline{background:transparent;border:1px solid var(--adm-line);color:var(--adm-text);box-shadow:none}
+body.admin-body .btn.outline:hover{border-color:var(--adm-brand);color:var(--adm-brand-strong);background:rgba(156,194,90,.08)}
+body.admin-body .btn.danger-button,body.admin-body .danger-button{background:rgba(239,122,109,.14);color:var(--adm-danger);box-shadow:none}
+body.admin-body .btn.danger-button:hover,body.admin-body .danger-button:hover{background:rgba(239,122,109,.24)}
+body.admin-body .action{background:var(--adm-surface-2);border:1px solid var(--adm-line);color:var(--adm-text)}
+body.admin-body .action:hover{border-color:var(--adm-brand);color:var(--adm-brand-strong);background:rgba(156,194,90,.12)}
+body.admin-body .action.danger{color:var(--adm-danger)}
+
+/* مودال، توست، یادداشت */
+body.admin-body .modal-back{background:rgba(4,9,6,.74);backdrop-filter:blur(6px)}
+body.admin-body .modal{background:#141d17;color:var(--adm-text);border:1px solid var(--adm-line);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+body.admin-body .modal-head .close{background:var(--adm-surface-2);color:var(--adm-text);border:1px solid var(--adm-line)}
+body.admin-body .modal-head .close:hover{border-color:var(--adm-danger);color:var(--adm-danger)}
+body.admin-body .toast{background:#1a241d;color:var(--adm-text);border:1px solid var(--adm-line)}
+body.admin-body .notice{background:rgba(156,194,90,.1);color:#cfe3b4;border:1px solid rgba(156,194,90,.25)}
+body.admin-body .notice.error-notice,body.admin-body .error-notice{background:rgba(239,122,109,.1);color:#f3c9c3;border-color:rgba(239,122,109,.32)}
+
+/* اجزای فرم محصول/دسته که روشن‌محور بودند */
+body.admin-body .pf-adv-body,body.admin-body details.pf-adv{background:#121b15;border-color:#2c3a2f}
+body.admin-body details.pf-adv>summary{color:#b7c8b0}
+body.admin-body .pf-section-title{color:var(--adm-text)}
+body.admin-body .pf-section-title b{background:var(--adm-brand);color:#152010}
+body.admin-body .pf-colors-hex{background:#121b15;border-color:#2c3a2f}
+body.admin-body .chf{color:#cfdcc9}
+body.admin-body .chf input[type=color]{border-color:#2c3a2f}
+body.admin-body .size-cell{background:#121b15;border-color:#2c3a2f;color:var(--adm-text)}
+body.admin-body .size-cell:hover{border-color:var(--adm-brand);background:#15201680}
+body.admin-body .size-cell.on{background:var(--adm-brand);border-color:var(--adm-brand);color:#152010}
+body.admin-body .img-slide{background:#121b15;border-color:#2c3a2f}
+body.admin-body .img-slide figcaption{color:#a9b8a4}
+body.admin-body .img-slide .img-actions{border-top-color:#2c3a2f}
+body.admin-body .img-slide .img-actions button{color:#cfdcc9;border-inline-start-color:#2c3a2f}
+body.admin-body .img-slide .img-actions button:hover{background:rgba(156,194,90,.1)}
+body.admin-body .img-slide .img-actions .rm{color:var(--adm-danger)}
+body.admin-body .img-slide.main{border-color:var(--adm-brand);box-shadow:0 0 0 2px rgba(156,194,90,.25)}
+body.admin-body .img-tag{background:rgba(156,194,90,.16);color:var(--adm-brand-strong)}
+body.admin-body .auth-touba-mark{filter:drop-shadow(0 0 16px rgba(156,194,90,.28)) brightness(1.15)}
+body.admin-body .tab,body.admin-body .data-table .muted{color:var(--adm-muted)}
+body.admin-body ::selection{background:rgba(156,194,90,.35)}
+
+/* — رتبه‌بندی دسته‌بندی‌ها v1.0.6 (پنل: ستون «ترتیب نمایش») — */
+body.admin-body .cat-order-move{display:inline-flex;align-items:center;gap:5px}
+body.admin-body .cat-order-pos{min-width:22px;text-align:center;font-weight:800;font-size:11.5px;color:var(--adm-muted,#93a197)}
+body.admin-body .cat-order-move .action{padding:4px 9px;line-height:1;font-size:11px}
+body.admin-body .cat-order-move .action:disabled{opacity:.3;cursor:not-allowed}

@@ -66,12 +66,12 @@
     const mode = new URLSearchParams(g.location.search).get('mode') || 'login';
     const verified = new URLSearchParams(g.location.search).get('verified') === '1';
     if (mode === 'signup') {
-      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#83a74a">♙</div><h1>ساخت حساب کاربری</h1><p class="muted">ثبت‌نام با ایمیل و رمز عبور؛ حساب شما بلافاصله فعال می‌شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.signUp(this)"><div class="field"><label for="signup-name">نام و نام خانوادگی</label><input id="signup-name" name="displayName" autocomplete="name" required maxlength="100"></div><div class="field"><label for="signup-email">ایمیل</label><input id="signup-email" name="email" type="email" autocomplete="email" required maxlength="254"></div><div class="field"><label for="signup-password">رمز عبور (حداقل ۱۲ نویسه)</label><input id="signup-password" name="password" type="password" autocomplete="new-password" required minlength="12"></div><div class="field"><label for="signup-password-confirm">تکرار رمز عبور</label><input id="signup-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required minlength="12"></div><button class="btn" style="width:100%">ساخت حساب</button></form><p>قبلاً حساب ساخته‌اید؟ <a class="text-link" href="/login">ورود</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+      return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center"><img class="auth-touba-mark" src="/touba-logo.png" alt="نشانِ طوبی" width="76" height="114"></div><h1>ساخت حساب کاربری</h1><p class="muted">ثبت‌نام با ایمیل و رمز عبور؛ حساب شما بلافاصله فعال می‌شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.signUp(this)"><div class="field"><label for="signup-name">نام و نام خانوادگی</label><input id="signup-name" name="displayName" autocomplete="name" required maxlength="100"></div><div class="field"><label for="signup-email">ایمیل</label><input id="signup-email" name="email" type="email" autocomplete="email" required maxlength="254"></div><div class="field"><label for="signup-password">رمز عبور (حداقل ۱۲ نویسه)</label><input id="signup-password" name="password" type="password" autocomplete="new-password" required minlength="12"></div><div class="field"><label for="signup-password-confirm">تکرار رمز عبور</label><input id="signup-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" required minlength="12"></div><button class="btn" style="width:100%">ساخت حساب</button></form><p>قبلاً حساب ساخته‌اید؟ <a class="text-link" href="/login">ورود</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
     }
     if (mode === 'forgot') {
       return `${g.header()}<main class="page container"><section class="auth-card"><h1>بازیابی رمز عبور</h1><p class="muted">پیوند بازیابی به ایمیل حسابتان ارسال می‌شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.resetPassword(this)"><div class="field"><label for="reset-email">ایمیل حساب</label><input id="reset-email" name="email" type="email" autocomplete="email" required maxlength="254"></div><button class="btn" style="width:100%">ارسال پیوند بازیابی</button></form><p><a class="text-link" href="/login">بازگشت به ورود</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
     }
-    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center;font-size:38px;color:#10b981">♙</div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="ایمیل حساب کاربری"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container"><section class="auth-card"><div style="text-align:center"><img class="auth-touba-mark" src="/touba-logo.png" alt="نشانِ طوبی" width="76" height="114"></div><h1>ورود به حساب کاربری</h1><p class="muted">برای دسترسی به حساب مشتری یا پنل مدیریت، ایمیل و رمز عبور خود را وارد کنید.</p>${verified?messageBox('ایمیل تأیید شد. اکنون با ایمیل و رمز عبور وارد شوید.'):''}<form onsubmit="event.preventDefault();ToubaAuthUI.signIn(this)"><div class="field"><label for="login-email">ایمیل حساب</label><input id="login-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="ایمیل حساب کاربری"></div><div class="field"><label for="login-password">رمز عبور</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></div><button class="btn" style="width:100%">ورود به حساب</button></form><p style="margin-top:16px"><a class="text-link" href="/login?mode=forgot">رمز عبور را فراموش کرده‌اید؟</a></p><p>حساب ندارید؟ <a class="text-link" href="/login?mode=signup">ثبت‌نام کنید</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
   }
 
   async function runForm(form, action, successText) {
@@ -129,8 +129,22 @@
   }
 
   function passwordRecoveryPage() {
-    return `${g.header()}<main class="page container"><section class="auth-card"><h1>تعیین رمز عبور جدید</h1><p class="muted">رمز عبور جدید باید دست‌کم ۱۲ نویسه داشته باشد.</p><form onsubmit="event.preventDefault();ToubaAuthUI.updatePassword(this)"><div class="field"><label for="new-password">رمز عبور جدید</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required></div><div class="field"><label for="new-password-confirm">تکرار رمز عبور</label><input id="new-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="12" required></div><button class="btn">ذخیره رمز جدید</button></form><div id="auth-message"></div></section></main>${g.footer()}`;
+    const steps = `<div class="rp-steps" aria-hidden="true"><span class="rp-step done"><i>✓</i>۱ · درخواست</span><span class="rp-step ${g.ToubaAuth?.passwordRecovery ? 'done' : 'active'}"><i>۲</i>پیوند ایمیل</span><span class="rp-step ${g.ToubaAuth?.passwordRecovery ? 'active' : ''}"><i>۳</i>رمز جدید</span></div>`;
+    const mark = '<div style="text-align:center"><img class="auth-touba-mark" src="/touba-logo.png" alt="نشانِ طوبی" width="76" height="114"></div>';
+    if (!g.ToubaAuth?.passwordRecovery) {
+      return `${g.header()}<main class="page container"><section class="auth-card">${mark}<h1>بازیابی رمز عبور</h1>${steps}<p class="muted">نشانی پیوند ایمیل شما در این صفحه معتبر نیست یا مهلتش گذشته است. ایمیل حسابتان را بزنید تا پیوند تازه برایتان ارسال شود.</p><form onsubmit="event.preventDefault();ToubaAuthUI.resetPassword(this)"><div class="field"><label for="reset-email">ایمیل حساب</label><input id="reset-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="مثلاً you@example.com"></div><button class="btn" style="width:100%">ارسال پیوند بازیابی</button></form><p style="text-align:center"><a class="text-link" href="/login">بازگشت به ورود ←</a></p><div id="auth-message"></div></section></main>${g.footer()}`;
+    }
+    return `${g.header()}<main class="page container"><section class="auth-card">${mark}<h1>تعیین رمز عبور جدید</h1>${steps}<p class="muted">پیوند ایمیل باز شد و در حالت بازیابی هستید — برای حساب <b>${esc(g.ToubaAuth?.currentUser?.email || 'کاربر طوبی')}</b> رمز تازه‌ای با دست‌کم ۱۲ نویسه بگذارید.</p><form onsubmit="event.preventDefault();ToubaAuthUI.updatePassword(this)"><div class="field"><label for="new-password">رمز عبور جدید</label><div class="rp-pw-row"><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" required><button class="rp-eye" type="button" onclick="authTogglePw('new-password',this)" aria-label="نمایش رمز">نمایش</button></div></div><div class="field"><label for="new-password-confirm">تکرار رمز عبور</label><div class="rp-pw-row"><input id="new-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="12" required><button class="rp-eye" type="button" onclick="authTogglePw('new-password-confirm',this)" aria-label="نمایش تکرار رمز">نمایش</button></div></div><button class="btn" style="width:100%">ذخیره رمز جدید و ورود به حساب</button></form><p class="muted" style="font-size:12px;text-align:center">پس از ذخیره، خودکار به حساب کاربری می‌روید.</p><div id="auth-message"></div></section></main>${g.footer()}`;
   }
+
+  g.authTogglePw = function (id, btn) {
+    const el = g.document.getElementById(id);
+    if (!el) return;
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    if (btn) { btn.textContent = show ? 'پنهان' : 'نمایش'; btn.setAttribute('aria-pressed', String(show)); }
+    el.focus();
+  };
 
   async function updatePassword(form) {
     const data = new FormData(form);
@@ -148,7 +162,7 @@
 
   function accountPage() {
     const user = auth.currentUser || (g.db && g.db.currentUser);
-    if (!user) return `${g.header()}<main class="page container"><div class="panel empty"><div class="big">♙</div><h2>برای مشاهده حساب وارد شوید</h2><a class="btn" href="/login">ورود به حساب</a>　<a class="btn outline" href="/login?mode=signup">ثبت‌نام</a></div></main>${g.footer()}`;
+    if (!user) return `${g.header()}<main class="page container"><div class="panel empty"><div class="big"><img class="auth-touba-mark big" src="/touba-logo.png" alt="نشانِ طوبی"></div><h2>برای مشاهده حساب وارد شوید</h2><a class="btn" href="/login">ورود به حساب</a>　<a class="btn outline" href="/login?mode=signup">ثبت‌نام</a></div></main>${g.footer()}`;
     return `${g.header()}<main class="page container"><h1 class="page-title">حساب کاربری</h1><div class="checkout-layout"><section class="panel"><h3>اطلاعات حساب</h3><p>نام: ${esc(user.name || 'کاربر طوبی')}</p><p>ایمیل: ${esc(user.email || '—')}</p><p>شماره تماس: ${esc(user.phone || '—')}</p><p>نوع حساب: ${user.role==='super_admin'?'مدیر ارشد':user.role==='admin'?'مدیر فروشگاه':'مشتری'}</p><div style="display:flex;gap:8px;margin-top:16px">${user.role==='admin'||user.role==='super_admin'?`<a class="btn small" href="/admin">ورود به پنل مدیریت</a>`:''}<button class="btn outline small" onclick="ToubaAuthUI.signOut()">خروج امن</button></div></section><section class="panel"><h3>سفارش‌های اخیر</h3><p>برای پیگیری وضعیت خرید و بسته‌های ارسالی به بخش سفارش‌ها بروید.</p><a class="text-link" href="/account/orders">مشاهده همه سفارش‌ها ←</a></section></div></main>${g.footer()}`;
   }
 
@@ -175,7 +189,7 @@
     homepage: 'چیدمان صفحه اصلی',
     banners: 'بنرها و اسلایدرها',
     media: 'کتابخانه رسانه',
-    payments: 'درگاه پرداخت زرین‌پال',
+    payments: 'پرداخت بلوپال (درگاه بانکی)',
     settings: 'تنظیمات کلی فروشگاه',
     demo: 'پایگاه داده و همگام‌سازی'
   };
@@ -227,7 +241,7 @@
       title: 'تنظیمات و زیرساخت',
       icon: '⚙️',
       items: [
-        { key: 'payments', label: 'درگاه پرداخت زرین‌پال', icon: '💳' },
+        { key: 'payments', label: 'درگاه پرداخت بلوپال', icon: '💳' },
         { key: 'settings', label: 'تنظیمات کلی فروشگاه', icon: '⚙' },
         { key: 'demo', label: 'پایگاه داده و همگام‌سازی', icon: '🗄' }
       ]
@@ -247,7 +261,7 @@
       loadAdminSection(selected);
     }, 15);
 
-    return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || '')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions"><button class="btn small" onclick="quickProductModal()">＋ افزودن سریع محصول</button><button class="btn outline small" onclick="ToubaAuthUI.switchAdminSection('ai-studio')">✨ استودیو هوش مصنوعی</button><button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button><button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button><button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem"><img src="/touba-logo.png" alt="" width="285" height="426" onerror="this.outerHTML='❧'"></span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
+    return `${g.header()}<main class="page container admin-page-container"><div class="auth-admin-head"><div class="auth-admin-title-box"><span class="section-eyebrow">پنل امن Supabase</span><h1 class="page-title">مدیریت طوبی</h1><small>${esc(user.email || '')} · ${user.role==='super_admin'||user.role==='SUPER_ADMIN'?'مدیر ارشد':'مدیر فروشگاه'}</small></div><div class="auth-admin-actions">${selected==='products'?`<button class="btn small" onclick="productModal()">＋ افزودن محصول جدید</button>`:selected==='categories'?`<button class="btn outline small" onclick="categoryModal()">＋ دسته‌بندی جدید</button>`:selected==='coupons'?`<button class="btn outline small" onclick="couponModal()">＋ کوپن جدید</button>`:``}${selected!=='ai-studio'?`<button class="btn outline small" onclick="ToubaAuthUI.switchAdminSection('ai-studio')">✨ استودیو هوش مصنوعی</button>`:``}<button class="btn outline small" onclick="ToubaAuthUI.loadAdminSection('${selected}')">↻ به‌روزرسانی</button><button class="btn small danger-button" onclick="ToubaAuthUI.signOut()">خروج</button></div></div><div class="admin-nav-bar"><button type="button" class="admin-hamburger-btn" onclick="ToubaAuthUI.toggleAdminDrawer()" aria-label="منوی بخش‌های مدیریت" aria-expanded="false"><span class="hamburger-icon">☰</span><span class="hamburger-title">بخش‌های مدیریت</span><span class="admin-current-chip" id="current-admin-section-name">${adminSections[selected]||'نمای کلی'}</span><span class="hamburger-arrow">⌄</span></button></div><div id="admin-drawer-overlay" class="admin-drawer-overlay" onclick="ToubaAuthUI.closeAdminDrawer()"></div><aside id="admin-drawer" class="admin-categorized-drawer" aria-label="منوی دسته‌بندی‌شده مدیریت"><div class="drawer-header"><div class="drawer-title"><span class="drawer-emblem"><img src="/touba-logo.png" alt="" width="285" height="426" onerror="this.outerHTML='❧'"></span><h3>دسته‌بندی‌های پنل مدیریت</h3></div><button type="button" class="drawer-close-btn" onclick="ToubaAuthUI.closeAdminDrawer()" aria-label="بستن منو">×</button></div><nav class="auth-admin-nav admin-drawer-nav" aria-label="بخش‌های مدیریت">${adminCategories.map(cat=>`<div class="admin-nav-group"><div class="admin-group-title"><span class="group-icon">${cat.icon}</span><span>${cat.title}</span></div><div class="admin-group-items">${cat.items.map(item=>`<button type="button" class="auth-admin-tab-btn admin-group-item ${selected===item.key?'active':''}" data-section="${item.key}" onclick="ToubaAuthUI.switchAdminSection('${item.key}')"><span class="item-icon">${item.icon}</span><span class="item-label">${item.label}</span><span class="item-active-dot"></span></button>`).join('')}</div></div>`).join('')}</nav><div class="drawer-footer"><a href="/" class="drawer-back-link">↩ بازگشت به فروشگاه</a><button type="button" class="drawer-logout-btn" onclick="ToubaAuthUI.signOut()">خروج از حساب مدیریت</button></div></aside><section id="admin-live-content" class="auth-admin-content" aria-live="polite">در حال دریافت اطلاعات…</section></main>${g.footer()}`;
   }
 
   function adminTable(headers, rows) {
@@ -259,6 +273,85 @@
     const currentIndex=order.status==='CONFIRMED'?0:Math.max(0,steps.indexOf(order.status));
     const available=steps.slice(currentIndex);
     return `<select class="select" aria-label="وضعیت سفارش ${esc(order.number||order.id)}" onchange="orderStatus('${esc(order.id)}',this.value)">${available.map(status=>`<option value="${status}" ${status===order.status?'selected':''}>${status}</option>`).join('')}</select>`;
+  }
+
+  /* ---------- برچسب ارسال: اطلاعات گیرنده برای بسته‌بندی و پست ---------- */
+  const SHIPPING_LABEL_NAMES = { normal: 'پست عادی', express: 'پست سریع', free: 'ارسال رایگان' };
+
+  function findHydratedOrder(orderId) {
+    const database = getDb();
+    return ((database && database.orders) || []).find(o => String(o.id) === String(orderId) || String(o.number || '') === String(orderId)) || null;
+  }
+
+  function shippingMethodLabel(order) {
+    return SHIPPING_LABEL_NAMES[order.shippingMethod] || order.shippingMethod || 'پست عادی';
+  }
+
+  function shippingLabelLines(order) {
+    const lines = ['— برچسب ارسال · کفش طوبی —'];
+    lines.push(`سفارش: ${order.number || order.id}`);
+    if (order.date) lines.push(`تاریخ: ${order.date}`);
+    lines.push(`گیرنده: ${order.customer || '—'}`);
+    lines.push(`موبایل: ${order.phone || '—'}`);
+    const region = [order.province, order.city].filter(Boolean).join(' — ');
+    if (region) lines.push(`استان و شهر: ${region}`);
+    lines.push(`آدرس: ${order.address || '—'}`);
+    if (order.postal) lines.push(`کد پستی: ${order.postal}`);
+    if (order.note) lines.push(`یادداشت مشتری: ${order.note}`);
+    lines.push(`روش ارسال: ${shippingMethodLabel(order)}`);
+    const items = (order.itemsList || []).map((item, index) => {
+      const variant = [item.size ? `سایز ${item.size}` : '', item.color || ''].filter(Boolean).join(' / ');
+      return `${index + 1}) ${item.name || 'کالا'}${variant ? ` (${variant})` : ''} × ${Number(item.quantity || 0)}`;
+    });
+    if (items.length) lines.push(`اقلام:\n${items.join('\n')}`);
+    lines.push(`مبلغ کل: ${Number(order.total || 0).toLocaleString('fa-IR')} تومان`);
+    lines.push(`پرداخت: ${order.paymentStatus === 'PAID' ? 'تأییدشده ✓' : 'در انتظار تأیید درگاه'}`);
+    if (order.trackingCode) lines.push(`کد رهگیری: ${order.trackingCode}`);
+    return lines;
+  }
+
+  function copyPlainText(text) {
+    const fallback = () => {
+      if (!g.document || !g.document.createElement) return false;
+      const area = g.document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.top = '-1000px';
+      g.document.body.appendChild(area);
+      area.select();
+      let ok = false;
+      try { ok = Boolean(g.document.execCommand && g.document.execCommand('copy')); } catch { ok = false; }
+      area.remove();
+      return ok;
+    };
+    if (g.navigator && g.navigator.clipboard && g.navigator.clipboard.writeText) {
+      return g.navigator.clipboard.writeText(text).then(() => true).catch(() => fallback());
+    }
+    return Promise.resolve(fallback());
+  }
+
+  function shippingLabelModal(orderId) {
+    const order = findHydratedOrder(orderId);
+    if (!order) { g.toast('سفارش در حافظهٔ پنل پیدا نشد؛ ابتدا «به‌روزرسانی» را بزنید.'); return; }
+    const row = (label, value) => `<div class="summary-line"><span>${esc(label)}</span><b>${esc(value || '—')}</b></div>`;
+    const items = (order.itemsList || []).map(item => `<div class="summary-line"><span>${esc(item.name || 'کالا')}${item.size ? ` · سایز ${esc(String(item.size))}` : ''}${item.color ? ` / ${esc(item.color)}` : ''} × ${Number(item.quantity || 0)}</span><b>${toman(Number(item.unitPrice || 0) * Number(item.quantity || 0))}</b></div>`).join('') || '<p class="muted">کالایی ثبت نشده است.</p>';
+    const paid = order.paymentStatus === 'PAID';
+    g.showModal(`
+      <div style="max-width:560px">
+        <h3 style="margin:0 0 4px">📦 برچسب ارسال · سفارش ${esc(order.number || order.id)}</h3>
+        ${paid ? '<div class="notice" style="margin:10px 0;background:#e8f4d9;color:#2e5a1c">پرداخت نزد درگاه تأیید شده است — بسته را ارسال کنید و وضعیت را «ارسال شده» بزنید.</div>' : `<div class="notice error-notice" style="margin:10px 0">پرداخت این سفارش هنوز نزد درگاه تأیید نشده (${esc(order.paymentStatus || 'PENDING')}); تا تأییدِ قطعی بسته ارسال نشود.</div>`}
+        <div style="margin-top:6px">${row('گیرنده', order.customer)}${row('موبایل', order.phone)}${row('استان و شهر', [order.province, order.city].filter(Boolean).join(' — '))}${row('آدرس کامل', order.address)}${row('کد پستی', order.postal)}${order.note ? row('یادداشت مشتری', order.note) : ''}${row('روش ارسال', shippingMethodLabel(order))}${row('هزینه ارسال', order.shipping ? toman(order.shipping) : 'رایگان')}${row('مبلغ کل', toman(order.total))}${order.trackingCode ? row('کد رهگیری', order.trackingCode) : ''}</div>
+        <div style="margin-top:10px"><b style="font-size:12.5px">اقلام سفارش</b>${items}</div>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn small" type="button" onclick="ToubaAuthUI.copyShippingLabel('${esc(order.id)}')">کپی برچسب</button><button class="btn outline small" type="button" onclick="closeModal()">بستن</button></div>
+      </div>`);
+  }
+
+  async function copyShippingLabel(orderId) {
+    const order = findHydratedOrder(orderId);
+    if (!order) { g.toast('سفارش پیدا نشد.'); return; }
+    const ok = await copyPlainText(shippingLabelLines(order).join('\n'));
+    g.toast(ok ? 'متن برچسب کپی شد؛ در اپ پستی بچسبانید.' : 'کپی نشد؛ متن را از پنجرهٔ برچسب دستی بردارید.');
   }
 
   async function refreshAdminData(section) {
@@ -286,6 +379,33 @@
     if (!confirm('آیا از حذف این دسته‌بندی اطمینان دارید؟')) return;
     try { await g.DataRepositories.categories.delete(id); await refreshAdminData('categories'); g.toast('دسته‌بندی از پایگاه داده حذف شد.'); }
     catch (error) { showActionError(error, 'حذف دسته‌بندی انجام نشد. اگر محصولی به آن متصل است، ابتدا آن را جابه‌جا کنید.'); }
+  };
+
+  g.moveCategoryRow = async function (id, dir) {
+    const database = getDb();
+    const list = (database && database.categories) || [];
+    const i = list.findIndex(c => String(c.id) === String(id));
+    const j = i + Number(dir);
+    if (i < 0 || j < 0 || j >= list.length) return;
+    const so = c => Number(c.sortOrder || 0);
+    const a = list[i], b = list[j];
+    try {
+      if (so(a) === so(b)) {
+        const fixes = [];
+        list.forEach((c, k) => { const want = (k + 1) * 10; if (so(c) !== want) { c.sortOrder = want; fixes.push(g.DataRepositories.categories.update(c.id, { sortOrder: want })); } });
+        await Promise.all(fixes);
+      }
+      const va = so(a), vb = so(b);
+      a.sortOrder = vb; b.sortOrder = va;
+      await g.DataRepositories.categories.update(a.id, { sortOrder: vb });
+      await g.DataRepositories.categories.update(b.id, { sortOrder: va });
+      list.splice(j, 0, list.splice(i, 1)[0]);
+      await refreshAdminData('categories');
+      g.toast('ترتیب نمایش دسته‌بندی ذخیره شد؛ صفحه اصلی هم همین ترتیب را دارد.');
+    } catch (error) {
+      showActionError(error, 'تغییر ترتیب دسته‌بندی ذخیره نشد.');
+      await refreshAdminData('categories').catch(() => {});
+    }
   };
 
   g.deleteCoupon = async function (code) {
@@ -453,7 +573,8 @@
       shipping:Math.max(0,Number(g.document.getElementById('adm-set-shipping')?.value)||0),
       freeShipping:Math.max(0,Number(g.document.getElementById('adm-set-free')?.value)||0),
       metaDescription:g.document.getElementById('adm-set-meta')?.value.trim()||'',
-      about:g.document.getElementById('adm-set-about')?.value.trim()||''
+      about:g.document.getElementById('adm-set-about')?.value.trim()||'',
+      enamad:{id:g.document.getElementById('adm-set-enamad-id')?.value.trim()||'',code:g.document.getElementById('adm-set-enamad-code')?.value.trim()||''}
     };
     settings.shippingOptions={...(database?.settings?.shippingOptions||{}),normal:settings.shipping,express:Math.max(0,Number(g.document.getElementById('adm-set-express')?.value)||0),freeFrom:settings.freeShipping};
     try {
@@ -462,15 +583,26 @@
     } catch(error) { showActionError(error,'ذخیرهٔ تنظیمات فروشگاه کامل نشد.'); }
   };
 
-  g.checkZarinpalStatus = async function () {
-    g.toast('در حال بررسی پیکربندی سرور و Supabase…');
+  g.checkBluPalStatus = async function () {
+    g.toast('در حال بررسی پیکربندی سرور، Supabase و کلید API بلوپال…');
     try {
-      const response=await fetch('/api/payment/zarinpal/status',{cache:'no-store'}),data=await response.json();
-      if(data?.configured&&data.paymentEnabled)g.toast('درگاه زرین‌پال در حالت sandbox آمادهٔ آزمون است؛ Production هنوز غیرفعال است.');
-      else if(data?.configured)g.toast('پیکربندی سروری آماده است، اما دریافت وجه واقعی عمداً غیرفعال است.');
-      else g.toast('پیکربندی سروری Supabase یا زرین‌پال کامل نیست.');
+      const response=await fetch('/api/payment/blupal/status',{cache:'no-store'}),data=await response.json();
+      if(data?.configured&&data.paymentEnabled)g.toast(`بلوپال در حالت ${data.mode==='sandbox'?'آزمایشی (کلید blu_test_)':'عملیاتی'} آماده است.`);
+      else if(data?.configured)g.toast('کلید API تنظیم شده است، اما دریافت وجه واقعی هنوز با BLUPAL_ENABLE_LIVE_PAYMENTS قفل است.');
+      else g.toast('پیکربندی سروری Supabase یا کلید API بلوپال کامل نیست.');
       return data;
-    } catch { g.toast('وضعیت زرین‌پال دریافت نشد؛ API سایت را بررسی کنید.');return null; }
+    } catch { g.toast('وضعیت بلوپال دریافت نشد؛ API سایت را بررسی کنید.');return null; }
+  };
+
+  g.checkBitPayStatus = async function () {
+    g.toast('در حال بررسی پیکربندی درگاه بیت‌پی…');
+    try {
+      const response=await fetch('/api/payment/bitpay/status',{cache:'no-store'}),data=await response.json();
+      if(data?.paymentEnabled)g.toast('بیت‌پی آماده است؛ مشتریان می‌توانند در تسویه «پرداخت مستقیم بانکی» را انتخاب کنند.');
+      else if(data && data.missingServerKeys && data.missingServerKeys.length)g.toast('متغیرهای سرور کامل نیست: '+data.missingServerKeys.join('، '));
+      else g.toast('پیکربندی بیت‌پی کامل نیست؛ کلید ۵۲ کاراکتری پنل را در متغیرهای محیطی Vercel (BITPAY_API_KEY) تنظیم کنید.');
+      return data;
+    } catch { g.toast('وضعیت بیت‌پی دریافت نشد؛ API سایت را بررسی کنید.');return null; }
   };
 
   g.mediaAddModal = function () {
@@ -601,10 +733,10 @@
           <h3 style="margin:0">آخرین سفارش‌ها</h3>
           <button type="button" class="btn outline small" onclick="ToubaAuthUI.switchAdminSection('orders')">مشاهده همه سفارش‌ها ←</button>
         </div>
-        ` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ', 'وضعیت', 'تاریخ'], ords.slice(0, 6).map(order => {
+        ` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ', 'وضعیت', 'تاریخ', 'برچسب ارسال'], ords.slice(0, 6).map(order => {
           const status = orderLabels[order.status] || order.status || '—';
-          return `<tr><td><b>${esc(order.number || order.id)}</b></td><td>${esc(order.customer)}</td><td>${toman(order.total)}</td><td><span class="badge ${order.status === 'لغو شده' || order.status === 'CANCELLED' ? 'red' : 'green'}">${esc(status)}</span></td><td>${esc(order.date || '—')}</td></tr>`;
-        }).join(''));
+          return `<tr><td><b>${esc(order.number || order.id)}</b></td><td>${esc(order.customer)}<br><small style="color:#666">${esc([order.province, order.city].filter(Boolean).join(' — ') || order.phone || '')}</small></td><td>${toman(order.total)}</td><td><span class="badge ${order.status === 'لغو شده' || order.status === 'CANCELLED' ? 'red' : 'green'}">${esc(status)}</span></td><td>${esc(order.date || '—')}</td><td><button class="action" onclick="ToubaAuthUI.shippingLabelModal('${esc(order.id)}')">📦 برچسب</button></td></tr>`;
+        }).join('') || `<tr><td colspan="6">هنوز سفارشی ثبت نشده است.</td></tr>`);
         return;
       }
 
@@ -638,17 +770,22 @@
         </section>`;
         target.innerHTML = `<div class="admin-catalog-toolbar">
           <div><h2 style="font-size:18px;margin:0">کاتالوگ محصولات (${prods.length})</h2><p class="muted" style="margin:4px 0 0">برای تغییر چند محصول، موارد را انتخاب کنید؛ عملیات گروهی محصولی را حذف نمی‌کند.</p><p class="notice" style="margin:6px 0 0">کاتالوگ از Supabase خوانده می‌شود و ذخیره‌سازی هر تغییر پس از تأیید پایگاه داده انجام می‌شود.</p></div>
-          <div class="admin-catalog-actions"><button class="btn small" onclick="quickProductModal()">＋ افزودن سریع محصول</button><button class="btn outline small" onclick="productModal()">فرم کامل محصول</button></div>
+          <div class="admin-catalog-actions"><button class="btn small" onclick="productModal()">＋ افزودن محصول جدید</button></div>
         </div>${toolbar}<div class="shop-toolbar"><input class="select" style="max-width:300px" placeholder="جستجوی نام، SKU یا برند" oninput="filterAdminTable(this.value)"><span>${prods.length.toLocaleString('fa-IR')} محصول · ${(database?.products||[]).filter(p=>p.active).length.toLocaleString('fa-IR')} فعال</span></div>`
         + adminTable(['انتخاب','نام محصول','SKU','دسته‌بندی','قیمت (تومان)','موجودی','وضعیت','عملیات'], prods.map(p => `<tr data-search="${esc(`${p.name||''} ${p.sku||''} ${p.brand||''}`.toLocaleLowerCase())}"><td><input type="checkbox" data-bulk-product value="${esc(p.id)}" aria-label="انتخاب ${esc(p.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('product')"></td><td><b>${esc(p.name)}</b></td><td><code>${esc(p.sku || '—')}</code></td><td>${esc(catName(p.category))}</td><td>${toman(p.price)}</td><td>${(p.variants || []).reduce((n, v) => n + Number(v.stock || 0), Number(p.stock || 0)).toLocaleString('fa-IR')}</td><td><span class="badge ${p.active ? 'green' : 'red'}">${p.active ? 'فعال' : 'پیش‌نویس'}</span></td><td><button class="action" onclick="productModal('${esc(p.id)}')">ویرایش کامل</button> <button class="action danger" onclick="deleteProduct('${esc(p.id)}')">حذف</button></td></tr>`).join(''));
         return;
       }
       if (section === 'orders') {
         const ords = (database && database.orders) || [];
+        const SHIPPING_NAMES = { normal: 'پست عادی', express: 'پست سریع', free: 'ارسال رایگان' };
         target.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
           <h2 style="font-size:18px;margin:0">سفارش‌ها (${ords.length})</h2>
-        </div>` + adminTable(['شماره سفارش', 'مشتری', 'مبلغ (تومان)', 'تاریخ', 'کد پیگیری', 'وضعیت', 'تغییر وضعیت'], ords.map(o => `<tr><td><b>${esc(o.number || o.id)}</b></td><td>${esc(o.customer)}<br><small style="color:#666">${esc(o.phone || '')}</small></td><td>${toman(o.total)}</td><td>${esc(o.date || '—')}</td><td><code>${esc(o.trackingCode || o.id)}</code></td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td>${orderStatusControl(o)}</td></tr>`).join(''));
+          <button class="btn outline small" onclick="ToubaAuthUI.refreshDatabase()">به‌روزرسانی از پایگاه داده</button>
+        </div>
+        <p class="muted" style="margin:0 0 12px;font-size:12px">برچسبِ هر سفارش نام، آدرس، کد پستی و اقلام گیرنده را برای بسته‌بندی و ارسال نشان می‌دهد؛ با «کپی برچسب» متنش را در اپ پستی بچسبانید.</p>
+        <div class="shop-toolbar" style="margin-bottom:10px"><input class="select" style="max-width:320px" placeholder="جستجو: شماره سفارش، مشتری، موبایل، شهر یا کد پستی" oninput="filterAdminTable(this.value)"></div>` +
+        adminTable(['شماره سفارش', 'مشتری', 'مبلغ (تومان)', 'ارسال', 'تاریخ', 'پرداخت', 'وضعیت', 'تغییر وضعیت', 'برچسب ارسال'], ords.map(o => `<tr data-search="${esc(`${o.number || o.id} ${o.customer || ''} ${o.phone || ''} ${o.city || ''} ${o.province || ''} ${o.postal || ''}`.toLocaleLowerCase())}"><td><b>${esc(o.number || o.id)}</b><br><small style="color:#666"><code>${esc(o.trackingCode || o.id)}</code></small></td><td>${esc(o.customer)}<br><small style="color:#666">${esc(o.phone || '')} · ${esc([o.province, o.city].filter(Boolean).join(' — ') || 'بدون شهر')}</small></td><td>${toman(o.total)}</td><td>${esc(SHIPPING_NAMES[o.shippingMethod] || o.shippingMethod || 'عادی')}<br><small style="color:#666">${o.shipping ? toman(o.shipping) : 'رایگان'}</small></td><td>${esc(o.date || '—')}</td><td><span class="badge ${o.paymentStatus === 'PAID' ? 'green' : 'red'}">${o.paymentStatus === 'PAID' ? 'تأییدشده' : o.paymentStatus === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><span class="badge ${o.status === 'لغو شده' ? 'red' : 'green'}">${esc(o.status)}</span></td><td>${orderStatusControl(o)}</td><td><button class="action" onclick="ToubaAuthUI.shippingLabelModal('${esc(o.id)}')">📦 برچسب ارسال</button></td></tr>`).join('') || '<tr><td colspan="9">هنوز سفارشی ثبت نشده است.</td></tr>');
         return;
       }
 
@@ -659,7 +796,7 @@
           <div class="admin-bulk-controls"><label>وضعیت<select id="bulk-category-active"><option value="">بدون تغییر</option><option value="true">فعال‌سازی</option><option value="false">غیرفعال‌سازی</option></select></label><label>آیکون مشترک (اختیاری)<input id="bulk-category-icon" maxlength="12" placeholder="مثلاً 👟"></label><button class="btn small" type="button" onclick="ToubaAuthUI.bulkApplyCategories()">اعمال به دسته‌های انتخاب‌شده</button></div>
         </section>`;
         target.innerHTML = `<div class="admin-catalog-toolbar"><div><h2 style="font-size:18px;margin:0">دسته‌بندی‌های فروشگاه (${cats.length})</h2><p class="muted" style="margin:4px 0 0">دسته‌های موجود حفظ می‌شوند؛ می‌توانید چند مورد را هم‌زمان فعال/غیرفعال یا آیکون‌گذاری کنید.</p><p class="notice" style="margin:6px 0 0">دسته‌بندی‌ها از جدول Supabase خوانده می‌شوند؛ تغییر وضعیت، افزودن و حذف فقط پس از موفقیت پایگاه داده اعمال می‌شود.</p></div><button class="btn small" onclick="categoryModal()">＋ دسته‌بندی جدید</button></div>${bulk}`
-        + adminTable(['انتخاب','آیکون','نام دسته‌بندی','شناسه لاتین','محصولات','وضعیت','عملیات'], cats.map(c => `<tr><td><input type="checkbox" data-bulk-category value="${esc(c.id)}" aria-label="انتخاب دسته ${esc(c.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('category')"></td><td style="font-size:20px">${esc(c.icon || '◈')}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td>${(database?.products||[]).filter(p=>p.category===c.id).length.toLocaleString('fa-IR')}</td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><button class="action" onclick="categoryModal('${esc(c.id)}')">ویرایش</button> <button class="action danger" onclick="deleteCategory('${esc(c.id)}')">حذف</button></td></tr>`).join(''));
+        + adminTable(['انتخاب','آیکون','نام دسته‌بندی','شناسه لاتین','محصولات','وضعیت','ترتیب نمایش'], cats.map((c, idx) => `<tr><td><input type="checkbox" data-bulk-category value="${esc(c.id)}" aria-label="انتخاب دسته ${esc(c.name)}" onchange="ToubaAuthUI.updateCatalogSelectionCount('category')"></td><td style="font-size:20px">${esc(c.icon || '◈')}</td><td><b>${esc(c.name)}</b></td><td><code>${esc(c.id)}</code></td><td>${(database?.products||[]).filter(p=>p.category===c.id).length.toLocaleString('fa-IR')}</td><td><span class="badge ${c.active ? 'green' : 'red'}">${c.active ? 'فعال' : 'غیرفعال'}</span></td><td><div class="cat-order-move"><button class="action" onclick="moveCategoryRow('${esc(c.id)}',-1)" ${idx===0?'disabled':''} title="انتقال به بالا" aria-label="بالا بردن ${esc(c.name)}">▲</button><span class="cat-order-pos">${(idx+1).toLocaleString('fa-IR')}</span><button class="action" onclick="moveCategoryRow('${esc(c.id)}',1)" ${idx===cats.length-1?'disabled':''} title="انتقال به پایین" aria-label="پایین بردن ${esc(c.name)}">▼</button></div></td></tr>`).join(''));
         return;
       }
       if (section === 'coupons') {
@@ -727,43 +864,53 @@
       }
 
       if (section === 'payments') {
-        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'zarinpal');
-        let paymentStatus = { configured:false, mode:'sandbox', callbackPath:'/api/payment/zarinpal/callback', liveCheckoutSafe:false };
+        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'blupal');
+        let paymentStatus = { configured:false, mode:'sandbox', notifyPath:'/api/payment/blupal/notify', callbackPath:'/api/payment/blupal/callback', receiptPath:'/api/payment/blupal/receipt', apiKeyKind:'missing', cardNumberConfigured:false, minAmountToman:10000, errorCodes:[] };
         try {
-          const response = await fetch('/api/payment/zarinpal/status', { cache:'no-store' });
-          if (response.ok) paymentStatus = { ...paymentStatus, ...(await response.json()) };
+          const response = await fetch('/api/payment/blupal/status', { cache:'no-store' });
+          if (response.ok) paymentStatus = await response.json();
         } catch { /* status API may be unavailable when server payment settings are absent */ }
-        const callbackUrl = `${g.location?.origin || ''}${paymentStatus.callbackPath || '/api/payment/zarinpal/callback'}`;
+        const origin = g.location?.origin || '';
+        const notifyUrl = `${origin}${paymentStatus.notifyPath || '/api/payment/blupal/notify'}`;
+        const callbackUrl = `${origin}${paymentStatus.callbackPath || '/api/payment/blupal/callback'}`;
         const modeLabel = paymentStatus.mode === 'production' ? 'عملیاتی' : 'Sandbox';
         const paymentEnabled = Boolean(paymentStatus.paymentEnabled);
         target.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr;gap:24px;max-width:960px">
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-              <div><h2 style="font-size:18px;margin:0;color:#0f172a">درگاه پرداخت زرین‌پال</h2><small style="color:#64748b">درخواست و تأیید تراکنش فقط روی سرور انجام می‌شود.</small></div>
-              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? `● آمادهٔ آزمایش · ${modeLabel}` : paymentStatus.configured ? '● پیکربندی شده · دریافت وجه غیرفعال' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
+              <div><h2 style="font-size:18px;margin:0;color:#0f172a">BluPal · درگاه کارت‌به‌کارت بلوپال</h2><small style="color:#64748b">فاکتور با <code>POST /v1/invoices/create</code> ساخته می‌شود و پرداخت فقط با <code>GET /v1/invoices/{invoice_id}</code> (وضعیت PAID) روی سرور نهایی می‌شود؛ وب‌هوک صرفاً سرنخ است.</small></div>
+              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? `● ${modeLabel === 'عملیاتی' ? 'دریافت وجه فعال' : 'آمادهٔ آزمون'} · ${modeLabel}` : paymentStatus.configured ? '● پیکربندی شده · دریافت وجه واقعی قفل است' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
             </div>
             <div class="form-grid">
               <div class="field"><label>محیط</label><input readonly value="${esc(modeLabel)}"></div>
-              <div class="field"><label>وضعیت</label><input readonly value="${paymentEnabled ? 'آمادهٔ پرداخت آزمایشی sandbox' : paymentStatus.configured ? 'درگاه تنظیم شده؛ دریافت وجه غیرفعال' : 'پیکربندی نشده'}"></div>
-              <div class="field full"><label>Callback URL (برای مشاهده)</label><input readonly value="${esc(callbackUrl)}" dir="ltr"></div>
+              <div class="field"><label>نوع کلید API</label><input readonly value="${esc(paymentStatus.apiKeyKind === 'test' ? 'کلید آزمایشی (blu_test_)' : paymentStatus.apiKeyKind === 'live' ? 'کلید عملیاتی (blu_live_)' : 'تنظیم نشده')}"></div>
+              <div class="field"><label>کارت مقصد</label><input readonly value="${esc(paymentStatus.cardNumberConfigured ? 'BLUPAL_CARD_NUMBER از متغیرهای سرور' : 'کارت پیش‌فرض/تصادفی فعال پنل بلوپال')}"></div>
+              <div class="field"><label>وضعیت پرداخت</label><input readonly value="${paymentEnabled ? (modeLabel === 'عملیاتی' ? 'دریافت وجه واقعی فعال' : 'آمادهٔ پرداخت آزمایشی sandbox') : paymentStatus.configured ? 'کلیدها تنظیم شده؛ دریافت وجه قفل' : 'پیکربندی نشده'}"></div>
+              <div class="field full"><label>«Callback page» در پنل بلوپال (اختیاری — صفحهٔ نتیجهٔ فروشگاه خودش وضعیت را می‌پرسد)</label><input readonly dir="ltr" value="${esc(callbackUrl)}"></div>
+              <div class="field full"><label>«Webhook درگاه» که باید در پنل ثبت شود</label><input readonly dir="ltr" value="${esc(notifyUrl)}"></div>
+              <div class="field full"><label>محدودهٔ مبلغ هر فاکتور</label><input readonly dir="ltr" value="${esc(`حداقل ${Number(paymentStatus.minAmountToman || 10000).toLocaleString('fa-IR')} تومان — ${(paymentStatus.errorCodes || ['amount_too_low','amount_too_high']).slice(0, 5).join(' · ')}`)}"></div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkZarinpalStatus()">بررسی پیکربندی</button></div>
+            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBluPalStatus()">بررسی پیکربندی</button><button class="btn outline" type="button" onclick="ToubaAuthUI.checkBitPayStatus()">بررسی درگاه بیت‌پی (موازی)</button></div>
           </div>
           <div class="panel" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:16px;padding:22px">
             <h3 style="margin:0 0 10px">تنظیم امن در Vercel → Settings → Environment Variables</h3>
             <ul style="margin:0;padding-right:22px;line-height:1.9;color:#334155">
-              <li><code>ZARINPAL_MERCHANT_ID</code> — شناسهٔ ۳۶ کاراکتری پذیرندهٔ زرین‌پال.</li>
-              <li><code>ZARINPAL_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای state و رسید callback.</li>
-              <li><code>ZARINPAL_MODE</code> — ابتدا <code>sandbox</code>؛ پس از فعال‌سازی پذیرنده، <code>production</code>.</li>
+              <li><code>BLUPAL_API_KEY</code> — کلید «API درگاه» از پنل بلوپال؛ برای آزمون با <code>blu_test_</code> و برای وجه واقعی با <code>blu_live_</code> آغاز می‌شود و پیشوندش باید با <code>BLUPAL_MODE</code> هم‌خوان باشد.</li>
+              <li><code>BLUPAL_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای رسید وضعیت پرداخت.</li>
+              <li><code>BLUPAL_MODE</code> — ابتدا <code>sandbox</code>؛ سپس <code>production</code> به‌همراه <code>BLUPAL_ENABLE_LIVE_PAYMENTS=true</code>.</li>
+              <li><code>BLUPAL_CARD_NUMBER</code> — اختیاری؛ شمارهٔ کارت ۱۶ رقمی مقصد. خالی بماند بلوپال کارت فعال پیش‌فرض پنل را انتخاب می‌کند (در sandbox نادیده گرفته می‌شود).</li>
+              <li>امضای وب‌هوک در مستندات بلوپال تعریف نشده، پس فروشگاه به بدنهٔ وب‌هوک اعتماد نمی‌کند: آن را فقط سرنخ می‌گیرد و وضعیت را از خودِ درگاه می‌پرسد.</li>
+              <li><code>SUPABASE_URL</code> و <code>SUPABASE_SERVICE_ROLE_KEY</code> — بدون آن‌ها پرداخت به سفارش متصل نمی‌شود؛ <code>SUPABASE_PUBLISHABLE_KEY</code> برای مرورگر است.</li>
+              <li>فهرست کامل در <code>vercel.env.example</code> است؛ با <code>npm run vercel:env -- --project &lt;name&gt;</code> یک‌جا روی Vercel اعمال می‌شود (بدون چاپ مقدارها).</li>
             </ul>
-            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. سفارش و موجودی اکنون از Supabase خوانده می‌شوند؛ بااین‌حال دریافت وجه Production تا تنظیم و آزمون عملی پذیرنده و تأیید callback و reconciliation غیرفعال می‌ماند.</p>
+            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. بازگشت مشتری از صفحهٔ پرداخت و بدنهٔ وب‌هوک هیچ‌کدام به‌تنهایی دلیل پرداخت نیستند و مبلغ هرگز از پاسخ درگاه خوانده نمی‌شود؛ مبلغ سفارش از Supabase گرفته و به ریال تبدیل می‌شود. مبلغ اصلاحی (final_amount) فقط به مشتری نشان داده می‌شود تا واریزش قابل تشخیص باشد. دریافت وجه واقعی تا تنظیم <code>BLUPAL_ENABLE_LIVE_PAYMENTS=true</code> و آزمون end-to-end در محیط آزمایشی عمداً قفل است.</p>
           </div>
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
-            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های پایگاه داده (${paymentsList.length})</h3>
-            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','کد مرجع / Authority'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'zarinpal' ? 'زرین‌پال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
+            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های بلوپال (${paymentsList.length})</h3>
+            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','شناسهٔ فاکتور / شماره مرجع'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'blupal' ? 'بلوپال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
           </div>
-        </div>`;
+        </div>`;;
         return;
       }
 
@@ -781,6 +928,10 @@
             <div class="field"><label>حداقل خرید برای ارسال رایگان (تومان)</label><input id="adm-set-free" type="number" min="0" value="${Number(st.freeShipping ?? 0)}"></div>
             <div class="field full"><label>معرفی فروشگاه</label><textarea id="adm-set-about">${esc(st.about || '')}</textarea></div>
             <div class="field full"><label>توضیحات SEO</label><textarea id="adm-set-meta">${esc(st.metaDescription || '')}</textarea></div>
+            <div class="field full" style="margin-top:6px"><b style="font-size:13px">نماد اعتماد الکترونیکی (اینماد)</b></div>
+            <div class="field"><label>شناسهٔ نماد (id)</label><input id="adm-set-enamad-id" value="${esc(st.enamad?.id || '')}" placeholder="8043803" dir="ltr"></div>
+            <div class="field"><label>کد لوگو (Code)</label><input id="adm-set-enamad-code" value="${esc(st.enamad?.code || '')}" placeholder="کد ۳۲ رقمی پنل اینماد" dir="ltr"></div>
+            <div class="field full"><p class="muted" style="font-size:11.5px;margin:2px 0 0">این کد باید از پنل اینماد (بخش «دریافت لوگو») برای همین دامنهٔ سایت گرفته شود؛ با تغییر دامنه یا تمدید نماد، کد تازه را همین‌جا جایگزین کنید — بدون نیاز به تغییر کد سایت. خالی = مقدار پیش‌فرض فعلی.</p></div>
           </div>
           <button class="btn" style="margin-top:16px" onclick="saveStoreSettings()">ذخیره تنظیمات</button>
         </div>`;
@@ -921,10 +1072,13 @@
     updatePassword,
     loadAdminSection,
     refreshDatabase,
+    shippingLabelModal,
+    copyShippingLabel,
     updateContactMessageStatus,
     bulkApplyProducts,
     bulkApplyCategories,
-    checkZarinpalStatus:g.checkZarinpalStatus,
+    checkBluPalStatus:g.checkBluPalStatus,
+    checkBitPayStatus:g.checkBitPayStatus,
     selectAllCatalogRows,
     updateCatalogSelectionCount,
     switchAdminSection,
@@ -958,16 +1112,54 @@
   g.account = accountPage;
   g.ordersPage = ordersPage;
 
+  // صفحهٔ انتظار پیش از رسیدن داده‌ها: انیمیشن برند (نه متن اخطار)، تا مشتری هنگام
+  // بارگذاریِ اولِ سرورِ سردِ Vercel سایت را ترک نکند. خطای واقعی همچون گذشته fail-closed است.
+  function dbLoadingScreen() {
+    return `<main class="tb-load" role="status" aria-live="polite">
+      <style>
+        .tb-load{min-height:100vh;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:#07110c;color:#e7f2dd;padding:24px}
+        .tb-load .tb-orbit{position:relative;width:88px;height:88px;display:grid;place-items:center}
+        .tb-load .tb-ring{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(140,173,75,.18);border-top-color:#a6c75e;animation:tb-spin .9s linear infinite}
+        .tb-load .tb-leaf{font-size:32px;color:#a6c75e;animation:tb-bob 1.7s ease-in-out infinite}
+        .tb-load h1{font-size:19px;margin:0;font-weight:700;color:#f2f8e9}
+        .tb-load .tb-sub{margin:8px 0 0;font-size:12.5px;color:#9db38b;display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap}
+        .tb-load .tb-dots i{display:inline-block;width:5px;height:5px;margin:0 2px;border-radius:50%;background:#a6c75e;animation:tb-jump 1s infinite}
+        .tb-load .tb-dots i:nth-child(2){animation-delay:.15s}
+        .tb-load .tb-dots i:nth-child(3){animation-delay:.3s}
+        .tb-load .tb-cards{display:flex;gap:10px;width:min(680px,92vw)}
+        .tb-load .tb-card{flex:1;border-radius:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);overflow:hidden}
+        .tb-load .tb-photo{height:62px;background:linear-gradient(90deg,rgba(166,199,94,.06) 25%,rgba(166,199,94,.17) 40%,rgba(166,199,94,.06) 65%);background-size:300%;animation:tb-shine 1.4s infinite}
+        .tb-load .tb-line{height:8px;margin:9px 10px;border-radius:6px;background:rgba(255,255,255,.09);animation:tb-fade 1.2s ease-in-out infinite}
+        .tb-load .tb-card .tb-line:last-child{width:58%;margin-bottom:12px}
+        .tb-load .tb-retry{border:1px solid rgba(166,199,94,.3);background:none;color:#7d9070;font-size:11px;border-radius:999px;padding:6px 16px;transition:.2s}
+        .tb-load .tb-retry:hover{color:#cfe8a8;border-color:#a6c75e}
+        @keyframes tb-spin{to{transform:rotate(360deg)}}
+        @keyframes tb-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+        @keyframes tb-jump{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-5px);opacity:1}}
+        @keyframes tb-fade{0%,100%{opacity:.5}50%{opacity:1}}
+        @keyframes tb-shine{to{background-position:-150% 0}}
+        @media (prefers-reduced-motion:reduce){.tb-load *{animation:none !important}}
+      </style>
+      <div class="tb-orbit"><span class="tb-ring" aria-hidden="true"></span><span class="tb-leaf" aria-hidden="true">❧</span></div>
+      <div style="text-align:center">
+        <h1>در حال آماده‌سازی ویترین…</h1>
+        <p class="tb-sub">اطلاعات فروشگاه مستقیم و امن از Supabase خوانده می‌شود؛ صفحه با دریافت کامل تازه می‌شود <span class="tb-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
+      </div>
+      <div class="tb-cards" aria-hidden="true">${'<div class="tb-card"><div class="tb-photo"></div><div class="tb-line"></div><div class="tb-line"></div></div>'.repeat(4)}</div>
+      <button type="button" class="tb-retry" onclick="location.reload()">اگر دیر شد، این را بزن</button>
+    </main>`;
+  }
+
   let __isAuthRendering = false;
   g.render = function () {
     if (__isAuthRendering) return;
     if (!g.__TOUBA_DATABASE_READY) {
       const app = g.document.querySelector?.('#app');
-      const loading = g.DataProvider?.state?.status === 'loading' || g.DataProvider?.state?.status === 'disconnected';
+      const loading = g.DataProvider?.state?.status === 'loading' || g.DataProvider?.state?.status === 'disconnected' || (!g.DataProvider?.state?.status && !g.__TOUBA_DATABASE_ERROR && !g.DataProvider?.state?.error);
       const error = g.__TOUBA_DATABASE_ERROR || g.DataProvider?.state?.error;
       if (g.document.body?.classList) g.document.body.classList.remove('storefront-mode','admin-body','has-commerce-sticky');
       if (app) app.innerHTML = loading
-        ? '<main class="page container"><section class="auth-card" role="status" style="text-align:center;margin:48px auto"><h1>در حال اتصال امن به پایگاه داده…</h1><p class="muted">اطلاعات فروشگاه فقط از Supabase بارگذاری می‌شوند.</p></section></main>'
+        ? (g.document.getElementById?.('boot-splash') && !g.document.getElementById('boot-splash').dataset.out ? '' : dbLoadingScreen())
         : `<main class="page container"><section class="auth-card" role="alert" style="max-width:720px;text-align:center;margin:48px auto"><h1>فروشگاه موقتاً در دسترس نیست</h1><p class="muted">${esc(error?.message || 'اتصال یا آماده‌سازی پایگاه داده انجام نشد.')}</p><div class="notice" style="text-align:right">برای ادامه، تنظیمات Supabase و اجرای migrationهای عملیاتی پروژه را بررسی کنید. برنامه عمداً به دادهٔ Demo یا ذخیره‌سازی محلی برنمی‌گردد.</div><button class="btn" type="button" onclick="location.reload()">تلاش دوباره</button></section></main>`;
       return;
     }
@@ -1012,6 +1204,14 @@
       if (mainContent && !mainContent.id) mainContent.id = 'main-content';
       __isAuthRendering = false;
     }
+  };
+
+  const __singleLoaderRender = g.render;
+  g.render = function () {
+    __singleLoaderRender();
+    const st = g.DataProvider?.state || {};
+    const stillLoading = !g.__TOUBA_DATABASE_READY && (st.status === 'loading' || st.status === 'disconnected' || (!st.status && !g.__TOUBA_DATABASE_ERROR && !st.error));
+    if (!stillLoading) g.toubaDismissBootSplash?.(); // one loader only: lift the splash once data is in (or failed)
   };
 
   (async function initializeApplication() {

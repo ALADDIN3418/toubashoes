@@ -114,7 +114,13 @@
       await setSession(data.session, { render: false });
     }
     const result = requireClient().auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') passwordRecovery = true;
+      if (event === 'PASSWORD_RECOVERY') {
+        passwordRecovery = true;
+        // If the Site-URL redirect dropped the user on another page, pull them onto the recovery screen.
+        if (g.location.pathname !== '/reset-password') {
+          try { g.history?.replaceState?.({}, '', '/reset-password' + g.location.search); } catch { g.location.href = '/reset-password'; }
+        }
+      }
       // INITIAL_SESSION was already read with getSession above. SIGNED_IN is
       // applied by signIn/signUp directly; repeating the profile fetch here can
       // race navigation and clear a valid session on a transient RLS/network error.

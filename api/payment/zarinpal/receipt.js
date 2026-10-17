@@ -1,4 +1,0 @@
-'use strict';
-const handler = require('../../../lib/zarinpal.js').receipt;
-module.exports = handler;
-module.exports.config = { api:{ bodyParser:{ sizeLimit:'32kb' } } };

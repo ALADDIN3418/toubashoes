@@ -1530,3 +1530,184 @@ body.storefront-mode[data-theme="light"] .brand-emblem {
   color: inherit;
   border-inline-end-color: rgba(15, 23, 17, 0.22);
 }
+
+/* ═══════ هم‌سازی مؤلفه‌ها و کنتراست: هر دو تم، دکمه‌ها و فرم‌ها ═══════
+   استایل پایه (stage4.css) روشن‌محور نوشته شده؛ این بلوک همهٔ کنترل‌های ویترین را
+   در دو تم روی متغیرهای مشترک می‌آورد: چیپ‌ها، پیل‌ها، شمارندهٔ تعداد، توست،
+   مودال، تایم‌لاین، کارت رهگیری، حالت انتخاب رادیویی، autofill و افکت hover. */
+
+/* چیپ وضعیت — سبز/قرمز/آبی؛ در تیره به‌جای پس‌زمینهٔ پاستلیِ سفید، تیِنت نیمه‌شفاف. */
+body.storefront-mode .badge.green{background:#e3f3e6;color:#1f7a3d;border:1px solid #bfe3c8}
+body.storefront-mode .badge.red{background:#fdecec;color:#b3372f;border:1px solid #f2c4bf}
+body.storefront-mode .badge.info{background:#e8f0fe;color:#1a56b4;border:1px solid #c6daf5}
+body.storefront-mode[data-theme="dark"] .badge{background:rgba(236,241,226,.09);color:var(--touba-muted);border-color:var(--touba-border)}
+body.storefront-mode[data-theme="dark"] .badge.green{background:rgba(74,222,128,.13);color:#6fca8b;border-color:rgba(74,222,128,.28)}
+body.storefront-mode[data-theme="dark"] .badge.red{background:rgba(248,113,113,.13);color:#ef9d97;border-color:rgba(248,113,113,.3)}
+body.storefront-mode[data-theme="dark"] .badge.info{background:rgba(96,165,250,.14);color:#9ec3f5;border-color:rgba(96,165,250,.35)}
+
+/* پیل سایز/رنگ و تب‌ها — حالت انتخاب با رنگ برند. */
+body.storefront-mode .pill{border-color:var(--touba-border)}
+body.storefront-mode .pill:hover{border-color:var(--touba-brand)}
+body.storefront-mode .pill.selected{background:color-mix(in srgb,var(--touba-brand) 20%,var(--touba-surface))!important;border-color:var(--touba-brand)!important;color:var(--touba-text)!important;font-weight:700}
+body.storefront-mode .tab{color:var(--touba-muted)}
+body.storefront-mode .tab.active{color:var(--touba-brand)!important;border-bottom-color:var(--touba-brand)!important}
+
+/* شمارندهٔ تعداد (سبد و صفحهٔ محصول). */
+body.storefront-mode .qty{background:var(--touba-surface)!important;border-color:var(--touba-border)!important}
+body.storefront-mode .qty button{background:var(--touba-surface-soft)!important;color:var(--touba-text)!important}
+body.storefront-mode .qty button:hover{background:color-mix(in srgb,var(--touba-brand) 22%,var(--touba-surface-soft))!important}
+body.storefront-mode .qty button:active{transform:scale(.94)}
+body.storefront-mode .qty span{color:var(--touba-text)!important}
+
+/* توست: هم‌خانوادهٔ سطحِ تم، با حاشیه و سایهٔ شناور. */
+body.storefront-mode .toast{background:var(--touba-surface-raised)!important;color:var(--touba-text)!important;border:1px solid var(--touba-border)!important;box-shadow:var(--shadow-floating)!important}
+
+/* دکمه‌های عملیات ریز (حذف/ویرایش/کد تخفیف). */
+body.storefront-mode .action{background:var(--touba-surface-soft)!important;color:var(--touba-text)!important;border:1px solid var(--touba-border)!important}
+body.storefront-mode .action:hover{background:color-mix(in srgb,var(--touba-brand) 16%,var(--touba-surface-soft))!important;border-color:var(--touba-brand)!important}
+body.storefront-mode .action.danger{color:#c53a2d}
+body.storefront-mode[data-theme="dark"] .action.danger{color:#f19189}
+
+/* مودال: هاورِ دکمهٔ بستن. */
+body.storefront-mode .modal-head .close:hover{background:color-mix(in srgb,var(--touba-brand) 18%,var(--touba-surface-soft))!important}
+
+/* رادیو/چک‌باکس: رنگ انتخاب از برند + هایلایت گزینهٔ انتخابی در کارت‌های ارسال و پرداخت. */
+body.storefront-mode input[type="radio"],
+body.storefront-mode input[type="checkbox"]{accent-color:var(--touba-brand)}
+body.storefront-mode .shipping-option:has(input:checked),
+body.storefront-mode .payment-method-card:has(input:checked){border-color:var(--touba-brand)!important;background:color-mix(in srgb,var(--touba-brand) 10%,var(--touba-surface-soft))!important}
+
+/* خودکارپُرکردن مرورگر در تیره: بلوک زرد پیش‌فرض کروم حذف می‌شود. */
+body.storefront-mode input:-webkit-autofill,
+body.storefront-mode input:-webkit-autofill:hover,
+body.storefront-mode input:-webkit-autofill:focus{box-shadow:0 0 0 1000px var(--touba-surface-raised) inset!important;-webkit-text-fill-color:var(--touba-text)!important;border-radius:10px}
+
+/* بازشوی select در تم تیره. */
+body.storefront-mode[data-theme="dark"] select option{background:var(--touba-surface-raised);color:var(--touba-text)}
+
+/* سلکت‌های رنگ/سایز داخل سبد و برچسب موجودی. */
+body.storefront-mode .cart-variant-fields select{background:var(--touba-surface-raised)!important;color:var(--touba-text)!important;border:1px solid var(--touba-border)!important;border-radius:8px;padding:4px 8px}
+body.storefront-mode .variant-stock-label{color:var(--touba-subtle)!important}
+
+/* کارت رهگیری و تایم‌لاین مراحل. */
+body.storefront-mode .tracking-card{background:var(--touba-surface-soft)!important;border:1px solid var(--touba-border)!important;color:var(--touba-text)!important}
+body.storefront-mode .tracking-card p{color:var(--touba-muted)}
+body.storefront-mode .timeline-step{color:var(--touba-subtle)!important}
+body.storefront-mode .timeline-step:before{background:var(--touba-border)!important}
+body.storefront-mode .timeline-step i{background:var(--touba-surface-raised)!important;color:var(--touba-subtle)!important;border:1px solid var(--touba-border)}
+body.storefront-mode .timeline-step.done{color:var(--touba-brand)!important}
+body.storefront-mode .timeline-step.done i{background:var(--touba-brand)!important;border-color:transparent!important;color:#10190f!important}
+body.storefront-mode[data-theme="light"] .timeline-step.done i{color:#fbfdf7!important}
+body.storefront-mode .timeline-step.done:before{background:var(--touba-brand)!important}
+
+/* یادداشت خطا: تیِنت قرمز ماندگار در هر دو تم (از قاعدهٔ عمومی .notice بعدتر می‌آید). */
+body.storefront-mode .notice.error-notice,
+body.storefront-mode .error-notice{background:color-mix(in srgb,#e5484d 13%,var(--touba-surface))!important;color:var(--touba-text)!important;border-color:color-mix(in srgb,#e5484d 32%,var(--touba-border))!important}
+
+/* هایلایت سبزِ آیکون نتیجهٔ پرداخت در تم تیره (پاستلِ روشن در stage3.css ثابت است). */
+body.storefront-mode[data-theme="dark"] .payment-result-icon.success{background:rgba(74,222,128,.14);color:#6fca8b}
+body.storefront-mode[data-theme="dark"] .payment-result-icon.failure{background:rgba(248,113,113,.14);color:#ef9d97}
+body.storefront-mode[data-theme="dark"] .payment-result-icon.pending{background:rgba(252,211,77,.14);color:#e8c473}
+body.storefront-mode[data-theme="dark"] .category-card:hover .category-icon{background:rgba(74,222,128,.14);color:#6fca8b}
+
+/* حالت غیرفعال دکمه‌ها (دکمهٔ «افزودن» ناموجود/در حال ارسال). */
+body.storefront-mode .btn:disabled{opacity:.55;filter:saturate(.55);cursor:not-allowed}
+body.storefront-mode .btn:disabled:hover{transform:none;box-shadow:none}
+
+/* قابِ بندانگشتیِ انتخابی گالری محصول. */
+body.storefront-mode .thumbs button.selected,
+body.storefront-mode .gallery-thumb.selected{outline:2px solid var(--touba-brand);outline-offset:2px}
+
+/* حالت خالی و کادر سبد خالی. */
+body.storefront-mode .empty{color:var(--touba-muted)!important}
+body.storefront-mode .empty-cart-box p{color:var(--touba-muted)}
+
+/* در تم تیره نشانِ سبز لوگو با درخشش ملایم از پس‌زمینه جدا می‌شود. */
+body.storefront-mode[data-theme="dark"] .auth-touba-mark{filter:drop-shadow(0 0 18px rgba(140,173,75,.30)) brightness(1.18) saturate(1.05)}
+body.storefront-mode .pf-adv-hint{color:var(--touba-subtle)}
+
+/* نوار اسلایدهای فرم محصول در تم تیره (مودال‌های داخل ویترین). */
+body.storefront-mode .img-slide{background:var(--touba-surface-raised);border-color:var(--touba-border)}
+body.storefront-mode .img-slide.main{border-color:var(--touba-brand);box-shadow:0 0 0 2px rgba(140,173,75,.22)}
+body.storefront-mode .img-slide figcaption{color:var(--touba-muted)}
+body.storefront-mode .img-slide .img-actions{border-top-color:var(--touba-border)}
+body.storefront-mode .img-slide .img-actions button{color:var(--touba-text);border-inline-start-color:var(--touba-border)}
+body.storefront-mode .img-slide .img-actions button:hover{background:var(--touba-surface-soft)}
+body.storefront-mode .img-slide .img-actions .rm{color:#f19189}
+
+body.storefront-mode .pf-colors-hex{background:var(--touba-surface-soft);border-color:var(--touba-border)}
+body.storefront-mode .chf{color:var(--touba-text)}
+body.storefront-mode .chf-note{color:var(--touba-muted)}
+body.storefront-mode .chf input[type=color]{border-color:var(--touba-border)}
+
+/* ==========================================================================
+   Home category row (v1.0.8) — ONE horizontal strip showing ONLY the
+   registered categories, in the admin's own table order. No auto-carousel,
+   no clones: the artwork sits on a transparent stage (no frame, no white
+   matte) with the category name centered underneath; edge arrows (shown
+   only when the row overflows) page through it, plus hand-swipe with snap.
+   Sizes: 136/150/208px media across the phone/default/desktop tiers.
+   Emoji tile only until an image is set for the category.
+   ========================================================================== */
+.cat-tile-row{display:flex;align-items:flex-start;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:4px 2px 16px;margin:14px -2px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.cat-tile-row::-webkit-scrollbar{display:none}
+.cat-tile{flex:0 0 auto;width:158px;margin-inline-end:16px;display:flex;flex-direction:column;align-items:center;gap:9px;scroll-snap-align:start;-webkit-tap-highlight-color:transparent;text-decoration:none}
+.cat-tile-media{width:150px;height:150px;display:grid;place-items:center;border-radius:28px;overflow:hidden;transition:transform .22s cubic-bezier(.16,1,.3,1)}
+.cat-tile-media img{display:block;width:100%;height:100%;object-fit:contain;border:0;background:transparent}
+.cat-tile:hover .cat-tile-media{transform:scale(1.05)}
+.cat-tile:active .cat-tile-media{transform:scale(.97);opacity:.85}
+.cat-tile-name{font-size:14px;font-weight:800;line-height:1.65;text-align:center;color:var(--touba-text,#253329);transition:color .2s ease}
+.cat-tile:hover .cat-tile-name{color:var(--touba-brand,#5e743f)}
+.cat-tile-emoji{border-radius:50%;background:var(--touba-surface-soft,#f0f1e9);border:1px solid var(--touba-border,rgba(38,56,42,.12))}
+.cat-tile-emoji i{font-style:normal;font-size:52px;line-height:1}
+@supports (background:color-mix(in srgb,red 50%,blue)){
+.cat-tile-emoji{background:color-mix(in srgb,var(--cat-tint,#b9cf8e) 24%,var(--touba-surface-soft,#f0f1e9))}
+body.storefront-mode[data-theme="dark"] .cat-tile-emoji{background:color-mix(in srgb,var(--cat-tint,#b9cf8e) 14%,var(--touba-surface-soft,#1c261d))}
+}
+@media (min-width:720px){
+.cat-tile-row{padding:6px 2px 18px}
+.cat-tile{width:216px;margin-inline-end:24px}
+.cat-tile-media{width:208px;height:208px;border-radius:36px}
+.cat-tile-emoji i{font-size:72px}
+.cat-tile-name{font-size:16px}
+}
+@media (max-width:379px){
+.cat-tile{width:144px;margin-inline-end:10px}
+.cat-tile-media{width:136px;height:136px;border-radius:24px}
+.cat-tile-emoji i{font-size:46px}
+.cat-tile-name{font-size:13.5px}
+}
+.cat-row-wrap{position:relative}
+.cat-arrow{display:none;position:absolute;top:96px;transform:translateY(-50%);z-index:6;width:38px;height:38px;border-radius:50%;place-items:center;padding:0;border:1px solid var(--touba-border,rgba(38,56,42,.12));background:var(--touba-surface-raised,#ffffff);color:var(--touba-text,#253329);box-shadow:0 6px 18px rgba(10,18,12,.16);cursor:pointer;transition:transform .18s cubic-bezier(.16,1,.3,1),color .2s ease,box-shadow .2s ease}
+.cat-row-wrap.has-overflow .cat-arrow{display:grid}
+.cat-arrow svg{width:19px;height:19px}
+.cat-arrow-start{inset-inline-start:2px}
+.cat-arrow-end{inset-inline-end:2px}
+.cat-arrow:hover{color:var(--touba-brand,#5e743f);transform:translateY(-50%) scale(1.1);box-shadow:0 10px 24px rgba(10,18,12,.24)}
+.cat-arrow:active{transform:translateY(-50%) scale(.94)}
+@media (min-width:720px){
+.cat-arrow{width:44px;height:44px;top:124px}
+.cat-arrow svg{width:22px;height:22px}
+.cat-arrow-start{inset-inline-start:-16px}
+.cat-arrow-end{inset-inline-end:-16px}
+}
+/* — صفحهٔ بازیابی رمز عبور v1.1.0 — */
+body.storefront-mode .rp-steps{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0 4px}
+body.storefront-mode .rp-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--touba-muted);border:1px solid var(--touba-border);background:var(--touba-surface-soft);border-radius:999px;padding:4px 12px}
+body.storefront-mode .rp-step i{font-style:normal;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;background:var(--touba-border);color:var(--touba-text)}
+body.storefront-mode .rp-step.active{border-color:var(--touba-brand);color:var(--touba-text)}
+body.storefront-mode .rp-step.active i{background:var(--touba-brand);color:#fff}
+body.storefront-mode .rp-step.done{opacity:.75}
+body.storefront-mode .rp-step.done i{background:#5d8a3c;color:#fff}
+body.storefront-mode .rp-pw-row{display:flex;gap:8px;align-items:stretch}
+body.storefront-mode .rp-pw-row input{flex:1}
+body.storefront-mode .rp-eye{flex:0 0 auto;border:1px solid var(--touba-line,#dfdfd7);background:var(--touba-surface-soft);color:var(--touba-muted);border-radius:9px;padding:0 14px;font-size:11.5px;font-weight:700;cursor:pointer;transition:.18s}
+body.storefront-mode .rp-eye:hover{color:var(--touba-brand);border-color:var(--touba-brand)}
+/* — نماد اعتماد الکترونیکی (اینماد) v1.1.2 — لوگوی ترنسپرنت، بدون هیچ بکگراند، چسبیده به گوشه — */
+.store-footer .footer-enamad{display:flex;justify-content:flex-end;align-items:flex-end;margin-top:16px}
+.store-footer .enamad-seal{display:block;padding:0;border:0;background:none;box-shadow:none;border-radius:0;transition:transform .22s cubic-bezier(.16,1,.3,1),filter .2s ease}
+.store-footer .enamad-seal img{height:150px;width:auto;max-width:150px;display:block;background:transparent;border:0;filter:drop-shadow(0 8px 22px rgba(0,0,0,.45))}
+.store-footer .enamad-seal:hover{transform:translateY(-3px) scale(1.05)}
+.store-footer .enamad-seal:hover img{filter:drop-shadow(0 12px 26px rgba(0,0,0,.55))}
+.store-footer .enamad-seal:active{transform:scale(.97)}
+@media (max-width:379px){.store-footer .enamad-seal img{height:126px;max-width:126px}}

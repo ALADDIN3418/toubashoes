@@ -5,18 +5,6 @@
   <url><loc>https://toubashoes.vercel.app/category/men</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://toubashoes.vercel.app/category/women</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://toubashoes.vercel.app/category/sport</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p1</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p2</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p3</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p4</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p5</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p6</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p7</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p8</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p9</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p10</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p11</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://toubashoes.vercel.app/product/p12</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://toubashoes.vercel.app/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
   <url><loc>https://toubashoes.vercel.app/contact</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
 </urlset>
