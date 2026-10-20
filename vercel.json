@@ -13,7 +13,16 @@
     "api/ai/studio/generate.js": {
       "maxDuration": 120
     },
-    "api/payment/bitpay/[action].js": {
+    "api/payment/bitpay/request.js": {
+      "maxDuration": 30
+    },
+    "api/payment/bitpay/verify.js": {
+      "maxDuration": 30
+    },
+    "api/payment/bitpay/status.js": {
+      "maxDuration": 30
+    },
+    "api/payment/bitpay/callback.js": {
       "maxDuration": 30
     }
   },

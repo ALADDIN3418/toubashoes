@@ -1,0 +1,8 @@
+'use strict';
+/* بستهٔ نازک مسیر «callback» درگاه بیت‌پی — GET؛ بازگشت مرورگر از بانک؛ سرنخ است، نه مدرک پرداخت.
+ * منطق در lib/bitpay.js است. سقف بدنه 32kb (هیچ راز و هیچ مبلغی از کلاینت خوانده نمی‌شود).
+ * فایل استاتیک به‌جای داینامیک‌رویت: مسیرهای API با نام ثابت روی ورسل قطعی‌تر route می‌شوند. */
+const bitpay = require('../../../lib/bitpay.js');
+
+module.exports = bitpay.callback;
+module.exports.config = { api: { bodyParser: { sizeLimit: '32kb' } } };
