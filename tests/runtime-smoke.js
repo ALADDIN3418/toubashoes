@@ -335,10 +335,12 @@ async function main() {
   // v1.3.0: BitPay is the ONLY gateway (docs BP_PGW_DOC 2.2); browser never settles.
   {
     const lib = fs.readFileSync(path.join(root,'lib/bitpay.js'),'utf8');
-    const bitDispatcher = fs.readFileSync(path.join(root,'api/payment/bitpay/[action].js'),'utf8');
-    for (const route of ['request','verify','status','callback'])
-      assert(bitDispatcher.includes(`${route}: bitpay.${route}`), `bitpay dispatcher maps ${route} (hobby 12-function budget folds routes into one file)`);
-    assert(!fs.existsSync(path.join(root,'api/payment/bitpay/request.js')), 'per-action bitpay files must be gone — dispatcher only');
+    for (const route of ['request','verify','status','callback']) {
+      const routeFile = fs.readFileSync(path.join(root,`api/payment/bitpay/${route}.js`),'utf8');
+      assert(routeFile.includes(`module.exports = bitpay.${route}`), `bitpay route ${route} is its own thin static function file`);
+      assert(routeFile.includes(`require('../../../lib/bitpay.js')`), `bitpay route ${route} delegates to lib/bitpay.js`);
+    }
+    assert(!fs.existsSync(path.join(root,'api/payment/bitpay/[action].js')), 'dynamic dispatcher retired — static route files only');
     assert(!fs.existsSync(path.join(root,'api/payment/blupal')), 'the retired gateway has no route left');
     assert(!fs.existsSync(path.join(root,'lib/blupal.js')) && !fs.existsSync(path.join(root,'services/blupal-pay.js')), 'retired gateway library and client bridge are deleted');
     assert(lib.includes("PROVIDER = 'bitpay'"), 'single provider everywhere');
@@ -376,7 +378,9 @@ async function main() {
     assert(fs.readFileSync(path.join(root,'local-server.js'),'utf8').includes('/api/payment/bitpay/request'), 'local server routes bitpay endpoints');
     assert(!fs.readFileSync(path.join(root,'local-server.js'),'utf8').includes('blupal'), 'local server no longer routes the retired gateway');
     const vercelJson = JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
-    assert(vercelJson.functions['api/payment/bitpay/[action].js'] && !vercelJson.functions['api/payment/blupal/[action].js'], 'exactly one payment dispatcher fits the Vercel hobby budget');
+    for (const route of ['request','verify','status','callback'])
+      assert(vercelJson.functions[`api/payment/bitpay/${route}.js`], `vercel.json configures api/payment/bitpay/${route}.js`);
+    assert(Object.keys(vercelJson.functions).length === 7, 'seven configured functions fit the Vercel hobby budget');
     const totalFunctions = require('child_process').execSync(`find ${'.'} api -name '*.js' -path 'api/*'`,{cwd:root}).toString().trim().split('\n').length;
     assert(totalFunctions <= 12, `api/ must stay within the hobby plan's 12 serverless functions (found ${totalFunctions})`);
     const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
