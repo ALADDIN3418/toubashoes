@@ -15,9 +15,6 @@
     },
     "api/payment/bitpay/[action].js": {
       "maxDuration": 30
-    },
-    "api/payment/blupal/[action].js": {
-      "maxDuration": 30
     }
   },
   "headers": [

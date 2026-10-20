@@ -13,7 +13,7 @@ Migration عملیاتی `202610030001_live_commerce.sql` در مخزن موجو
 - `SUPABASE_URL` — Project URL.
 - `SUPABASE_PUBLISHABLE_KEY` — public/publishable key؛ اگر پروژه فقط کلید legacy را دارد از `SUPABASE_ANON_KEY` استفاده کنید.
 
-این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token، کلید API بلوپال و `BLUPAL_STATE_SECRET` را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
+این‌ها تنها مقدارهای Supabase هستند که به کلاینت مرورگر می‌رسند. `SUPABASE_SERVICE_ROLE_KEY`، رمز دیتابیس، GitHub token و کلید API بیت‌پی (`BITPAY_API_KEY`) را هرگز در Browser یا Git قرار ندهید. پس از تغییر Environment Variables، deployment را دوباره بسازید.
 
 در Supabase → Authentication:
 
@@ -66,44 +66,34 @@ Workflow قبل از apply، `supabase db push --dry-run` اجرا می‌کند
 
 تست‌های repository در این پروژه Supabase را با stub شبیه‌سازی می‌کنند و مدرک اجرای واقعی migration نیستند.
 
-## بلوپال (BluPal · blupal.top — کارت‌به‌کارت با فاکتور)
+## بیت‌پی (BitPay · bitpay.ir — پرداخت مستقیم بانکی)
 
-`supabase/migrations/202610050001_blupal_provider.sql` ستون `payments.provider` را روی مقدار
-تنها `blupal` قفل می‌کند (و default را حذف می‌کند تا هیچ ردیف mock ساخته نشود)، سه RPC زیر را
-می‌سازد و RPCهای درگاه‌های قبلی را `drop` می‌کند:
+`supabase/migrations/202610170001_bitpay_gateway.sql` قید `provider` را گسترش می‌دهد و
+چهار RPC امن می‌سازد؛ `supabase/migrations/202610200001_bitpay_only.sql` بیت‌پی را تنها
+درگاه قابل‌نوشت می‌کند و سفارشات تازه را مستقیم با `provider = 'bitpay'` می‌سازد:
 
-- `attach_blupal_payment(p_order_id, p_invoice_id, p_payment_url, p_card_number, p_amount_rial, p_final_amount_rial, p_status)` — فقط `service_role`؛ شناسهٔ فاکتور، نشانی صفحهٔ پرداخت، کارت مقصد و مبلغ‌های ریالی را روی ردیف `pending` می‌گذارد. ساخت دوباره مجاز است (فاکتور منقضی‌شده با فاکتور تازه جایگزین می‌شود و تاریخچه در `callback_payload.attempts` می‌ماند).
-- `settle_blupal_payment(p_order_id, p_invoice_id, p_outcome, p_amount_toman, p_reference_id, p_provider_code, p_callback_payload)` — تنها راه `verified` شدن؛ مبلغ را با `orders.total_toman` دوباره مقایسه می‌کند، ردیف‌های `verified` را تغییر نمی‌دهد (بازپخش فقط `idempotent:true` می‌دهد)، `final_amount` را به‌عنوان مبلغ شارژ اعمال نمی‌کند و در صورت موفقیت موجودی سبد را کم و سفارش را `paid` می‌کند.
-- `expire_stale_blupal_checkouts(p_grace_minutes default 60)` — فاکتورهای پرداخت‌نشده را بعد از مهلت با بازگرداندن رزرو موجودی و ظرفیت کوپن می‌بندد (کف ۱۵ دقیقه؛ هم از CLI و هم از پنل مدیر قابل اجراست).
+- `attach_bitpay_payment(p_order_id, p_id_get, p_amount_rial, p_factor_id)` — فقط `service_role`؛ شناسهٔ درگاه و مبلغ ریالی را روی ردیف `pending` می‌گذارد و provider را یک‌بار به `bitpay` می‌چرخاند. ساخت دوباره مجاز است (تلاش‌های قبلی در `callback_payload.attempts` می‌ماند).
+- `record_bitpay_trans_id(p_order_id, p_id_get, p_trans_id)` — فقط `service_role`؛ `trans_id` بانک را یک‌بار ثبت می‌کند تا سوءاستفاده نشود (سرنخ، نه مدرک پرداخت).
+- `settle_bitpay_payment(...)` — تنها راه `verified` شدن؛ فقط نتیجهٔ `gateway-result-second` (وضعیت ۱ یا ۱۱) با تطبیق مبلغ و `id_get`، موجودی سبد را کم و سفارش را `paid` می‌کند.
+- `expire_stale_bitpay_checkouts(p_grace_minutes default 60)` — چک‌اوت‌های رهاشده را بعد از مهلت با بازگرداندن رزرو موجودی و ظرفیت کوپن می‌بندد.
 
-`payments.authority` شناسهٔ فاکتور بلوپال است (عددی و کوتاه، مثل `123`)؛ الگوی اعتبارسنجی در SQL و
-در `lib/supabase-server.js` روی همین اساس شل شده است، وگرنه شناسه‌های کوتاه رد می‌شدند.
+`payments.authority` شناسهٔ `id_get` درگاه است (عددی و کوتاه)؛ الگوی اعتبارسنجی در SQL و
+در `lib/supabase-server.js` روی همین اساس شل شده است.
 
-همراه آن: `create_order_with_payment` (کف مبلغ ۱۰٬۰۰۰ تومان = حداقل فاکتور درگاه، رزرو اتمیک
-موجودی، `provider = 'blupal'`)، `cancel_pending_order` (تا ۱۰ دقیقه پس از ساخت فاکتور با
-`gateway_verification_pending` رد می‌شود تا واریزِ در شرف تطبیق، موجودی را آزاد نکند) و
-`admin_update_order_status` که `PAID` را فقط برای پرداخت `verified` می‌پذیرد.
+همراه آن: `create_order_with_payment` (کف مبلغ ۵۰۰ تومان = حداقل مبلغ درگاه، رزرو اتمیک
+موجودی، `provider = 'bitpay'`)، `cancel_pending_order` و `admin_update_order_status` که
+`PAID` را فقط برای پرداخت `verified` می‌پذیرد.
 
-هنگام اجرای migration چک‌اوت‌های `pending` درگاه‌های قبلی بسته می‌شوند (رزرو موجودی و سهم کد تخفیف
-آزاد، سفارش `cancelled`، `provider_code = 'GATEWAY_RETIRED'`). ردیف‌های تأییدشدهٔ قدیمی حذف یا
-بازنویسی **نمی‌شوند**: قید `CHECK` نام همان درگاه‌ها را برای تاریخچه می‌پذیرد و تریگر
-`payments_enforce_blupal_provider` ثبت پرداخت تازه با آن‌ها را رد می‌کند؛ تعداد ردیف‌های
-نگهداری‌شده با `NOTICE` گزارش می‌شود.
-
-برای اجرای دستی در Supabase SQL Editor هفت فایل تک‌تراکنشی در `supabase/manual/` هست (با
-`node scripts/blupal-sql-chunks.js` از همان migration ساخته می‌شوند) — چسباندن یک‌جاِ فایل کامل
-ممکن است نیمه‌بریده شود و خطای `unterminated dollar-quoted string` بدهد. همان SQL در
-`node tests/blupal-sql.js` روی Postgres واقعی هم اجرا و راستی‌آزمایی می‌شود.
+هنگام اجرای migration چک‌اوت‌های `pending` درگاه بازنشسته بسته می‌شوند (رزرو موجودی و
+سهم کد تخفیف آزاد، سفارش `cancelled`، `provider_code = 'GATEWAY_RETIRED'`). ردیف‌های
+تأییدشدهٔ قدیمی حذف یا بازنویسی **نمی‌شوند**: قید `CHECK` نام همان درگاه‌ها را برای
+تاریخچه می‌پذیرد و تریگر `payments_enforce_bitpay_provider` ثبت پرداخت تازه با هر
+مقدار دیگری را رد می‌کند.
 
 متغیرهای لازم سمت سرور (هیچ‌کدام در SQL نیستند):
 
-- `BLUPAL_MODE=sandbox` (آزمون با کلید `blu_test_…`) یا `production` (کلید `blu_live_…`)
-- `BLUPAL_API_KEY` — کلید «API درگاه» پنل؛ فقط هدر `X-API-Key` سمت سرور
-- `BLUPAL_STATE_SECRET` — راز تصادفی ≥۳۲ بایت برای امضای رسید وضعیت
-- `BLUPAL_CARD_NUMBER` — اختیاری؛ کارت مقصد، وگرنه کارت فعال پیش‌فرض پنل
-- `BLUPAL_ENABLE_LIVE_PAYMENTS=true` — قفل دریافت وجه واقعی
+- `BITPAY_API_KEY` — کلید ۵۲ کاراکتری «بخش توسعه ← فعال‌سازی API» پنل بیت‌پی؛ فقط سمت سرور
 
-تست‌های `npm test` پاسخ‌های `blupal.top` را stub می‌کنند؛ برای go-live باید اجرای migration، یک
-چرخهٔ کامل sandbox (ساخت فاکتور ← `simulate --scenario success` ← وب‌هوک `200` در پنل ← `paid`
-شدن سفارش) و سپس یک تراکنش واقعی کوچک روی دامنهٔ production انجام و با پنل بلوپال مقابله شود.
-راهنمای کامل: [`BLUPAL_OPERATIONS.md`](../BLUPAL_OPERATIONS.md).
+ست آزمون‌های `npm test` پاسخ‌های درگاه را با stub جایگزین می‌کند؛ برای go-live باید اجرای
+migration، یک چرخهٔ کامل آزمایشی (ساخت تراکنش ← پرداخت در صفحهٔ بانک ← بازگشت ←
+تسویهٔ سرور) و سپس یک تراکنش واقعی کوچک روی دامنهٔ production انجام شود.

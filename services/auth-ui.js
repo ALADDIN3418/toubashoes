@@ -189,7 +189,7 @@
     homepage: 'چیدمان صفحه اصلی',
     banners: 'بنرها و اسلایدرها',
     media: 'کتابخانه رسانه',
-    payments: 'پرداخت بلوپال (درگاه بانکی)',
+    payments: 'پرداخت بیت‌پی (درگاه بانکی)',
     settings: 'تنظیمات کلی فروشگاه',
     demo: 'پایگاه داده و همگام‌سازی'
   };
@@ -241,7 +241,7 @@
       title: 'تنظیمات و زیرساخت',
       icon: '⚙️',
       items: [
-        { key: 'payments', label: 'درگاه پرداخت بلوپال', icon: '💳' },
+        { key: 'payments', label: 'درگاه پرداخت بیت‌پی', icon: '💳' },
         { key: 'settings', label: 'تنظیمات کلی فروشگاه', icon: '⚙' },
         { key: 'demo', label: 'پایگاه داده و همگام‌سازی', icon: '🗄' }
       ]
@@ -583,17 +583,6 @@
     } catch(error) { showActionError(error,'ذخیرهٔ تنظیمات فروشگاه کامل نشد.'); }
   };
 
-  g.checkBluPalStatus = async function () {
-    g.toast('در حال بررسی پیکربندی سرور، Supabase و کلید API بلوپال…');
-    try {
-      const response=await fetch('/api/payment/blupal/status',{cache:'no-store'}),data=await response.json();
-      if(data?.configured&&data.paymentEnabled)g.toast(`بلوپال در حالت ${data.mode==='sandbox'?'آزمایشی (کلید blu_test_)':'عملیاتی'} آماده است.`);
-      else if(data?.configured)g.toast('کلید API تنظیم شده است، اما دریافت وجه واقعی هنوز با BLUPAL_ENABLE_LIVE_PAYMENTS قفل است.');
-      else g.toast('پیکربندی سروری Supabase یا کلید API بلوپال کامل نیست.');
-      return data;
-    } catch { g.toast('وضعیت بلوپال دریافت نشد؛ API سایت را بررسی کنید.');return null; }
-  };
-
   g.checkBitPayStatus = async function () {
     g.toast('در حال بررسی پیکربندی درگاه بیت‌پی…');
     try {
@@ -864,51 +853,44 @@
       }
 
       if (section === 'payments') {
-        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'blupal');
-        let paymentStatus = { configured:false, mode:'sandbox', notifyPath:'/api/payment/blupal/notify', callbackPath:'/api/payment/blupal/callback', receiptPath:'/api/payment/blupal/receipt', apiKeyKind:'missing', cardNumberConfigured:false, minAmountToman:10000, errorCodes:[] };
+        const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'bitpay');
+        let paymentStatus = { configured:false, paymentEnabled:false, apiKeyKind:'missing', minAmountToman:500, missingServerKeys:[] };
         try {
-          const response = await fetch('/api/payment/blupal/status', { cache:'no-store' });
+          const response = await fetch('/api/payment/bitpay/status', { cache:'no-store' });
           if (response.ok) paymentStatus = await response.json();
         } catch { /* status API may be unavailable when server payment settings are absent */ }
         const origin = g.location?.origin || '';
-        const notifyUrl = `${origin}${paymentStatus.notifyPath || '/api/payment/blupal/notify'}`;
-        const callbackUrl = `${origin}${paymentStatus.callbackPath || '/api/payment/blupal/callback'}`;
-        const modeLabel = paymentStatus.mode === 'production' ? 'عملیاتی' : 'Sandbox';
+        const callbackUrl = `${origin}${paymentStatus.callbackPath || '/api/payment/bitpay/callback'}`;
         const paymentEnabled = Boolean(paymentStatus.paymentEnabled);
         target.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr;gap:24px;max-width:960px">
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-              <div><h2 style="font-size:18px;margin:0;color:#0f172a">BluPal · درگاه کارت‌به‌کارت بلوپال</h2><small style="color:#64748b">فاکتور با <code>POST /v1/invoices/create</code> ساخته می‌شود و پرداخت فقط با <code>GET /v1/invoices/{invoice_id}</code> (وضعیت PAID) روی سرور نهایی می‌شود؛ وب‌هوک صرفاً سرنخ است.</small></div>
-              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? `● ${modeLabel === 'عملیاتی' ? 'دریافت وجه فعال' : 'آمادهٔ آزمون'} · ${modeLabel}` : paymentStatus.configured ? '● پیکربندی شده · دریافت وجه واقعی قفل است' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
+              <div><h2 style="font-size:18px;margin:0;color:#0f172a">BitPay · درگاه مستقیم بانکی بیت‌پی</h2><small style="color:#64748b">با <code>POST /payment/gateway-send</code> شناسهٔ درگاه ساخته می‌شود، مشتری با <code>GET /payment/gateway-&lt;id_get&gt;-get</code> به صفحهٔ بانک می‌رود و پرداخت فقط با <code>POST /payment/gateway-result-second</code> (وضعیت ۱) روی سرور نهایی می‌شود.</small></div>
+              <span class="badge ${paymentEnabled ? 'green' : paymentStatus.configured ? 'orange' : 'red'}">${paymentEnabled ? '● فعال' : paymentStatus.configured ? '● پیکربندی شده' : '○ نیازمند تنظیم متغیرهای سرور'}</span>
             </div>
             <div class="form-grid">
-              <div class="field"><label>محیط</label><input readonly value="${esc(modeLabel)}"></div>
-              <div class="field"><label>نوع کلید API</label><input readonly value="${esc(paymentStatus.apiKeyKind === 'test' ? 'کلید آزمایشی (blu_test_)' : paymentStatus.apiKeyKind === 'live' ? 'کلید عملیاتی (blu_live_)' : 'تنظیم نشده')}"></div>
-              <div class="field"><label>کارت مقصد</label><input readonly value="${esc(paymentStatus.cardNumberConfigured ? 'BLUPAL_CARD_NUMBER از متغیرهای سرور' : 'کارت پیش‌فرض/تصادفی فعال پنل بلوپال')}"></div>
-              <div class="field"><label>وضعیت پرداخت</label><input readonly value="${paymentEnabled ? (modeLabel === 'عملیاتی' ? 'دریافت وجه واقعی فعال' : 'آمادهٔ پرداخت آزمایشی sandbox') : paymentStatus.configured ? 'کلیدها تنظیم شده؛ دریافت وجه قفل' : 'پیکربندی نشده'}"></div>
-              <div class="field full"><label>«Callback page» در پنل بلوپال (اختیاری — صفحهٔ نتیجهٔ فروشگاه خودش وضعیت را می‌پرسد)</label><input readonly dir="ltr" value="${esc(callbackUrl)}"></div>
-              <div class="field full"><label>«Webhook درگاه» که باید در پنل ثبت شود</label><input readonly dir="ltr" value="${esc(notifyUrl)}"></div>
-              <div class="field full"><label>محدودهٔ مبلغ هر فاکتور</label><input readonly dir="ltr" value="${esc(`حداقل ${Number(paymentStatus.minAmountToman || 10000).toLocaleString('fa-IR')} تومان — ${(paymentStatus.errorCodes || ['amount_too_low','amount_too_high']).slice(0, 5).join(' · ')}`)}"></div>
+              <div class="field"><label>درگاه</label><input readonly value="بیت‌پی (BitPay · bitpay.ir)"></div>
+              <div class="field"><label>کلید API (مرچنت‌کد درگاه)</label><input readonly value="${esc(paymentStatus.apiKeyKind === 'malformed' ? 'قالب نادرست — باید ۵۲ کاراکتر باشد' : paymentStatus.apiKeyKind === 'set' ? 'کلید ۵۲ کاراکتری پنل ثبت شده' : 'تنظیم نشده')}"></div>
+              <div class="field"><label>وضعیت پرداخت</label><input readonly value="${paymentEnabled ? 'دریافت وجه فعال' : paymentStatus.configured ? 'پیکربندی شده' : 'پیکربندی نشده'}"></div>
+              <div class="field"><label>حداقل مبلغ سفارش</label><input readonly dir="ltr" value="${Number(paymentStatus.minAmountToman || 500).toLocaleString('fa-IR')} تومان"></div>
+              <div class="field full"><label>«Callback URL» که باید در پنل بیت‌پی ثبت شود</label><input readonly dir="ltr" value="${esc(callbackUrl)}"></div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBluPalStatus()">بررسی پیکربندی</button><button class="btn outline" type="button" onclick="ToubaAuthUI.checkBitPayStatus()">بررسی درگاه بیت‌پی (موازی)</button></div>
+            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBitPayStatus()">بررسی پیکربندی</button></div>
           </div>
           <div class="panel" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:16px;padding:22px">
             <h3 style="margin:0 0 10px">تنظیم امن در Vercel → Settings → Environment Variables</h3>
             <ul style="margin:0;padding-right:22px;line-height:1.9;color:#334155">
-              <li><code>BLUPAL_API_KEY</code> — کلید «API درگاه» از پنل بلوپال؛ برای آزمون با <code>blu_test_</code> و برای وجه واقعی با <code>blu_live_</code> آغاز می‌شود و پیشوندش باید با <code>BLUPAL_MODE</code> هم‌خوان باشد.</li>
-              <li><code>BLUPAL_STATE_SECRET</code> — راز تصادفی حداقل ۳۲ کاراکتری برای امضای رسید وضعیت پرداخت.</li>
-              <li><code>BLUPAL_MODE</code> — ابتدا <code>sandbox</code>؛ سپس <code>production</code> به‌همراه <code>BLUPAL_ENABLE_LIVE_PAYMENTS=true</code>.</li>
-              <li><code>BLUPAL_CARD_NUMBER</code> — اختیاری؛ شمارهٔ کارت ۱۶ رقمی مقصد. خالی بماند بلوپال کارت فعال پیش‌فرض پنل را انتخاب می‌کند (در sandbox نادیده گرفته می‌شود).</li>
-              <li>امضای وب‌هوک در مستندات بلوپال تعریف نشده، پس فروشگاه به بدنهٔ وب‌هوک اعتماد نمی‌کند: آن را فقط سرنخ می‌گیرد و وضعیت را از خودِ درگاه می‌پرسد.</li>
+              <li><code>BITPAY_API_KEY</code> — کلید ۵۲ کاراکتری «بخش توسعه ← فعال‌سازی API» پنل بیت‌پی (مرچنت‌کد درگاه). این تنها روش احراز است و فقط سمت سرور استفاده می‌شود؛ با scope «Production» تنظیم و سپس Redeploy کنید.</li>
+              <li>دامنهٔ دقیق سایت (همان <code>https://…</code> نهایی) باید در پنل بیت‌پی ثبت شده باشد؛ ناهماهنگی باعث خطای درگاه (کد ۴) می‌شود.</li>
               <li><code>SUPABASE_URL</code> و <code>SUPABASE_SERVICE_ROLE_KEY</code> — بدون آن‌ها پرداخت به سفارش متصل نمی‌شود؛ <code>SUPABASE_PUBLISHABLE_KEY</code> برای مرورگر است.</li>
               <li>فهرست کامل در <code>vercel.env.example</code> است؛ با <code>npm run vercel:env -- --project &lt;name&gt;</code> یک‌جا روی Vercel اعمال می‌شود (بدون چاپ مقدارها).</li>
             </ul>
-            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. متغیرها را فقط در محیط امن سرور Vercel تنظیم و سپس Redeploy کنید. بازگشت مشتری از صفحهٔ پرداخت و بدنهٔ وب‌هوک هیچ‌کدام به‌تنهایی دلیل پرداخت نیستند و مبلغ هرگز از پاسخ درگاه خوانده نمی‌شود؛ مبلغ سفارش از Supabase گرفته و به ریال تبدیل می‌شود. مبلغ اصلاحی (final_amount) فقط به مشتری نشان داده می‌شود تا واریزش قابل تشخیص باشد. دریافت وجه واقعی تا تنظیم <code>BLUPAL_ENABLE_LIVE_PAYMENTS=true</code> و آزمون end-to-end در محیط آزمایشی عمداً قفل است.</p>
+            <p class="notice" style="margin:14px 0 0">مقادیر محرمانه را در پنل یا مرورگر وارد نکنید. پس از زدن دکمهٔ تسویه، مشتری مستقیماً به صفحهٔ رسمی بانک منتقل می‌شود؛ بازگشت او از صفحهٔ پرداخت هیچ‌گاه دلیل پرداخت نیست — تسویه فقط با استعلام سمت سرور (gateway-result-second) و با تطبیق مبلغ انجام می‌شود و مبلغ هرگز از مرورگر خوانده نمی‌شود.</p>
           </div>
           <div class="panel" style="background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px">
-            <h3 style="font-size:16px;margin:0 0 14px;color:#0f172a">تراکنش‌های بلوپال (${paymentsList.length})</h3>
-            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','شناسهٔ فاکتور / شماره مرجع'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'blupal' ? 'بلوپال' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
+            <h3 style="margin:0 0 14px;color:#0f172a">تراکنش‌های بیت‌پی (${paymentsList.length})</h3>
+            ${paymentsList.length ? adminTable(['شناسه پرداخت','شماره سفارش','مبلغ (تومان)','درگاه','وضعیت','شناسهٔ تراکنش / شماره مرجع'], paymentsList.slice().reverse().map(p => `<tr><td><code>${esc(p.id)}</code></td><td><b>${esc(p.orderId || '—')}</b></td><td>${toman(p.amount || 0)}</td><td><span class="badge green">${p.provider === 'bitpay' ? 'بیت‌پی' : esc(p.provider || '—')}</span></td><td><span class="badge ${p.status === 'SUCCEEDED' ? 'green' : p.status === 'FAILED' ? 'red' : 'orange'}">${p.status === 'SUCCEEDED' ? 'پرداخت موفق' : p.status === 'FAILED' ? 'ناموفق' : 'در انتظار'}</span></td><td><code style="font-size:11px">${esc(p.referenceId || p.authority || '—')}</code></td></tr>`)) : '<div class="notice" style="margin:10px 0">هنوز تراکنشی در پایگاه داده ثبت نشده است.</div>'}
           </div>
         </div>`;;
         return;
@@ -1077,7 +1059,6 @@
     updateContactMessageStatus,
     bulkApplyProducts,
     bulkApplyCategories,
-    checkBluPalStatus:g.checkBluPalStatus,
     checkBitPayStatus:g.checkBitPayStatus,
     selectAllCatalogRows,
     updateCatalogSelectionCount,

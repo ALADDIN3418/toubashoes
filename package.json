@@ -1,23 +1,20 @@
 {
   "name": "touba-shoes-storefront",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
-  "description": "Persian RTL shoe storefront with Supabase auth and server-side BluPal (بلوپال) checkout",
+  "description": "Persian RTL shoe storefront with Supabase auth and server-side BitPay direct-bank checkout",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "node local-server.js",
     "start": "node local-server.js",
-    "blupal:status": "node scripts/blupal-cli.js config",
-    "blupal:check": "node scripts/blupal-cli.js verify",
-    "blupal:expire": "node scripts/blupal-cli.js expire",
     "vercel:env": "node scripts/vercel-env.js",
     "vercel:env:list": "node scripts/vercel-env.js --list",
     "start:comfy": "uvicorn comfy-automation-api.app.main:app --host 0.0.0.0 --port 8000",
     "build": "node scripts/check.js && node scripts/build-vercel.js",
     "lint": "node scripts/check.js",
-    "test": "node tests/supabase-commerce.js && node tests/ai-studio.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/blupal.js && node tests/blupal-sql.js && node tests/runtime-smoke.js"
+    "test": "node tests/supabase-commerce.js && node tests/ai-studio.js && node tests/vercel-api.js && node tests/supabase-auth.js && node tests/runtime-smoke.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
