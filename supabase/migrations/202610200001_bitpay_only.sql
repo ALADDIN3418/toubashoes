@@ -1,9 +1,88 @@
--- بلوپال (BluPal · blupal.top) — قطعهٔ 2 از 7: ثبت اتمیک سفارش/پرداخت با رزرو موجودی
--- با «node scripts/blupal-sql-chunks.js» از supabase/migrations/202610050001_blupal_provider.sql
--- ساخته شده؛ خودسرانه ویرایشش نکن. قطعه‌ها را به ترتیب شماره و هرکدام کامل اجرا کن.
-
+-- BitPay-only checkout (۱۴۰۴/۰۷/۲۹). The previous card-to-card gateway is retired from
+-- the application: no route, library, environment variable, client bridge or admin panel
+-- references it anymore. BitPay (bitpay.ir, contract BP_PGW_DOC 2.2) is the single live
+-- gateway: the browser hands the customer to the bank page, and only the server's own
+-- gateway-result-second call settles the payment.
+-- Runs after 202610170001_bitpay_gateway.sql. No secret lives in SQL.
 begin;
 
+-- A checkout still pending under the retired gateway is closed out and its reservations
+-- released (none is expected on a fresh production database; preview databases may hold
+-- test rows). Rows that already reached a terminal state keep their provider name as
+-- ledger history — rewriting history would falsify the record.
+do $$
+declare
+  v_row record;
+  v_line record;
+  v_history bigint;
+begin
+  if exists (select 1 from public.payments where provider not in ('blupal','bitpay','zarinpal','balepay','bluepal')) then
+    raise exception 'payments contains an unknown provider; reconcile it before retiring the old gateway';
+  end if;
+  select count(*) into v_history from public.payments
+   where provider in ('zarinpal','balepay','bluepal','blupal') and status <> 'pending';
+  if v_history > 0 then
+    raise notice 'bitpay-only: % retired-gateway payment row(s) stay in the table as history', v_history;
+  end if;
+  for v_row in
+    select p.order_id from public.payments p
+     join public.orders o on o.id = p.order_id
+     where p.provider = 'blupal' and p.status = 'pending'
+     for update of p skip locked
+  loop
+    for v_line in
+      select variant_id, quantity from public.order_items
+       where order_id = v_row.order_id and variant_id is not null
+    loop
+      update public.product_variants set stock = stock + v_line.quantity where id = v_line.variant_id;
+    end loop;
+    update public.payments
+       set status = 'failed', provider_code = 'GATEWAY_RETIRED',
+           failure_reason = 'Retired gateway checkout was abandoned before any payment was verified',
+           callback_payload = coalesce(callback_payload,'{}'::jsonb) || jsonb_build_object('migration','bitpay_only','at',now())
+     where order_id = v_row.order_id and status = 'pending' and provider = 'blupal';
+    update public.orders
+       set status = 'cancelled',
+           status_history = status_history || jsonb_build_array(
+             jsonb_build_object('status','cancelled','at',now(),'source','bitpay_only_migration'))
+     where id = v_row.order_id and status = 'pending_payment';
+    update public.coupons c
+       set usage_count = greatest(c.usage_count - 1, 0)
+      from public.orders o
+     where o.id = v_row.order_id and c.id = o.coupon_id;
+  end loop;
+end
+$$;
+
+-- BitPay is the only writable provider; retired names remain valid history.
+drop trigger if exists payments_enforce_blupal_provider on public.payments;
+create or replace function public.enforce_bitpay_payment_provider()
+returns trigger language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.provider is distinct from 'bitpay' then
+    raise exception using errcode = '22023', message = 'new payments must use the bitpay provider';
+  end if;
+  return new;
+end;
+$$;
+grant execute on function public.enforce_bitpay_payment_provider() to public, authenticated, service_role;
+
+drop trigger if exists payments_enforce_bitpay_provider on public.payments;
+create trigger payments_enforce_bitpay_provider
+  before insert or update on public.payments
+  for each row execute function public.enforce_bitpay_payment_provider();
+
+drop function if exists public.enforce_blupal_payment_provider();
+
+comment on column public.payments.provider is 'BitPay is the only writable provider; older names appear in pre-switch rows as history.';
+comment on column public.payments.authority is 'BitPay id_get returned by payment/gateway-send and used by gateway-result-second.';
+comment on column public.payments.provider_reference is 'BitPay trans_id reported by the bank for the settled transaction.';
+comment on column public.payments.provider_code is 'Last gateway state (SENT, RETURNED, PAID, FAILED) or a synthetic failure code.';
+comment on column public.payments.callback_payload is 'Gateway metadata: idGet, amountRial, factorId, transId and the attempt history.';
+
+-- create_order_with_payment: seeds the payment row straight into the single live gateway.
 create or replace function public.create_order_with_payment(
   p_items jsonb,
   p_address jsonb,
@@ -88,7 +167,7 @@ begin
     select o.id, o.coupon_id from public.orders o
      join public.payments p on p.order_id = o.id
      where o.status = 'pending_payment' and p.status = 'pending' and p.authority is null
-       and p.provider = 'blupal'
+       and p.provider = 'bitpay'
        and o.created_at < now() - interval '30 minutes'
      for update of o skip locked
   loop
@@ -99,7 +178,7 @@ begin
        where id = v_expired_line.variant_id;
     end loop;
     update public.payments set status = 'failed', provider_code = 'EXPIRED', failure_reason = 'Checkout expired',
-      callback_payload = callback_payload || jsonb_build_object('outcome','expired','source','blupal','at',now())
+      callback_payload = callback_payload || jsonb_build_object('outcome','expired','source','bitpay','at',now())
      where order_id = v_expired.id and status = 'pending';
     update public.orders set status = 'cancelled', status_history = status_history || jsonb_build_array(
       jsonb_build_object('status','cancelled','at',now(),'source','expiry'))
@@ -172,8 +251,8 @@ begin
   end if;
 
   v_total := v_subtotal + v_shipping - v_discount;
-  -- BluPal rejects invoices below 100,000 RIAL, i.e. 10,000 Toman.
-  if v_total < 10000 then raise exception using errcode = '22023', message = 'order total is below the payment provider minimum'; end if;
+  -- BitPay rejects amounts below 5,000 RIAL, i.e. 500 Toman.
+  if v_total < 500 then raise exception using errcode = '22023', message = 'order total is below the payment provider minimum'; end if;
   v_snapshot := jsonb_build_object(
     'recipient', btrim(p_address->>'recipient'),
     'phone', p_address->>'phone',
@@ -200,7 +279,7 @@ begin
   from jsonb_array_elements(v_lines) line;
 
   insert into public.payments(order_id, provider, status, amount_toman)
-  values (v_order_id, 'blupal', 'pending', v_total)
+  values (v_order_id, 'bitpay', 'pending', v_total)
   returning id into v_payment_id;
 
   insert into public.carts(user_id) values (v_user_id) on conflict (user_id) do nothing;

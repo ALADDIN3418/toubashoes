@@ -142,8 +142,8 @@ async function main() {
     ]) assert(theme.includes(needle), `storefront-theme.css missing theme-parity rule: ${needle}`);
     const stage3 = fs.readFileSync(path.join(root,'stage3.js'),'utf-8');
     assert(!stage3.includes('style=\"color:#777\"'), 'stage3.js login hint must use themed .muted, not hardcoded #777');
-    assert(!stage3.includes('background:#eef4ff'), 'stage3.js BluPal chip must use .badge.info, not inline pastel');
-    assert(stage3.includes('badge info'), 'stage3.js BluPal chip missing .badge.info');
+    assert(!stage3.includes('background:#eef4ff'), 'stage3.js gateway chip must use .badge.info, not inline pastel');
+    assert(stage3.includes('badge info'), 'stage3.js gateway chip missing .badge.info');
     assert(!fs.readFileSync(path.join(root,'customer-orders.js'),'utf8').includes('#fbe9e4'), 'customer-orders tracking error must use .notice.error-notice');
     assert(fs.readFileSync(path.join(root,'stage4.js'),'utf8').includes('color:var(--touba-brand,#10b981)'), 'stage4 free-shipping highlight must follow theme brand color');
   }
@@ -200,7 +200,7 @@ async function main() {
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
     assert(st4.includes('CATEGORY_ICON_RULES') && st4.includes('function categoryIconFor'), 'image-less categories must fall back to a name-matched icon');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.2.0', 'package version must be 1.2.0');
+    assert(pkg.version === '1.3.0', 'package version must be 1.3.0');
     assert(!fs.readFileSync(path.join(root,'sitemap.xml'),'utf8').includes('/product/p'), 'sitemap must not advertise fabricated demo product URLs');
     assert(!fs.existsSync(path.join(root,'1790940930521 (1).png')) || true, 'stray png removed from git only');
   }
@@ -231,7 +231,7 @@ async function main() {
     assert(themeCss.includes('.cat-tile-name{') && themeCss.includes('.cat-tile-media{'), 'tile media + name styles exist');
     assert(themeCss.includes('.cat-tile-media img{') && themeCss.includes('background:transparent}'), 'the image stage must stay transparent');
     const pkg = JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-    assert(pkg.version === '1.2.0', 'package version must be 1.2.0');
+    assert(pkg.version === '1.3.0', 'package version must be 1.3.0');
   }
 
   // v1.0.7: the loop carousel is fully deleted — static, swipe-only row of the real categories.
@@ -332,51 +332,63 @@ async function main() {
     assert(doc.includes('خطای ۱۰') && doc.includes('noreferrer'), 'docs explain the 102 root cause and the rel rule');
   }
 
-  // v1.2.0: BitPay direct gateway — parallel to BluPal, docs BP_PGW_DOC 2.2, browser never settles.
+  // v1.3.0: BitPay is the ONLY gateway (docs BP_PGW_DOC 2.2); browser never settles.
   {
     const lib = fs.readFileSync(path.join(root,'lib/bitpay.js'),'utf8');
     const bitDispatcher = fs.readFileSync(path.join(root,'api/payment/bitpay/[action].js'),'utf8');
     for (const route of ['request','verify','status','callback'])
       assert(bitDispatcher.includes(`${route}: bitpay.${route}`), `bitpay dispatcher maps ${route} (hobby 12-function budget folds routes into one file)`);
     assert(!fs.existsSync(path.join(root,'api/payment/bitpay/request.js')), 'per-action bitpay files must be gone — dispatcher only');
+    assert(!fs.existsSync(path.join(root,'api/payment/blupal')), 'the retired gateway has no route left');
+    assert(!fs.existsSync(path.join(root,'lib/blupal.js')) && !fs.existsSync(path.join(root,'services/blupal-pay.js')), 'retired gateway library and client bridge are deleted');
+    assert(lib.includes("PROVIDER = 'bitpay'"), 'single provider everywhere');
     assert(lib.includes("SEND_ENDPOINT = '/payment/gateway-send'") && lib.includes("RESULT_ENDPOINT = '/payment/gateway-result-second'"), 'uses the two documented gateway endpoints');
     assert(lib.includes('gateway-${idGet}-get'), 'buyer is redirected to the documented gateway-<id_get>-get address');
     assert(lib.includes('MIN_AMOUNT_RIAL = 5000'), 'rial minimum per docs (5000 IRR)');
-    assert(lib.includes("{52}"), 'api key is validated as the documented 52-char string');
+    assert(lib.includes('{52}'), 'api key is validated as the documented 52-char string');
     assert(lib.includes('record_bitpay_trans_id'), 'trans_id is recorded once (docs: save it to prevent misuse)');
     assert(lib.includes('verified.ok || verified.alreadyVerified'), 'settlement only on result-second status 1/11');
-    assert(!lib.includes('process.env.BLUPAL'), 'bitpay module reads no blupal env (zero coupling)');
     const migration = fs.readFileSync(path.join(root,'supabase/migrations/202610170001_bitpay_gateway.sql'),'utf8');
-    assert(migration.includes("check (provider in ('blupal','bitpay','zarinpal','balepay','bluepal'))"), 'provider allowlist gains bitpay while blupal rows stay valid');
+    assert(migration.includes("check (provider in ('blupal','bitpay','zarinpal','balepay','bluepal'))"), 'provider allowlist keeps retired names as history');
     assert(migration.includes('a payment can only switch to bitpay before any gateway invoice is recorded'), 'trigger: only an invoice-less pending row may flip to bitpay');
     for (const fn of ['attach_bitpay_payment','record_bitpay_trans_id','settle_bitpay_payment','expire_stale_bitpay_checkouts'])
       assert(migration.includes(`public.${fn}(`), `rpc ${fn} exists`);
     assert((migration.match(/from public, anon, authenticated/g)||[]).length >= 3, 'attach/record/settle are service-role only');
+    const only = fs.readFileSync(path.join(root,'supabase/migrations/202610200001_bitpay_only.sql'),'utf8');
+    assert(only.includes("values (v_order_id, 'bitpay', 'pending', v_total)"), 'new orders seed straight into the single live gateway');
+    assert(only.includes('new payments must use the bitpay provider'), 'only bitpay rows may be written from now on');
     const shared = fs.readFileSync(path.join(root,'lib/supabase-server.js'),'utf8');
-    assert(shared.includes("'attach_bitpay_payment'") && shared.includes("'settle_bitpay_payment'"), 'service RPC allowlist includes bitpay functions');
-    assert(shared.includes("provider = 'blupal'"), 'shared selectors default to blupal so the old gateway path is byte-for-byte unchanged');
-    const blupalLib = fs.readFileSync(path.join(root,'lib/blupal.js'),'utf8');
-    assert(blupalLib.includes("PROVIDER = 'blupal'") && blupalLib.includes("attach_blupal_payment"), 'blupal server flow intact');
+    assert(shared.includes("'attach_bitpay_payment'") && shared.includes("'settle_bitpay_payment'"), 'service RPC allowlist has only bitpay functions');
+    assert(shared.includes("provider = 'bitpay'"), 'shared selectors filter the single live provider');
+    assert(!shared.includes('blupal'), 'server layer no longer references the retired gateway');
     const stage3 = fs.readFileSync(path.join(root,'stage3.js'),'utf8');
-    assert(stage3.includes('name="paymentMethod" value="blupal" checked required') && stage3.includes('name="paymentMethod" value="bitpay"'), 'checkout offers both gateways, blupal stays default');
-    assert(stage3.includes("paymentMethod==='bitpay'") && stage3.includes('ToubaBitPay.requestGateway(orderId)'), 'checkout branches to the bitpay bridge');
-    assert(stage3.includes("پل پرداخت بلوپال بارگذاری نشده است"), 'blupal handoff untouched');
-    assert(stage3.includes('gw=bitpay') && stage3.includes('processBitPayVerification(orderId)'), 'result page routes bitpay orders to the bitpay verifier');
+    assert(stage3.includes('name="paymentMethod" value="bitpay" checked required') && !stage3.includes('value="blupal"'), 'checkout offers exactly one gateway: bitpay');
+    assert(stage3.includes('ToubaBitPay.requestGateway(orderId)'), 'checkout hands the customer to the bitpay bridge');
+    assert(stage3.includes('پل پرداخت بیت‌پی بارگذاری نشده است'), 'bitpay handoff guard intact');
+    assert(stage3.includes('processBitPayVerification(orderId)'), 'result page always verifies through the server');
     const bridge = fs.readFileSync(path.join(root,'services/bitpay-pay.js'),'utf8');
     assert(bridge.includes("'/api/payment/bitpay/request'") && bridge.includes("'/api/payment/bitpay/verify'"), 'client bridge only talks to our server');
     assert(!bridge.includes('BITPAY_API'), 'no secret on the client');
     const html = fs.readFileSync(path.join(root,'index.html'),'utf8');
-    assert(html.indexOf('bitpay-pay.js') > html.indexOf('blupal-pay.js') && html.indexOf('bitpay-pay.js') < html.indexOf('stage4.js'), 'bitpay bridge loads after blupal and before stage4');
+    assert(html.includes('services/bitpay-pay.js') && !html.includes('blupal'), 'only the bitpay bridge is loaded');
+    assert(html.indexOf('bitpay-pay.js') < html.indexOf('stage4.js'), 'bitpay bridge loads before stage4');
     assert(fs.readFileSync(path.join(root,'scripts/build-vercel.js'),'utf8').includes("'services/bitpay-pay.js'"), 'bridge is whitelisted for the vercel build');
     assert(fs.readFileSync(path.join(root,'local-server.js'),'utf8').includes('/api/payment/bitpay/request'), 'local server routes bitpay endpoints');
+    assert(!fs.readFileSync(path.join(root,'local-server.js'),'utf8').includes('blupal'), 'local server no longer routes the retired gateway');
     const vercelJson = JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
-    assert(vercelJson.functions['api/payment/bitpay/[action].js'] && vercelJson.functions['api/payment/blupal/[action].js'], 'one dispatcher entry per gateway fits the Vercel hobby function budget');
+    assert(vercelJson.functions['api/payment/bitpay/[action].js'] && !vercelJson.functions['api/payment/blupal/[action].js'], 'exactly one payment dispatcher fits the Vercel hobby budget');
     const totalFunctions = require('child_process').execSync(`find ${'.'} api -name '*.js' -path 'api/*'`,{cwd:root}).toString().trim().split('\n').length;
     assert(totalFunctions <= 12, `api/ must stay within the hobby plan's 12 serverless functions (found ${totalFunctions})`);
     const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');
-    assert(authUi.includes('checkBitPayStatus'), 'admin panel can probe the bitpay configuration');
+    assert(authUi.includes('checkBitPayStatus') && !authUi.includes('blupal'), 'admin panel probes only the bitpay configuration');
+    for (const envFile of ['.env.example','vercel.env.example']) {
+      const env = fs.readFileSync(path.join(root,envFile),'utf8');
+      assert(env.includes('BITPAY_API_KEY=') && !env.includes('BLUPAL'), `${envFile} carries only the bitpay key`);
+    }
+    const pkg = fs.readFileSync(path.join(root,'package.json'),'utf8');
+    assert(!pkg.includes('blupal'), 'npm scripts carry no retired-gateway command');
     const doc = fs.readFileSync(path.join(root,'PRODUCTION_READINESS.md'),'utf8');
-    assert(doc.includes('BITPAY_API_KEY') && doc.includes('202610170001_bitpay_gateway.sql'), 'docs list the exact operator steps');
+    assert(doc.includes('BITPAY_API_KEY') && doc.includes('202610200001_bitpay_only.sql'), 'docs list the exact operator steps');
   }
 
   // Multi-slide upload guards: the product form must accept several files and manage them.
