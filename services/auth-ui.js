@@ -854,7 +854,7 @@
 
       if (section === 'payments') {
         const paymentsList = ((database && database.payments) || []).filter(payment => payment.provider === 'bitpay');
-        let paymentStatus = { configured:false, paymentEnabled:false, apiKeyKind:'missing', minAmountToman:500, missingServerKeys:[] };
+        let paymentStatus = { configured:false, paymentEnabled:false, apiKeyKind:'missing', apiKeyLength:0, minAmountToman:500, missingServerKeys:[] };
         try {
           const response = await fetch('/api/payment/bitpay/status', { cache:'no-store' });
           if (response.ok) paymentStatus = await response.json();
@@ -871,7 +871,7 @@
             </div>
             <div class="form-grid">
               <div class="field"><label>درگاه</label><input readonly value="بیت‌پی (BitPay · bitpay.ir)"></div>
-              <div class="field"><label>کلید API (مرچنت‌کد درگاه)</label><input readonly value="${esc(paymentStatus.apiKeyKind === 'malformed' ? 'قالب نادرست — باید ۵۲ کاراکتر باشد' : paymentStatus.apiKeyKind === 'set' ? 'کلید ۵۲ کاراکتری پنل ثبت شده' : 'تنظیم نشده')}"></div>
+              <div class="field"><label>کلید API (مرچنت‌کد درگاه)</label><input readonly value="${esc(paymentStatus.apiKeyKind === 'malformed' ? 'قالب نادرست — طول فعلی ' + Number(paymentStatus.apiKeyLength || 0) + ' نویسه (باید ۵۲)؛ کلید پنل را عیناً با خط تیره کپی کنید' : paymentStatus.apiKeyKind === 'set' ? 'کلید ۵۲ کاراکتری پنل ثبت شده' : 'تنظیم نشده')}"></div>
               <div class="field"><label>وضعیت پرداخت</label><input readonly value="${paymentEnabled ? 'دریافت وجه فعال' : paymentStatus.configured ? 'پیکربندی شده' : 'پیکربندی نشده'}"></div>
               <div class="field"><label>حداقل مبلغ سفارش</label><input readonly dir="ltr" value="${Number(paymentStatus.minAmountToman || 500).toLocaleString('fa-IR')} تومان"></div>
               <div class="field full"><label>«Callback URL» که باید در پنل بیت‌پی ثبت شود</label><input readonly dir="ltr" value="${esc(callbackUrl)}"></div>
