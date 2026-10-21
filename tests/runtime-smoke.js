@@ -350,6 +350,12 @@ async function main() {
     assert(lib.includes('{52}'), 'api key is validated as the documented 52-char string');
     assert(lib.includes('/^[A-Za-z0-9_-]{52}$/'), 'panel keys whose dashes count inside the 52 chars are accepted verbatim');
     assert(lib.includes('apiKeyLength'), 'status exposes the configured key length so a bad paste is self-explanatory');
+    assert(lib.includes("DEFAULT_SITE_ORIGIN = 'https://toubashose.ir'"), 'redirect origin is pinned to the registered store domain (gateway -4 guard)');
+    assert(lib.includes('callbackUrl'), 'status exposes the absolute callback URL the panel domain must match');
+    const bitpay = require(path.join(root,'lib/bitpay.js'));
+    let domainError = null;
+    try { bitpay.parseSendResponse('-4'); } catch (error) { domainError = error.message; }
+    assert(domainError && domainError.includes('-4') && domainError.includes('toubashose.ir'), 'gateway error -4 maps to the actionable domain-registration message');
     assert(lib.includes('record_bitpay_trans_id'), 'trans_id is recorded once (docs: save it to prevent misuse)');
     assert(lib.includes('verified.ok || verified.alreadyVerified'), 'settlement only on result-second status 1/11');
     const migration = fs.readFileSync(path.join(root,'supabase/migrations/202610170001_bitpay_gateway.sql'),'utf8');

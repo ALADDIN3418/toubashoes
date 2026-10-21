@@ -859,8 +859,7 @@
           const response = await fetch('/api/payment/bitpay/status', { cache:'no-store' });
           if (response.ok) paymentStatus = await response.json();
         } catch { /* status API may be unavailable when server payment settings are absent */ }
-        const origin = g.location?.origin || '';
-        const callbackUrl = `${origin}${paymentStatus.callbackPath || '/api/payment/bitpay/callback'}`;
+        const callbackUrl = paymentStatus.callbackUrl || `${g.location?.origin || ''}${paymentStatus.callbackPath || '/api/payment/bitpay/callback'}`;
         const paymentEnabled = Boolean(paymentStatus.paymentEnabled);
         target.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr;gap:24px;max-width:960px">
@@ -874,7 +873,7 @@
               <div class="field"><label>کلید API (مرچنت‌کد درگاه)</label><input readonly value="${esc(paymentStatus.apiKeyKind === 'malformed' ? 'قالب نادرست — طول فعلی ' + Number(paymentStatus.apiKeyLength || 0) + ' نویسه (باید ۵۲)؛ کلید پنل را عیناً با خط تیره کپی کنید' : paymentStatus.apiKeyKind === 'set' ? 'کلید ۵۲ کاراکتری پنل ثبت شده' : 'تنظیم نشده')}"></div>
               <div class="field"><label>وضعیت پرداخت</label><input readonly value="${paymentEnabled ? 'دریافت وجه فعال' : paymentStatus.configured ? 'پیکربندی شده' : 'پیکربندی نشده'}"></div>
               <div class="field"><label>حداقل مبلغ سفارش</label><input readonly dir="ltr" value="${Number(paymentStatus.minAmountToman || 500).toLocaleString('fa-IR')} تومان"></div>
-              <div class="field full"><label>«Callback URL» که باید در پنل بیت‌پی ثبت شود</label><input readonly dir="ltr" value="${esc(callbackUrl)}"></div>
+              <div class="field full"><label>نشانی بازگشت از درگاه (دامنه‌اش باید در پنل بیت‌پی به‌عنوان «آدرس سایت» ثبت شده باشد)</label><input readonly dir="ltr" value="${esc(callbackUrl)}"></div>
             </div>
             <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn" type="button" onclick="ToubaAuthUI.checkBitPayStatus()">بررسی پیکربندی</button></div>
           </div>
