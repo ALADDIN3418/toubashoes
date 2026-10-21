@@ -314,7 +314,12 @@ async function main() {
     const start = st4.indexOf('class="enamad-seal"');
     assert(start>0, 'seal anchor exists');
     const seal = st4.slice(start, st4.indexOf('</a>', start));
-    assert(st4.includes('<div class="footer-enamad">'), 'seal sits in its own corner row under the footer');
+    assert(st4.includes('<div class="footer-enamad" role="group" aria-label="نمادهای اعتماد فروشگاه"><div class="footer-trust-pair">'), 'both trust marks share a separate footer row at the corner');
+    assert(st4.includes('نماد اعتماد الکترونیکی (اینماد)') && st4.includes('گواهی اعتماد بیت‌پی'), 'each trust mark has an explanatory caption underneath');
+    const bitpayStart = st4.indexOf('class="bitpay-seal"');
+    const bitpaySeal = st4.slice(bitpayStart, st4.indexOf('</a>', bitpayStart));
+    assert(bitpayStart > 0 && bitpaySeal.includes('href="https://bitpay.ir/certificate-119478-toubashose.ir" target="_blank"'), 'BitPay seal links to the supplied certificate in a new tab');
+    assert(bitpaySeal.includes('src="https://bitpay.ir/theme/public/images/trusted-logo.svg"'), 'BitPay uses the supplied official trust logo');
     assert(seal.includes('referrerpolicy="origin" target="_blank" href="https://trustseal.enamad.ir/?id='), 'anchor: official trustseal href + referrer policy, no extra attrs');
     assert(!seal.includes('noreferrer'), 'rel=noreferrer must NEVER decorate the enamad link (it strips the Referer and breaks domain-bound verification → error 102)');
     assert(!seal.includes('rel='), 'official snippet keeps rel untouched');
