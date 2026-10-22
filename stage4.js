@@ -373,8 +373,11 @@ function home(){
   let cms=db.settings.homepage||{},products=db.products.filter(p=>p.active),newest=products.slice().sort((a,b)=>(Date.parse(b.createdAt||b.updatedAt||'')||0)-(Date.parse(a.createdAt||a.updatedAt||'')||0)||Number(String(b.id).match(/\d+$/)?.[0]||0)-Number(String(a.id).match(/\d+$/)?.[0]||0)).slice(0,5),featured=(cms.featuredProductIds||[]).map(product).filter(p=>p?.active),best=(cms.bestSellerProductIds||[]).map(product).filter(p=>p?.active),promo=db.banners.filter(b=>b.active&&(b.position==='home-promo'||b.position==='home')),approved=db.reviews.filter(r=>r.status==='تأیید شده'),averageReviewRating=approved.length?approved.reduce((sum,r)=>sum+Number(r.rating||0),0)/approved.length:0,saleProducts=products.filter(p=>p.oldPrice>p.price),saleDiscount=Math.max(0,...saleProducts.map(discountPercent));
   if(!featured.length)featured=products.filter(p=>p.featured).slice(0,5);
   if(!best.length)best=products.filter(p=>p.bestSeller).slice(0,5);
-  let heroTitle=(!cms.heroTitle||cms.heroTitle==='قدم‌هایی مطمئن با کفش طوبی')?'راحتی، استایل و کیفیت در هر قدم':cms.heroTitle;
-  let heroTitleMarkup=heroTitle==='راحتی، استایل و کیفیت در هر قدم'?'راحتی، استایل و کیفیت<br><em>در هر قدم</em>':esc(heroTitle);
+  const defaultHeroTitle='خرید اینترنتی کفش زنانه و مردانه';
+  let heroTitle=(!cms.heroTitle||cms.heroTitle==='قدم‌هایی مطمئن با کفش طوبی'||cms.heroTitle==='راحتی، استایل و کیفیت در هر قدم')?defaultHeroTitle:cms.heroTitle;
+  let heroTitleMarkup=heroTitle===defaultHeroTitle?'خرید اینترنتی کفش<br><em>زنانه و مردانه</em>':esc(heroTitle);
+  const defaultHeroText='مدل‌های متنوع کفش را بر اساس سایز، رنگ و موجودی بررسی کنید و آگاهانه انتخاب کنید.';
+  let heroText=(!cms.heroText||cms.heroText==='کفش‌های شیک، راحت و بادوام')?defaultHeroText:cms.heroText;
   let heroImage=(!cms.heroImage||cms.heroImage==='/hero-shoe.jpg'||cms.heroImage==='hero-shoe.jpg'||cms.heroImage==='/touba-hero.jpg')?'/touba-hero-editorial.jpg':cms.heroImage,banner=promo[0],bannerImage=(!banner?.imageUrl||banner.imageUrl==='/hero-shoe.jpg'||banner.imageUrl==='/touba-hero.jpg')?heroImage:banner.imageUrl;
   let freeShippingThreshold=Number(db.settings.shippingOptions?.freeFrom??db.settings.freeShipping??0),freeShippingActive=Number.isFinite(freeShippingThreshold)&&freeShippingThreshold>0;
   const categoryRows=db.categories.filter(category=>category.active&&category.id!=='sale');
@@ -394,7 +397,7 @@ function home(){
         </div>
 
         <h1 class="lux-editorial-title" aria-label="${esc(heroTitle)}">${heroTitleMarkup}</h1>
-        <p class="lux-editorial-subtitle">${esc(cms.heroText||'کفش‌های شیک، راحت و بادوام')}</p>
+        <p class="lux-editorial-subtitle">${esc(heroText)}</p>
 
         <div class="lux-editorial-features">
           <div class="lux-feat-item">
@@ -753,12 +756,12 @@ function modernShop(forceCategory = "") {
 
     <div class="shop-hero-bar">
       <div>
-        <h1 class="page-title">${shopState.q ? `نتایج جستجو برای: «${esc(shopState.q)}»` : activeCatName ? `کالکشن ${esc(activeCatName)} طوبی` : "فروشگاه و کالکشن محصولات طوبی"}</h1>
-        <p class="shop-hero-sub">کیفیت اصیل چرم طبیعی، طراحی ارگونومیک طبی و راحتی ماندگار در هر قدم</p>
+        <h1 class="page-title">${shopState.q ? `نتایج جستجو برای: «${esc(shopState.q)}»` : activeCatName ? `خرید ${esc(activeCatName)}` : "خرید اینترنتی کفش از طوبی"}</h1>
+        <p class="shop-hero-sub">قیمت، سایزبندی، رنگ و موجودی ثبت‌شدهٔ هر مدل را پیش از سفارش بررسی کنید.</p>
       </div>
       <div class="shop-hero-badges">
-        <span class="shop-badge">${uiIcon("shield")} ضمانت اصالت چرم</span>
-        <span class="shop-badge">${uiIcon("truck")} ارسال سریع سراسر کشور</span>
+        <span class="shop-badge">${uiIcon("shield")} انتخاب سایز و رنگ</span>
+        <span class="shop-badge">${uiIcon("truck")} شرایط ارسال پیش از پرداخت</span>
       </div>
     </div>
 

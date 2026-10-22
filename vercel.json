@@ -13,6 +13,10 @@
     "api/ai/studio/generate.js": {
       "maxDuration": 120
     },
+    "api/seo.js": {
+      "maxDuration": 30,
+      "includeFiles": "index.html"
+    },
     "api/payment/bitpay/request.js": {
       "maxDuration": 30
     },
@@ -50,6 +54,66 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/sitemap-products.xml",
+      "destination": "/api/seo?type=sitemap"
+    },
+    {
+      "source": "/shop",
+      "destination": "/api/seo?type=shop"
+    },
+    {
+      "source": "/product/:slug",
+      "destination": "/api/seo?type=product&slug=:slug"
+    },
+    {
+      "source": "/category/:slug",
+      "destination": "/api/seo?type=category&slug=:slug"
+    },
+    {
+      "source": "/cart",
+      "destination": "/api/seo?type=private&path=cart"
+    },
+    {
+      "source": "/checkout",
+      "destination": "/api/seo?type=private&path=checkout"
+    },
+    {
+      "source": "/login",
+      "destination": "/api/seo?type=private&path=login"
+    },
+    {
+      "source": "/account",
+      "destination": "/api/seo?type=private&path=account"
+    },
+    {
+      "source": "/account/:path*",
+      "destination": "/api/seo?type=private&path=account/:path*"
+    },
+    {
+      "source": "/wishlist",
+      "destination": "/api/seo?type=private&path=wishlist"
+    },
+    {
+      "source": "/tracking",
+      "destination": "/api/seo?type=private&path=tracking"
+    },
+    {
+      "source": "/search",
+      "destination": "/api/seo?type=private&path=search"
+    },
+    {
+      "source": "/payment/result/:id",
+      "destination": "/api/seo?type=private&path=payment/result/:id"
+    },
+    {
+      "source": "/admin",
+      "destination": "/api/seo?type=private&path=admin"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/api/seo?type=private&path=admin/:path*"
+    },
     {
       "source": "/22342065.txt",
       "destination": "/22342065.txt"
