@@ -1722,3 +1722,53 @@ body.storefront-mode .rp-eye:hover{color:var(--touba-brand);border-color:var(--t
 .store-footer .bitpay-seal:hover img{filter:drop-shadow(0 12px 26px rgba(0,0,0,.55))}
 .store-footer .footer-trust-caption{display:block;max-width:170px;margin:0;color:#aeb9aa;font-size:11px;font-weight:600;line-height:1.7;text-align:center}
 @media (max-width:379px){.store-footer .footer-trust-pair{gap:12px}.store-footer .footer-trust-item{min-width:126px}.store-footer .bitpay-seal{width:126px;height:126px}.store-footer .bitpay-seal img{max-width:126px;max-height:126px}.store-footer .footer-trust-caption{max-width:140px;font-size:10.5px}}
+
+/* Guided checkout — one clear step at a time with a live three-step timeline. */
+body.storefront-mode .checkout-flow-header{grid-column:1/-1;width:100%;min-width:0;padding:10px 0 4px}
+body.storefront-mode .checkout-flow-intro{text-align:center;margin:0 auto 18px}
+body.storefront-mode .checkout-flow-intro h2{margin:0 0 5px;color:var(--touba-text);font-size:19px;font-weight:800}
+body.storefront-mode .checkout-flow-intro p{margin:0;color:var(--touba-muted);font-size:12px;line-height:1.8}
+body.storefront-mode .checkout-timeline-wrap{position:relative;max-width:720px;margin:18px auto 0;padding:0 4px}
+body.storefront-mode .checkout-timeline-track{position:absolute;top:16px;inset-inline-start:16.6667%;inset-inline-end:16.6667%;height:2px;border-radius:99px;background:var(--touba-border);overflow:hidden}
+body.storefront-mode #checkout-timeline-progress{display:block;width:0;height:100%;background:var(--touba-brand);transition:width .3s ease}
+body.storefront-mode .checkout-timeline{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));list-style:none;margin:0;padding:0}
+body.storefront-mode .checkout-timeline li{display:flex;min-width:0;flex-direction:column;align-items:center;gap:7px;color:var(--touba-subtle);font-size:11px;font-weight:600;text-align:center;transition:color .2s ease}
+body.storefront-mode .checkout-timeline-number{display:grid;width:34px;height:34px;place-items:center;border:1px solid var(--touba-border);border-radius:50%;background:var(--touba-surface-raised);color:var(--touba-muted);font-size:13px;font-weight:800;transition:background .2s ease,color .2s ease,border-color .2s ease}
+body.storefront-mode .checkout-timeline li.is-active{color:var(--touba-text)}
+body.storefront-mode .checkout-timeline li.is-active .checkout-timeline-number,body.storefront-mode .checkout-timeline li.is-complete .checkout-timeline-number{border-color:var(--touba-brand);background:var(--touba-brand);color:var(--touba-bg)}
+body.storefront-mode .checkout-step-status{margin:12px 0 0;color:var(--touba-muted);font-size:11px;text-align:center}
+body.storefront-mode .checkout-info-col{min-width:0}
+body.storefront-mode .checkout-step-page{min-width:0}
+body.storefront-mode .checkout-step-page[hidden]{display:none!important}
+body.storefront-mode .checkout-step-title{margin:0;color:var(--touba-text);font-size:16px;font-weight:800}
+body.storefront-mode .checkout-step-description{margin:0 0 16px;color:var(--touba-muted);font-size:12px;line-height:1.9}
+body.storefront-mode .checkout-step-actions{display:flex;align-items:stretch;justify-content:space-between;gap:10px;margin-top:20px}
+body.storefront-mode .checkout-step-actions>.btn{display:inline-flex;flex:1;min-height:44px;align-items:center;justify-content:center;padding:10px 12px;text-align:center;line-height:1.6}
+body.storefront-mode .checkout-step-actions>.checkout-submit-btn{background:var(--touba-brand)!important;color:var(--touba-bg)!important}
+body.storefront-mode .checkout-review-card{margin:10px 0 18px;padding:4px 14px;border:1px solid var(--touba-border);border-radius:14px;background:var(--touba-surface-soft)}
+body.storefront-mode .checkout-review-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--touba-border)}
+body.storefront-mode .checkout-review-row:last-child{border-bottom:0}
+body.storefront-mode .checkout-review-value{display:flex;min-width:0;flex:1;flex-direction:column;gap:3px;overflow-wrap:anywhere}
+body.storefront-mode .checkout-review-value>span{color:var(--touba-muted);font-size:11px}
+body.storefront-mode .checkout-review-value>b{color:var(--touba-text);font-size:12px;line-height:1.8}
+body.storefront-mode .checkout-review-value small{color:var(--touba-muted);font-size:11px}
+body.storefront-mode .checkout-review-value small b{color:var(--touba-text)}
+body.storefront-mode .checkout-review-edit{flex:0 0 auto;padding:4px 2px;border:0;background:transparent;color:var(--touba-brand);font-size:11px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+body.storefront-mode .checkout-final-payment{margin-top:8px}
+body.storefront-mode .checkout-final-payment>h3{margin:0 0 10px;color:var(--touba-text);font-size:14px}
+body.storefront-mode .checkout-final-payment .payment-method-card{margin:0}
+body.storefront-mode .checkout-payment-safety{margin:10px 0 0;color:var(--touba-muted);font-size:11px;line-height:1.9}
+@media(max-width:640px){
+  body.storefront-mode .checkout-flow-header{padding-top:4px}
+  body.storefront-mode .checkout-flow-intro{margin-bottom:14px}
+  body.storefront-mode .checkout-flow-intro h2{font-size:16px}
+  body.storefront-mode .checkout-flow-intro p{font-size:11px}
+  body.storefront-mode .checkout-timeline-wrap{margin-top:14px;padding:0}
+  body.storefront-mode .checkout-timeline-track{top:14px}
+  body.storefront-mode .checkout-timeline-number{width:30px;height:30px;font-size:12px}
+  body.storefront-mode .checkout-timeline li{gap:6px;font-size:9.5px}
+  body.storefront-mode .checkout-step-actions{gap:8px}
+  body.storefront-mode .checkout-step-actions>.btn{padding:9px 7px;font-size:11px}
+  body.storefront-mode .checkout-review-card{padding-inline:10px}
+}
+@media(max-width:360px){body.storefront-mode .checkout-timeline-label{max-width:82px;line-height:1.5}}

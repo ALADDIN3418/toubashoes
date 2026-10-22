@@ -381,6 +381,16 @@ async function main() {
     assert(stage3.includes('ToubaBitPay.requestGateway(orderId)'), 'checkout hands the customer to the bitpay bridge');
     assert(stage3.includes('پل پرداخت بیت‌پی بارگذاری نشده است'), 'bitpay handoff guard intact');
     assert(stage3.includes('processBitPayVerification(orderId)'), 'result page always verifies through the server');
+    const stage4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
+    const wizardStart = stage4.indexOf('function modernCheckout() {');
+    const wizardEnd = stage4.indexOf('function modernTracking() {', wizardStart);
+    const wizard = stage4.slice(wizardStart, wizardEnd);
+    for (const step of ['1','2','3']) assert(wizard.includes(`data-checkout-page="${step}"`), `checkout wizard page ${step} exists`);
+    assert(wizard.includes('checkout-timeline') && wizard.includes('id="checkout-timeline-progress"'), 'checkout displays a progress timeline');
+    assert(wizard.includes('اطلاعات تماس') && wizard.includes('نشانی و ارسال') && wizard.includes('بازبینی و پرداخت'), 'timeline labels explain each checkout step');
+    assert(stage4.includes('function nextCheckoutStep()') && stage4.includes('field.reportValidity()'), 'each step validates its visible fields before continuing');
+    assert((wizard.match(/type="submit"/g)||[]).length === 1 && wizard.includes('novalidate'), 'only the final review step can submit; per-step validation avoids hidden-field confusion');
+    assert(stage3.includes('activeCheckoutStep<3') && stage3.includes('data-checkout-step') && stage3.includes('nextCheckoutStep?.()'), 'implicit form submit cannot skip the checkout steps');
     const bridge = fs.readFileSync(path.join(root,'services/bitpay-pay.js'),'utf8');
     assert(bridge.includes("'/api/payment/bitpay/request'") && bridge.includes("'/api/payment/bitpay/verify'"), 'client bridge only talks to our server');
     assert(!bridge.includes('BITPAY_API'), 'no secret on the client');

@@ -584,6 +584,9 @@ function animatedRender(isPageTransition=false){
     }else if(typeof __stage3BaseRender==='function'){
       __stage3BaseRender();
     }
+    if(location.pathname==='/checkout'&&appEl?.querySelector?.('#checkout-form')){
+      setCheckoutStep(window.__checkoutStep||1,{focus:false,scroll:false});
+    }
     let mainContent=appEl?.querySelector?.('main');
     if(mainContent&&!mainContent.id)mainContent.id='main-content';
     if(appEl?.querySelector?.('.mobile-product-bar, .mobile-cart-sticky-bar'))body?.classList?.add('has-commerce-sticky');
@@ -843,105 +846,268 @@ function modernShop(forceCategory = "") {
   </main>${footer()}`;
 }
 
+function saveCheckoutDraft(form) {
+  if (!form || typeof FormData === "undefined") return;
+  const draft = {};
+  for (const [key, value] of new FormData(form).entries()) draft[key] = String(value);
+  window.__checkoutDraft = draft;
+}
+
+function checkoutStepIsValid(step) {
+  const page = document.querySelector(`[data-checkout-page="${Number(step)}"]`);
+  if (!page) return false;
+  const requiredFields = Array.from(page.querySelectorAll("input[required], select[required], textarea[required]"));
+  for (const field of requiredFields) {
+    if (!field.checkValidity()) {
+      field.reportValidity();
+      field.focus();
+      return false;
+    }
+  }
+  return true;
+}
+
+function updateCheckoutReview() {
+  const form = document.querySelector("#checkout-form");
+  if (!form) return;
+  const value = name => String(form.elements.namedItem(name)?.value || "").trim();
+  const put = (id, text) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text || "—";
+  };
+  put("checkout-review-name", value("name"));
+  put("checkout-review-phone", value("phone"));
+  put("checkout-review-region", [value("province"), value("city")].filter(Boolean).join("، "));
+  put("checkout-review-address", value("address"));
+  put("checkout-review-postal", value("postal"));
+  const selectedShipping = form.querySelector('[name="shippingMethod"]:checked');
+  const shippingLabel = selectedShipping?.closest(".shipping-option");
+  const shippingName = shippingLabel?.querySelector(".shipping-meta b")?.textContent?.trim() || "روش ارسال انتخاب‌شده";
+  const shippingCost = shippingLabel?.querySelector(".shipping-cost")?.textContent?.trim() || "";
+  put("checkout-review-shipping", shippingCost ? `${shippingName} — ${shippingCost}` : shippingName);
+  const noteRow = document.getElementById("checkout-review-note-row");
+  if (noteRow) {
+    const note = value("note");
+    noteRow.hidden = !note;
+    put("checkout-review-note", note);
+  }
+}
+
+function setCheckoutStep(step, options = {}) {
+  const form = document.querySelector("#checkout-form");
+  if (!form) return;
+  const activeStep = Math.min(3, Math.max(1, Number(step) || 1));
+  window.__checkoutStep = activeStep;
+  form.dataset.checkoutStep = String(activeStep);
+  saveCheckoutDraft(form);
+
+  form.querySelectorAll("[data-checkout-page]").forEach(page => {
+    page.hidden = Number(page.dataset.checkoutPage) !== activeStep;
+  });
+  form.querySelectorAll("[data-checkout-timeline-step]").forEach(item => {
+    const itemStep = Number(item.dataset.checkoutTimelineStep);
+    item.classList.toggle("is-active", itemStep === activeStep);
+    item.classList.toggle("is-complete", itemStep < activeStep);
+    if (itemStep === activeStep) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+    const number = item.querySelector(".checkout-timeline-number");
+    if (number) number.textContent = itemStep < activeStep ? "✓" : ["۱", "۲", "۳"][itemStep - 1];
+  });
+  const progress = document.getElementById("checkout-timeline-progress");
+  if (progress) progress.style.width = `${((activeStep - 1) / 2) * 100}%`;
+  const status = document.getElementById("checkout-step-status");
+  if (status) status.textContent = [
+    "مرحلهٔ ۱ از ۳ — اطلاعات تماس",
+    "مرحلهٔ ۲ از ۳ — نشانی و ارسال",
+    "مرحلهٔ ۳ از ۳ — بازبینی و پرداخت"
+  ][activeStep - 1];
+  const submit = form.querySelector(".checkout-submit-btn");
+  if (submit) submit.disabled = activeStep !== 3;
+  if (activeStep === 3) updateCheckoutReview();
+
+  if (options.focus !== false) {
+    document.getElementById(`checkout-step-title-${activeStep}`)?.focus({ preventScroll: true });
+    if (options.scroll !== false) document.querySelector(".checkout-flow-header")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function nextCheckoutStep() {
+  const form = document.querySelector("#checkout-form");
+  if (!form) return;
+  const current = Number(form.dataset.checkoutStep || window.__checkoutStep || 1);
+  if (current >= 3) return;
+  saveCheckoutDraft(form);
+  if (!checkoutStepIsValid(current)) return;
+  setCheckoutStep(current + 1);
+}
+
 function modernCheckout() {
   if (!db.cart.length) {
     smoothGo("/cart");
     return "";
   }
-  let tot = checkoutTotals("normal");
-  let options = StoreServices.shipping.options(tot.subtotal);
+  const draft = window.__checkoutDraft || {};
+  const draftValue = (name, fallback = "") => String(draft[name] ?? fallback);
+  const provinceValue = draftValue("province");
+  const shippingOptions = StoreServices.shipping.options(getCartTotals().subtotal);
+  const selectedShipping = shippingOptions.some(x => x.id === draftValue("shippingMethod") && x.available)
+    ? draftValue("shippingMethod")
+    : "normal";
+  const tot = checkoutTotals(selectedShipping);
+  const provinces = ["آذربایجان شرقی", "آذربایجان غربی", "اردبیل", "اصفهان", "البرز", "ایلام", "بوشهر", "تهران", "چهارمحال و بختیاری", "خراسان جنوبی", "خراسان رضوی", "خراسان شمالی", "خوزستان", "زنجان", "سمنان", "سیستان و بلوچستان", "فارس", "قزوین", "قم", "کردستان", "کرمان", "کرمانشاه", "کهگیلویه و بویراحمد", "گلستان", "گیلان", "لرستان", "مازندران", "مرکزی", "هرمزگان", "همدان", "یزد"];
 
   return `${header()}<main class="page container">
     <div class="breadcrumb"><a href="/">خانه</a>　/　<a href="/cart">سبد خرید</a>　/　<span>تسویه حساب امن</span></div>
-    <h1 class="page-title">تکمیل اطلاعات و ثبت سفارش</h1>
+    <h1 class="page-title">تکمیل سفارش</h1>
 
-    <form id="checkout-form" class="checkout-layout">
-      <section class="checkout-info-col">
-        <div class="panel checkout-panel">
-          <div class="panel-head-row">
-            <h3>اطلاعات تحویل‌گیرنده</h3>
-            <span class="panel-step-badge">مرحله ۱ از ۲</span>
-          </div>
-          <div class="form-grid">
-            <div class="field">
-              <label for="co-name">نام و نام خانوادگی تحویل‌گیرنده *</label>
-              <input id="co-name" required minlength="3" name="name" value="${esc(db.currentUser?.name || "")}" placeholder="نام و نام خانوادگی">
-            </div>
-            <div class="field">
-              <label for="co-phone">شماره موبایل هماهنگی تحویل *</label>
-              <input id="co-phone" required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" value="${esc(db.currentUser?.phone || "")}" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
-            </div>
-            <div class="field">
-              <label for="co-prov">استان *</label>
-              <select id="co-prov" required name="province">
-                <option value="">انتخاب استان</option>
-                ${["تهران","البرز","اصفهان","فارس","خراسان رضوی","گیلان","مازندران","آذربایجان شرقی","خوزستان","یزد","کرمان","قم"].map(x => `<option value="${x}">${x}</option>`).join("")}
-              </select>
-            </div>
-            <div class="field">
-              <label for="co-city">شهر *</label>
-              <input id="co-city" required minlength="2" name="city" placeholder="نام شهر">
-            </div>
-            <div class="field full">
-              <label for="co-addr">نشانی دقیق پستی *</label>
-              <textarea id="co-addr" required minlength="10" name="address" placeholder="خیابان اصلی، کوچه، پلاک، زنگ، واحد"></textarea>
-            </div>
-            <div class="field">
-              <label for="co-postal">کد پستی ۱۰ رقمی *</label>
-              <input id="co-postal" required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal" placeholder="کد پستی بدون خط تیره">
-            </div>
-            <div class="field">
-              <label for="co-note">یادداشت برای تحویل (اختیاری)</label>
-              <input id="co-note" name="note" placeholder="مثلاً: بعدازظهر ارسال شود">
-            </div>
-          </div>
+    <form id="checkout-form" class="checkout-layout" novalidate oninput="saveCheckoutDraft(this)" onchange="saveCheckoutDraft(this)">
+      <div class="checkout-flow-header" role="group" aria-label="پیشرفت مراحل تسویه حساب">
+        <div class="checkout-flow-intro">
+          <h2>سفارش را در ۳ مرحله ساده تکمیل کنید</h2>
+          <p>هر مرحله را جداگانه انجام دهید؛ اطلاعات و مبلغ سفارش در کنار صفحه در دسترس است.</p>
         </div>
+        <div class="checkout-timeline-wrap">
+          <div class="checkout-timeline-track" aria-hidden="true"><span id="checkout-timeline-progress"></span></div>
+          <ol class="checkout-timeline" aria-label="مراحل تکمیل سفارش">
+            <li class="is-active" data-checkout-timeline-step="1" aria-current="step"><span class="checkout-timeline-number">۱</span><span class="checkout-timeline-label">اطلاعات تماس</span></li>
+            <li data-checkout-timeline-step="2"><span class="checkout-timeline-number">۲</span><span class="checkout-timeline-label">نشانی و ارسال</span></li>
+            <li data-checkout-timeline-step="3"><span class="checkout-timeline-number">۳</span><span class="checkout-timeline-label">بازبینی و پرداخت</span></li>
+          </ol>
+        </div>
+        <p id="checkout-step-status" class="checkout-step-status" aria-live="polite">مرحلهٔ ۱ از ۳ — اطلاعات تماس</p>
+      </div>
 
-        <div class="panel checkout-panel" style="margin-top:18px">
-          <div class="panel-head-row">
-            <h3>روش ارسال کالا</h3>
+      <section class="checkout-info-col">
+        <section class="checkout-step-page" data-checkout-page="1" aria-labelledby="checkout-step-title-1">
+          <div class="panel checkout-panel">
+            <div class="panel-head-row">
+              <h2 id="checkout-step-title-1" class="checkout-step-title" tabindex="-1">۱. اطلاعات تماس</h2>
+              <span class="panel-step-badge">مرحله ۱ از ۳</span>
+            </div>
+            <p class="checkout-step-description">نام تحویل‌گیرنده و شماره‌ای را وارد کنید که برای هماهنگی ارسال در دسترس باشد.</p>
+            <div class="form-grid">
+              <div class="field">
+                <label for="co-name">نام و نام خانوادگی تحویل‌گیرنده *</label>
+                <input id="co-name" required minlength="3" name="name" autocomplete="name" value="${esc(draftValue("name", db.currentUser?.name || ""))}" placeholder="نام و نام خانوادگی">
+              </div>
+              <div class="field">
+                <label for="co-phone">شماره موبایل برای هماهنگی تحویل *</label>
+                <input id="co-phone" required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" name="phone" autocomplete="tel" value="${esc(draftValue("phone", db.currentUser?.phone || ""))}" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
+              </div>
+            </div>
+            <div class="checkout-step-actions">
+              <a class="btn outline" href="/cart">بازگشت به سبد خرید</a>
+              <button type="button" class="btn" onclick="nextCheckoutStep()">ادامه به نشانی و ارسال ←</button>
+            </div>
           </div>
-          <div class="shipping-options-list">
-            ${options.map(x => `
-              <label class="shipping-option ${x.id === "normal" ? "selected" : ""}">
-                <div class="shipping-meta">
-                  <input type="radio" name="shippingMethod" value="${x.id}" ${x.id === "normal" ? "checked" : ""} ${x.available ? "" : "disabled"} onchange="refreshCheckoutTotals()">
+        </section>
+
+        <section class="checkout-step-page" data-checkout-page="2" aria-labelledby="checkout-step-title-2" hidden>
+          <div class="panel checkout-panel">
+            <div class="panel-head-row">
+              <h2 id="checkout-step-title-2" class="checkout-step-title" tabindex="-1">۲. نشانی و روش ارسال</h2>
+              <span class="panel-step-badge">مرحله ۲ از ۳</span>
+            </div>
+            <p class="checkout-step-description">نشانی دقیق و کد پستی را وارد کنید تا سفارش به‌درستی به دستتان برسد.</p>
+            <div class="form-grid">
+              <div class="field">
+                <label for="co-prov">استان *</label>
+                <select id="co-prov" required name="province" autocomplete="address-level1">
+                  <option value="">انتخاب استان</option>
+                  ${provinces.map(x => `<option value="${esc(x)}" ${provinceValue === x ? "selected" : ""}>${esc(x)}</option>`).join("")}
+                </select>
+              </div>
+              <div class="field">
+                <label for="co-city">شهر *</label>
+                <input id="co-city" required minlength="2" name="city" autocomplete="address-level2" value="${esc(draftValue("city"))}" placeholder="نام شهر">
+              </div>
+              <div class="field full">
+                <label for="co-addr">نشانی کامل پستی *</label>
+                <textarea id="co-addr" required minlength="10" name="address" autocomplete="street-address" placeholder="خیابان، کوچه، پلاک، طبقه و واحد">${esc(draftValue("address"))}</textarea>
+              </div>
+              <div class="field">
+                <label for="co-postal">کد پستی ۱۰ رقمی *</label>
+                <input id="co-postal" required inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10" name="postal" autocomplete="postal-code" value="${esc(draftValue("postal"))}" placeholder="کد پستی بدون خط تیره">
+              </div>
+              <div class="field">
+                <label for="co-note">یادداشت برای تحویل (اختیاری)</label>
+                <input id="co-note" name="note" value="${esc(draftValue("note"))}" placeholder="مثلاً: بعدازظهر ارسال شود">
+              </div>
+            </div>
+            <div class="detail-row checkout-shipping-detail">
+              <b>روش ارسال</b>
+              <div class="shipping-options-list">
+                ${shippingOptions.map(x => `
+                  <label class="shipping-option ${x.id === selectedShipping ? "selected" : ""}">
+                    <div class="shipping-meta">
+                      <input type="radio" name="shippingMethod" value="${esc(x.id)}" ${x.id === selectedShipping ? "checked" : ""} ${x.available ? "" : "disabled"} required onchange="refreshCheckoutTotals()">
+                      <div>
+                        <b>${esc(x.name)}</b>
+                        <small>${x.id === "free" ? "با رسیدن مبلغ خرید به حد تعیین‌شده، ارسال رایگان می‌شود." : x.id === "express" ? "ارسال سریع‌تر با بسته‌بندی ایمن." : "ارسال استاندارد با بسته‌بندی ایمن جعبه کفش."}</small>
+                      </div>
+                    </div>
+                    <span class="shipping-cost">${x.cost ? toman(x.cost) : "رایگان"}</span>
+                  </label>
+                `).join("")}
+              </div>
+            </div>
+            <div class="checkout-step-actions">
+              <button type="button" class="btn outline" onclick="setCheckoutStep(1)">بازگشت به اطلاعات تماس</button>
+              <button type="button" class="btn" onclick="nextCheckoutStep()">ادامه به بازبینی سفارش ←</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="checkout-step-page" data-checkout-page="3" aria-labelledby="checkout-step-title-3" hidden>
+          <div class="panel checkout-panel">
+            <div class="panel-head-row">
+              <h2 id="checkout-step-title-3" class="checkout-step-title" tabindex="-1">۳. بازبینی و پرداخت</h2>
+              <span class="panel-step-badge">مرحله ۳ از ۳</span>
+            </div>
+            <p class="checkout-step-description">اطلاعات گیرنده و نشانی را بررسی کنید؛ در صورت نیاز با «ویرایش» به همان بخش برگردید.</p>
+            <div class="checkout-review-card" aria-label="بازبینی اطلاعات سفارش">
+              <div class="checkout-review-row">
+                <div class="checkout-review-value"><span>تحویل‌گیرنده</span><b id="checkout-review-name">—</b><b id="checkout-review-phone" dir="ltr">—</b></div>
+                <button type="button" class="checkout-review-edit" onclick="setCheckoutStep(1)">ویرایش</button>
+              </div>
+              <div class="checkout-review-row">
+                <div class="checkout-review-value"><span>نشانی ارسال</span><b id="checkout-review-region">—</b><b id="checkout-review-address">—</b><small>کد پستی: <b id="checkout-review-postal">—</b></small></div>
+                <button type="button" class="checkout-review-edit" onclick="setCheckoutStep(2)">ویرایش</button>
+              </div>
+              <div class="checkout-review-row">
+                <div class="checkout-review-value"><span>روش ارسال</span><b id="checkout-review-shipping">—</b></div>
+                <button type="button" class="checkout-review-edit" onclick="setCheckoutStep(2)">ویرایش</button>
+              </div>
+              <div class="checkout-review-row" id="checkout-review-note-row" hidden>
+                <div class="checkout-review-value"><span>یادداشت تحویل</span><b id="checkout-review-note">—</b></div>
+                <button type="button" class="checkout-review-edit" onclick="setCheckoutStep(2)">ویرایش</button>
+              </div>
+            </div>
+
+            <div class="checkout-final-payment">
+              <h3>روش پرداخت</h3>
+              <label class="payment-method-card active-method">
+                <div class="pm-head">
+                  <input type="radio" name="paymentMethod" value="bitpay" checked required>
                   <div>
-                    <b>${esc(x.name)}</b>
-                    <small>${x.id === "free" ? "خرید بالاتر از ۲ میلیون تومان شامل ارسال رایگان طوبی است." : x.id === "express" ? "ارسال فوری پیشتاز هوایی یا پیک ویژه." : "ارسال استاندارد با بسته‌بندی ایمن جعبه کفش."}</small>
+                    <b>پرداخت مستقیم بانکی از طریق بیت‌پی</b>
+                    <small>با ادامه، به صفحهٔ امن درگاه منتقل می‌شوید. اطلاعات کارت را فقط در صفحهٔ بانک وارد کنید.</small>
                   </div>
                 </div>
-                <span class="shipping-cost">${x.cost ? toman(x.cost) : "رایگان"}</span>
+                <span class="pm-logo">بیت‌پی</span>
               </label>
-            `).join("")}
+            </div>
+            <div class="checkout-step-actions checkout-final-actions">
+              <button type="button" class="btn outline" onclick="setCheckoutStep(2)">بازگشت به نشانی</button>
+              <button type="submit" class="btn checkout-submit-btn" disabled>ثبت سفارش و پرداخت امن ←</button>
+            </div>
+            <p class="checkout-payment-safety">شماره کارت، CVV2 یا رمز بانکی را در این سایت وارد نکنید؛ پرداخت در صفحهٔ رسمی بانک انجام می‌شود.</p>
           </div>
-        </div>
-
-        <div class="panel checkout-panel" style="margin-top:18px">
-          <div class="panel-head-row">
-            <h3>پرداخت آنلاین</h3>
-            <span class="panel-step-badge">BitPay · بیت‌پی</span>
-          </div>
-          <div class="checkout-payment-methods">
-            <label class="payment-method-card active-method">
-              <div class="pm-head">
-                <input type="radio" name="paymentMethod" value="bitpay" checked required>
-                <div>
-                  <b>پرداخت مستقیم بانکی (بیت‌پی)</b>
-                  <small>پس از ثبت سفارش، مستقیماً به صفحهٔ امن بانک منتقل می‌شوید و پرداخت را همان‌جا انجام می‌دهید. تأیید نهایی تراکنش توسط سرور فروشگاه از درگاه بیت‌پی پرسیده می‌شود. حداقل مبلغ سفارش ۵۰۰ تومان است.</small>
-                </div>
-              </div>
-              <span class="pm-logo">بیت‌پی</span>
-            </label>
-          </div>
-          <small class="muted">شمارهٔ کارت و رمز بانکی خود را هرگز در این سایت وارد نمی‌کنید؛ پرداخت در صفحهٔ رسمی بانک انجام می‌شود و تأیید آن سمت سرور بررسی می‌شود.</small>
-        </div>
-
+        </section>
       </section>
 
       <aside class="cart-summary checkout-summary" id="checkout-summary">
         <h3>خلاصه فاکتور خرید (${db.cart.reduce((n, x) => n + x.qty, 0).toLocaleString("fa-IR")} کالا)</h3>
-
         <div class="checkout-items-preview">
           ${db.cart.map(i => {
             let p = product(i.id);
@@ -954,51 +1120,27 @@ function modernCheckout() {
             </div>`;
           }).join("")}
         </div>
-
         <div class="coupon-box-modern">
           <label for="checkout-coupon">کد تخفیف</label>
           <div class="coupon-row">
-            <input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code || "")}">
+            <input id="checkout-coupon" name="checkoutCoupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code || draftValue("checkoutCoupon"))}">
             <button type="button" class="btn small" onclick="applyCheckoutCoupon()">ثبت کد</button>
           </div>
         </div>
-
         <div id="checkout-totals" class="checkout-totals-modern">
-          <div class="summary-line">
-            <span>مبلغ کالاها</span>
-            <b>${toman(tot.subtotal)}</b>
-          </div>
-          ${tot.discount ? `
-            <div class="summary-line discount-line">
-              <span>تخفیف</span>
-              <b>− ${toman(tot.discount)}</b>
-            </div>
-          ` : ""}
-          <div class="summary-line">
-            <span>هزینه ارسال</span>
-            <b id="ship-total">${tot.shipping ? toman(tot.shipping) : "رایگان"}</b>
-          </div>
-          <div class="summary-line total">
-            <span>مبلغ قابل پرداخت</span>
-            <b>${toman(tot.total)}</b>
-          </div>
+          <div class="summary-line"><span>مبلغ کالاها</span><b>${toman(tot.subtotal)}</b></div>
+          ${tot.discount ? `<div class="summary-line discount-line"><span>تخفیف</span><b>− ${toman(tot.discount)}</b></div>` : ""}
+          <div class="summary-line"><span>هزینه ارسال</span><b id="ship-total">${tot.shipping ? toman(tot.shipping) : "رایگان"}</b></div>
+          <div class="summary-line total"><span>مبلغ قابل پرداخت</span><b>${toman(tot.total)}</b></div>
         </div>
-
-        <button type="submit" class="btn checkout-submit-btn" style="width:100%;margin-top:16px">
-          ادامه به درگاه پرداخت امن ←
-        </button>
-
-        <p class="muted" style="font-size:11.5px;line-height:1.9;margin:10px 2px 0">پس از ثبت سفارش، مستقیم به صفحهٔ امن بانک (درگاه بیت‌پی) منتقل می‌شوید و پرداخت را همان‌جا انجام می‌دهید. شماره کارتِ خودتان، CVV2 یا رمز دوم را هرگز در این سایت وارد نکنید؛ اطلاعات کارت فقط در صفحهٔ رسمی بانک ثبت می‌شود و تأیید تراکنش سمت سرور فروشگاه بررسی می‌شود.</p>
-
         <div class="checkout-trust-features">
-          <span>${uiIcon("shield")} ۷ روز گارانتی تعویض سایز رایگان</span>
-          <span>${uiIcon("truck")} بسته‌بندی ویژه حفظ فرم کفش</span>
+          <span>${uiIcon("shield")} مبلغ و روش پرداخت پیش از ثبت نهایی نمایش داده می‌شود.</span>
+          <span>${uiIcon("truck")} بسته‌بندی ایمن و امکان پیگیری سفارش.</span>
         </div>
       </aside>
     </form>
   </main>${footer()}`;
 }
-
 function modernTracking() {
   return `${header()}<main class="page container">
     <div class="breadcrumb"><a href="/">خانه</a>　/　<span>پیگیری سفارش</span></div>
