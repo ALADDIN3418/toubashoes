@@ -60,6 +60,8 @@ function bindForms(){
   const form=$('#checkout-form');
   if(form)form.onsubmit=async event=>{
     event.preventDefault();
+    const activeCheckoutStep=Number(form.dataset.checkoutStep||window.__checkoutStep||1);
+    if(form.hasAttribute('data-checkout-step')&&activeCheckoutStep<3){window.nextCheckoutStep?.();return}
     if(!form.reportValidity())return;
     const user=db.currentUser;
     if(!user?.id||user.authProvider!=='supabase'||user.role!=='customer'){toast('برای ثبت سفارش امن، ابتدا با حساب مشتری خود وارد شوید.');go('/login');return}
