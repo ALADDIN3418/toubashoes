@@ -157,8 +157,7 @@ async function runTests() {
   assert.equal(res.statusCode, 503);
   assert.match(parsePayload(res).error, /Puter.js/);
 
-  // Client checks: Puter SDK precedes the studio, the live image catalog is used,
-  // and no Google API key/OAuth or old local compositor remains in the studio UI.
+  // Client checks: the live image catalog is available, but the third-party SDK is lazy-loaded only on explicit admin use; no Google API key/OAuth or old local compositor remains.
   const clientScript = fs.readFileSync(path.join(__dirname, '../admin-product-ai.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   assert(clientScript.includes('PUTER_CATALOG_DRIVER'));
@@ -173,7 +172,8 @@ async function runTests() {
   assert(!clientScript.includes('synthesizeGeminiStudioImage'));
   assert(!clientScript.includes('requestCloudNeuralCutout'));
   assert(!clientScript.includes('requestWasmNeuralCutout'));
-  assert(html.indexOf('https://js.puter.com/v2/') < html.indexOf('/admin-product-ai.js'));
+  assert(!html.includes('https://js.puter.com/v2/'), 'storefront must not load the Puter SDK on every visit');
+  assert(clientScript.includes("script.src = 'https://js.puter.com/v2/'") && clientScript.includes('async function ensurePuterClient'), 'admin product image generation lazy-loads Puter on demand');
 
   const stage4Css = fs.readFileSync(path.join(__dirname, '../stage4.css'), 'utf8');
   assert(stage4Css.includes('.ai-studio-page-wrapper .full'));

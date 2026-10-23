@@ -19,6 +19,7 @@ const DEFAULT_MODEL = DEFAULT_PIPELINE;
 const SUPPORTED_MODELS = SUPPORTED_PIPELINES;
 const { persistentAiQuotaConfig, requireAdminRequest, parseProductReferenceRoles, reserveWindowQuota, finishWindowQuota, reservePersistentAiQuota, finalizePersistentAiQuota } = require('./lib/vercel-api.js');
 const bitpay = require('./lib/bitpay.js');
+const seo = require('./api/seo.js');
 const { looksLikeSecretKey } = require('./lib/supabase-server.js');
 
 function loadLocalEnv() {
@@ -84,6 +85,18 @@ function parseJpegDataUrl(value, maxBytes = 3 * 1024 * 1024) {
   return data;
 }
 
+function forwardSeoRequest(req, res, type, extra = {}) {
+  const source = new URL(req.url || '/', 'http://localhost');
+  const params = new URLSearchParams();
+  params.set('type', type);
+  if (type === 'shop') {
+    for (const [key, value] of source.searchParams) {
+      if (key !== 'type') params.append(key, value);
+    }
+  }
+  for (const [key, value] of Object.entries(extra)) params.set(key, String(value));
+  return seo({ url:`/api/seo?${params.toString()}`, method:req.method, headers:req.headers }, res);
+}
 
 const server = http.createServer(async (req, res) => {
   let pathname;
@@ -104,6 +117,18 @@ const server = http.createServer(async (req, res) => {
     return res.end('');
   }
 
+  if (pathname === '/sitemap-products.xml') return forwardSeoRequest(req, res, 'sitemap');
+  if (pathname === '/shop') return forwardSeoRequest(req, res, 'shop');
+  const productRoute = /^\/product\/([^/]+)$/.exec(pathname);
+  if (productRoute) return forwardSeoRequest(req, res, 'product', { slug:productRoute[1] });
+  const categoryRoute = /^\/category\/([^/]+)$/.exec(pathname);
+  if (categoryRoute) return forwardSeoRequest(req, res, 'category', { slug:categoryRoute[1] });
+  if (
+    ['/cart','/checkout','/login','/account','/account/orders','/wishlist','/tracking','/search','/admin'].includes(pathname) ||
+    pathname.startsWith('/account/') || pathname.startsWith('/payment/result/') || pathname.startsWith('/admin/')
+  ) return forwardSeoRequest(req, res, 'private', { path:pathname.replace(/^\/+/, '') });
+
+  if (pathname === '/api/seo') return seo(req, res);
   if (pathname === '/api/supabase-config') {
     if (req.method !== 'GET') return json(res, 405, { error:'روش درخواست مجاز نیست.' }, { Allow:'GET' });
     const rawUrl = String(process.env.SUPABASE_URL || '').trim();
@@ -305,16 +330,6 @@ const server = http.createServer(async (req, res) => {
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
     const builtAsset = path.join(root, 'public', pathname.replace(/^\/+/, ''));
     if (builtAsset.startsWith(path.join(root, 'public') + path.sep) && fs.existsSync(builtAsset) && fs.statSync(builtAsset).isFile()) file = builtAsset;
-  }
-  if (pathname === '/sitemap.xml' || pathname === '/robots.txt') {
-    const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'localhost').split(',')[0].trim();
-    const protocol = String(req.headers['x-forwarded-proto'] || (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? 'http' : 'https')).split(',')[0].trim();
-    let origin; try { origin = new URL(`${protocol}://${host}`).origin; } catch { origin = 'https://localhost'; }
-    return fs.readFile(file, 'utf8', (err, content) => {
-      if (err) { res.writeHead(404); return res.end('Not found'); }
-      res.writeHead(200, { 'Content-Type':types[path.extname(file)], 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'Permissions-Policy':'camera=(), microphone=(), geolocation=()' });
-      res.end(content.replaceAll('{{ORIGIN}}', origin));
-    });
   }
   if (pathname === '/' || !path.extname(pathname) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return serveFile(path.join(root, 'index.html'), res);
   if (!file.startsWith(root)) { res.writeHead(403); return res.end('Forbidden'); }

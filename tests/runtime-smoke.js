@@ -151,7 +151,7 @@ async function main() {
   // Admin product-form upgrade guards: honest <title>, size-tick grid 22-48, manual upload, variant-id resilience.
   {
     const idx = fs.readFileSync(path.join(root,'index.html'),'utf-8');
-    assert(idx.includes('<title>کفش طوبی | '), 'index.html <title> must start with ' + 'کفش طوبی');
+    assert(idx.includes('<title>خرید اینترنتی کفش زنانه و مردانه | کفش طوبی</title>'), 'index.html <title> must target the store’s core Persian shoe-shopping searches');
     assert(!/<title>[^<]*22342065/.test(idx), 'index.html <title> must not contain the enamad code');
     assert(!/og:title[^>]*22342065|twitter:title[^>]*22342065/.test(idx), 'social title tags must not contain the enamad code');
     assert(!fs.readFileSync(path.join(root,'services/seo.js'),'utf8').includes('22342065'), 'seo.js home title must use store name, not enamad code');
@@ -403,7 +403,10 @@ async function main() {
     const vercelJson = JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
     for (const route of ['request','verify','status','callback'])
       assert(vercelJson.functions[`api/payment/bitpay/${route}.js`], `vercel.json configures api/payment/bitpay/${route}.js`);
-    assert(Object.keys(vercelJson.functions).length === 7, 'seven configured functions fit the Vercel hobby budget');
+    assert(Object.keys(vercelJson.functions).length === 8, 'eight configured functions fit the Vercel hobby budget');
+    assert(vercelJson.functions['api/seo.js'].includeFiles === 'index.html', 'SEO rendering bundles the storefront HTML shell');
+    for (const route of ['/sitemap-products.xml','/shop','/product/:slug','/category/:slug','/cart','/checkout','/login','/account','/wishlist','/tracking','/search','/payment/result/:id','/admin'])
+      assert(vercelJson.rewrites.some(rule => rule.source === route && rule.destination.startsWith('/api/seo?')), `SEO route is rewritten to the shared function: ${route}`);
     const totalFunctions = require('child_process').execSync(`find ${'.'} api -name '*.js' -path 'api/*'`,{cwd:root}).toString().trim().split('\n').length;
     assert(totalFunctions <= 12, `api/ must stay within the hobby plan's 12 serverless functions (found ${totalFunctions})`);
     const authUi = fs.readFileSync(path.join(root,'services/auth-ui.js'),'utf8');

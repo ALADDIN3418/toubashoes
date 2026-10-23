@@ -94,8 +94,36 @@
   const KNOWN_PUTER_MODELS = new Map(PUTER_FALLBACK_MODELS.map(model => [model.id, model]));
   let cachedPuterImageModels = null;
 
+  let puterSdkPromise = null;
+
   function getPuterClient() {
     return g.puter || (typeof globalThis !== 'undefined' ? globalThis.puter : null);
+  }
+
+  function loadPuterSdk() {
+    const loaded = getPuterClient();
+    if (loaded?.ai?.txt2img) return Promise.resolve(loaded);
+    if (puterSdkPromise) return puterSdkPromise;
+    if (typeof document === 'undefined' || !document.head || typeof document.createElement !== 'function') {
+      return Promise.reject(new Error('کتابخانهٔ Puter.js در این محیط در دسترس نیست.'));
+    }
+    puterSdkPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://js.puter.com/v2/';
+      script.async = true;
+      script.dataset.toubaPuterSdk = 'true';
+      script.onload = () => {
+        const puter = getPuterClient();
+        if (puter?.ai?.txt2img) resolve(puter);
+        else reject(new Error('کتابخانهٔ Puter.js بارگذاری شد اما آمادهٔ تولید تصویر نیست.'));
+      };
+      script.onerror = () => reject(new Error('اتصال به کتابخانهٔ Puter.js انجام نشد؛ اتصال اینترنت را بررسی کنید.'));
+      document.head.appendChild(script);
+    }).catch(error => {
+      puterSdkPromise = null;
+      throw error;
+    });
+    return puterSdkPromise;
   }
 
   function safeLocalStorageGet(key, fallback) {
@@ -298,7 +326,7 @@
   }
 
   async function ensurePuterClient() {
-    const puter = getPuterClient();
+    const puter = await loadPuterSdk();
     if (!puter?.ai?.txt2img) {
       throw new Error('کتابخانهٔ Puter.js بارگذاری نشد؛ صفحه را تازه‌سازی و دوباره تلاش کنید.');
     }
@@ -673,8 +701,8 @@
     loadPuterImageModels(getPuterClient()).then(models => populatePuterModelSelect(pipelineSelect, models));
     connectBtn?.addEventListener('click', async () => {
       try {
-        const puter = getPuterClient();
-        if (!puter?.auth?.signIn) throw new Error('کتابخانهٔ Puter.js هنوز بارگذاری نشده است. صفحه را تازه‌سازی کنید.');
+        const puter = await loadPuterSdk();
+        if (!puter?.auth?.signIn) throw new Error('کتابخانهٔ Puter.js هنوز آماده نیست؛ دوباره تلاش کنید.');
         if (!puter.auth.isSignedIn?.()) await puter.auth.signIn();
         if (puterStatus) puterStatus.textContent = '✅ حساب Puter متصل است؛ مدل‌ها آماده‌اند.';
         const models = await loadPuterImageModels(puter, { discoverLive: true, force: true });
@@ -958,8 +986,8 @@
     refreshPuterCatalog(false).catch(() => updatePuterStatus(false, PUTER_FALLBACK_MODELS.length));
     puterConnectBtn?.addEventListener('click', async () => {
       try {
-        const puter = getPuterClient();
-        if (!puter?.auth?.signIn) throw new Error('کتابخانهٔ Puter.js بارگذاری نشده است؛ صفحه را تازه‌سازی کنید.');
+        const puter = await loadPuterSdk();
+        if (!puter?.auth?.signIn) throw new Error('کتابخانهٔ Puter.js هنوز آماده نیست؛ دوباره تلاش کنید.');
         if (!puter.auth.isSignedIn?.()) await puter.auth.signIn();
         await refreshPuterCatalog(true);
       } catch (error) {

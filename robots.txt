@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Allow: /sitemap-products.xml
 Disallow: /admin
-Sitemap: https://toubashoes.vercel.app/sitemap.xml
+Disallow: /api/
+
+Sitemap: https://toubashose.ir/sitemap.xml
+Sitemap: https://toubashose.ir/sitemap-products.xml
