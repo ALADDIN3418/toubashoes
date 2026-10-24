@@ -167,8 +167,29 @@ async function main() {
     const migPath = path.join(root,'supabase/migrations/202610060001_variant_id_default.sql');
     assert(fs.existsSync(migPath), 'variant id default migration must ship');
     assert(/product_variants[\s\S]*alter column id set default/.test(fs.readFileSync(migPath,'utf8')), 'migration must set product_variants.id default');
+    for (const needle of ['function bindProductValidation','function validateProductForm','function showProductSaveError','function nextProductSku','function collectProductVariantSkus','function makeUniqueVariantSku','while(usedSkus.has(normalizeProductSku(candidate)))','product_variants_sku_key','product_variants_product_id_size_color_key','products_sku_key','products_slug_key','product_variants_stock_check','product-error-summary','کد SKU این ترکیب خالی است'])
+      assert(enh.includes(needle), `product editor must provide field-level validation: ${needle}`);
+    const skuStart = enh.indexOf('function normalizeProductSku');
+    const skuEnd = enh.indexOf('function clearProductValidation',skuStart);
+    assert(skuStart >= 0 && skuEnd > skuStart, 'SKU helpers must be separable for unit checks');
+    const skuContext = {
+      Date:{now:()=>1234567},
+      latinDigits:value=>String(value),
+      db:{products:[{id:'existing',sku:'TB-34567',variants:[{sku:'TB-34567-39-BLACK'}]}]}
+    };
+    vm.runInNewContext(enh.slice(skuStart,skuEnd),skuContext);
+    assert.equal(skuContext.nextProductSku(),'TB-34568','generated product SKU should advance past a collision');
+    const usedVariantSkus=skuContext.collectProductVariantSkus();
+    const firstVariantSku=skuContext.makeUniqueVariantSku('TB-NEW','39','BLACK',usedVariantSkus);
+    const nextVariantSku=skuContext.makeUniqueVariantSku('TB-NEW','39','BLACK',usedVariantSkus);
+    assert.notEqual(firstVariantSku,nextVariantSku,'default SKU generation must not repeat for identical new variants');
+    const stage3 = fs.readFileSync(path.join(root,'stage3.js'),'utf8');
+    assert(stage3.includes('window.validateProductForm(f,id,{checkVariants:false})') && stage3.includes('window.validateProductForm(f,id,{checkVariants:true})') && stage3.includes('window.showProductSaveError(f,error)'), 'product save path must validate fields and map server errors inline');
+    const repository = fs.readFileSync(path.join(root,'repositories/supabase-repository.js'),'utf8');
+    assert(repository.includes('error.details') && repository.includes('error.hint'), 'repository errors must preserve details so the editor can identify the failing field');
     const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
     assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
+    assert(css.includes('#product-edit-form .pf-inline-error') && css.includes('#product-edit-form .pf-invalid-control') && css.includes('tr.pf-row-invalid td'), 'product editor validation must render inline red field and row highlights');
   }
 
   // v1.0.1b: IRANSans webfont, admin console skin, full homepage categories.

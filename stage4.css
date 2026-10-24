@@ -7148,3 +7148,26 @@ body.admin-body .cat-order-move{display:inline-flex;align-items:center;gap:5px}
 body.admin-body .cat-order-pos{min-width:22px;text-align:center;font-weight:800;font-size:11.5px;color:var(--adm-muted,#93a197)}
 body.admin-body .cat-order-move .action{padding:4px 9px;line-height:1;font-size:11px}
 body.admin-body .cat-order-move .action:disabled{opacity:.3;cursor:not-allowed}
+
+/* Product editor field-level validation: explicit Persian guidance + visible red focus. */
+#product-edit-form .pf-error-summary{margin:0 0 14px;padding:12px 14px;border:1.5px solid #dc2626;border-radius:11px;background:#fff1f2;color:#7f1d1d;font-size:12px;line-height:1.9}
+#product-edit-form .pf-error-summary[hidden]{display:none!important}
+#product-edit-form .pf-error-summary ul{margin:5px 0 0;padding-inline-start:22px}
+#product-edit-form .pf-inline-error{display:block;margin:5px 1px 0;color:#b91c1c;font-size:11px;font-weight:700;line-height:1.75;white-space:normal}
+#product-edit-form .pf-field-invalid>label{color:#b91c1c!important}
+#product-edit-form .pf-invalid-control,
+#product-edit-form .pf-invalid-control:focus,
+#product-edit-form input.pf-invalid-control,
+#product-edit-form select.pf-invalid-control,
+#product-edit-form textarea.pf-invalid-control{border-color:#dc2626!important;box-shadow:0 0 0 3px rgba(220,38,38,.16)!important;outline:none!important}
+#product-edit-form .size-grid.pf-invalid-control,#product-edit-form table.pf-invalid-control{outline:2px solid #dc2626!important;outline-offset:3px;border-radius:8px}
+#product-edit-form tr.pf-row-invalid td{background:#fff1f2!important;vertical-align:top}
+#product-edit-form tr.pf-row-invalid .pf-inline-error{max-width:240px}
+body.admin-body #product-edit-form .pf-error-summary{background:rgba(127,29,29,.2);border-color:#f87171;color:#fecaca}
+body.admin-body #product-edit-form .pf-inline-error,body.admin-body #product-edit-form .pf-field-invalid>label{color:#fca5a5!important}
+body.admin-body #product-edit-form .pf-invalid-control,
+body.admin-body #product-edit-form .pf-invalid-control:focus,
+body.admin-body #product-edit-form input.pf-invalid-control,
+body.admin-body #product-edit-form select.pf-invalid-control,
+body.admin-body #product-edit-form textarea.pf-invalid-control{border-color:#f87171!important;box-shadow:0 0 0 3px rgba(248,113,113,.2)!important}
+body.admin-body #product-edit-form tr.pf-row-invalid td{background:rgba(127,29,29,.22)!important}

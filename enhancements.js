@@ -48,7 +48,14 @@ function removeCoupon(){db.coupon=null;save();render();toast('کد تخفیف ح
 function checkout(){if(!db.cart.length){go('/cart');return ''}let totals=getCartTotals();return `${header()}<main class="page container"><div class="breadcrumb">خانه　/　سبد خرید　/　تسویه حساب</div><h1 class="page-title">تکمیل سفارش</h1><form id="checkout-form" class="checkout-layout"><section class="panel"><h3>اطلاعات گیرنده</h3><div class="form-grid"><div class="field"><label>نام و نام خانوادگی *</label><input required name="name" minlength="3" value="${esc(db.currentUser?.name||'')}"></div><div class="field"><label>شماره موبایل *</label><input required name="phone" inputmode="numeric" pattern="[0-9۰-۹٠-٩]{11}" maxlength="11" value="${esc(db.currentUser?.phone||'')}"></div><div class="field"><label>استان *</label><input required name="province"></div><div class="field"><label>شهر *</label><input required name="city"></div><div class="field full"><label>آدرس کامل *</label><textarea required name="address" minlength="10"></textarea></div><div class="field"><label>کد پستی *</label><input required name="postal" inputmode="numeric" pattern="[0-9۰-۹٠-٩]{10}" maxlength="10"></div><div class="field"><label>روش ارسال</label><select name="ship"><option>ارسال عادی</option><option>ارسال سریع</option></select></div><div class="field full"><label>توضیحات سفارش</label><textarea name="note"></textarea></div></div><div class="detail-row"><b>روش پرداخت</b><label style="display:block;margin-top:10px"><input type="radio" name="paymentMethod" value="bitpay" checked required> پرداخت مستقیم بانکی — درگاه بیت‌پی</label><small class="muted">پس از ثبت سفارش، مستقیماً به صفحهٔ امن بانک هدایت می‌شوید.</small></div></section><aside class="cart-summary"><h3>خلاصه سفارش (${db.cart.reduce((n,i)=>n+i.qty,0)} کالا)</h3>${db.cart.map(i=>`<div class="summary-line"><span>${esc(product(i.id)?.name||'')} · ${esc(i.size)} / ${esc(i.color)} × ${i.qty}</span><b>${toman((product(i.id)?.price||0)*i.qty)}</b></div>`).join('')}<div class="coupon-row"><input id="checkout-coupon" class="select" placeholder="کد تخفیف" value="${esc(db.coupon?.code||'')}"><button type="button" class="btn small" onclick="applyCheckoutCoupon()">اعمال</button></div><div class="summary-line"><span>جمع محصولات</span><b>${toman(totals.subtotal)}</b></div>${totals.discount?`<div class="summary-line"><span>تخفیف</span><b>− ${toman(totals.discount)}</b></div>`:''}<div class="summary-line"><span>هزینه ارسال</span><b>${totals.shipping?toman(totals.shipping):'رایگان'}</b></div><div class="summary-line total"><span>مبلغ نهایی</span><b>${toman(totals.total)}</b></div><button class="btn" style="width:100%;margin-top:12px">پرداخت امن با درگاه بیت‌پی</button><small class="muted">شماره کارت و رمز بانکی خود را هرگز در این سایت وارد نمی‌کنید؛ پرداخت در صفحهٔ رسمی بانک انجام می‌شود.</small></aside></form></main>${footer()}`}
 function applyCheckoutCoupon(){let input=$('#checkout-coupon');if($('#coupon-code'))$('#coupon-code').value=input.value;else{let c=input.value.trim().toUpperCase(),obj=db.coupons.find(x=>x.code===c),subtotal=db.cart.reduce((n,i)=>n+(product(i.id)?.price||0)*i.qty,0);if(!obj||!couponValid(obj,subtotal)){toast('کد معتبر نیست یا شرایط آن رعایت نشده');return}let discount=obj.type==='درصدی'?Math.round(subtotal*obj.amount/100):obj.amount;db.coupon={code:obj.code,discount};save();render();toast('کد تخفیف اعمال شد')}}
 function bindForms(){if(path()==='/shop'||path()==='/search'||path().startsWith('/category/')){let sel=$('#shop-sort');if(sel)sel.value=shopState.sort;renderShopResults()}}
-function productModal(id){let p=id?product(id):{id:'',name:'',category:db.categories[0]?.id,price:0,oldPrice:0,sku:'',brand:'طوبی',stock:0,sizes:['۳۸','۳۹','۴۰','۴۱','۴۲'],colors:['مشکی'],desc:'',shortDesc:'',longDesc:'',images:[],features:[],specifications:{},featured:false,bestSeller:false,active:true,image:0,variants:[]};let initialVariants=p.variants?.length?p.variants:p.sizes.flatMap((size,i)=>p.colors.map((color,j)=>({size,color,sku:`${p.sku||'TB-'+(p.name||'').trim().slice(0,10).replace(/\s+/g,'-')||'SKU'}-${i+1}${j+1}`,stock:0}))),variantRows=initialVariants.map(v=>variantEditorRow(v)).join('');showModal(`<form id="product-edit-form" onsubmit="event.preventDefault();saveProduct(this,'${id||''}')">
+function productModal(id){
+  let p=id?product(id):{id:'',name:'',category:db.categories[0]?.id,price:0,oldPrice:0,sku:'',brand:'طوبی',stock:0,sizes:['۳۸','۳۹','۴۰','۴۱','۴۲'],colors:['مشکی'],desc:'',shortDesc:'',longDesc:'',images:[],features:[],specifications:{},featured:false,bestSeller:false,active:true,image:0,variants:[]};
+  if(!String(p.sku||'').trim())p.sku=nextProductSku();
+  const usedSkus=collectProductVariantSkus();
+  const initialVariants=p.variants?.length?p.variants.map(v=>({...v,sku:String(v.sku||'').trim()||makeUniqueVariantSku(p.sku,v.size,v.color,usedSkus)})):p.sizes.flatMap(size=>p.colors.map(color=>({size,color,sku:makeUniqueVariantSku(p.sku,size,color,usedSkus),stock:0})));
+  let variantRows=initialVariants.map(v=>variantEditorRow(v)).join('');
+  showModal(`<form id="product-edit-form" novalidate onsubmit="event.preventDefault();saveProduct(this,'${id||''}')">
+<div id="product-error-summary" class="pf-error-summary" role="alert" aria-live="assertive" hidden></div>
 <div class="pf-section-title"><b>1</b> نام و دسته‌بندی</div>
 <div class="form-grid">
 <div class="field full"><label>نام محصول *</label><input name="name" required maxlength="140" autofocus value="${esc(p.name)}" placeholder="مثلاً کفش روزمره زنانه طوبی مدل ۷۰۳"></div>
@@ -82,9 +89,142 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 <div class="field"><label><input type="checkbox" name="featured" ${p.featured?'checked':''}> محصول ویژه (نمایش در خانه)</label></div>
 <div class="field"><label><input type="checkbox" name="bestSeller" ${p.bestSeller?'checked':''}> پرفروش</label></div>
 </div></details>
-</form>`);const _pf=document.getElementById('product-edit-form');renderImageStrip(_pf);renderColorHexEditor(_pf)}
+</form>`);const _pf=document.getElementById('product-edit-form');bindProductValidation(_pf);renderImageStrip(_pf);renderColorHexEditor(_pf)}
 function syncSizeSpecification(form,sizeValues){let field=form?.elements?.specifications;if(!field)return '';let raw=Array.isArray(sizeValues)?sizeValues:String(form.elements.sizes?.value||'').split(','),sizes=[...new Set(raw.map(value=>String(value||'').trim()).filter(Boolean))],isSizeLine=/^\s*(?:سایزبندی(?:\s*(?:موجود|کالا|محصول))?|سایز(?:ها)?|اندازه(?:بندی)?|sizes?|size\s*range)\s*:/iu,lines=String(field.value||'').split(/\r?\n/).filter(line=>line.trim()&&!isSizeLine.test(line));if(sizes.length)lines.push(`سایزبندی: ${sizes.join('، ')}`);field.value=lines.join('\n');return field.value}
 function variantEditorRow(v){return `<tr><td><input class="v-size" value="${esc(v.size)}" readonly></td><td><input class="v-color" value="${esc(v.color)}" readonly></td><td><input class="v-sku" value="${esc(v.sku||'')}" aria-label="SKU واریانت"></td><td><input class="v-stock" type="number" min="0" value="${Number(v.stock)||0}" aria-label="موجودی"></td></tr>`}
+
+function normalizeProductSku(value){return String(value||'').trim().toLocaleUpperCase('en-US')}
+function nextProductSku(){
+  const used=new Set((Array.isArray(db.products)?db.products:[]).map(item=>normalizeProductSku(item.sku)).filter(Boolean));
+  const start=Number(Date.now().toString().slice(-5));
+  for(let offset=0;offset<100000;offset++){const candidate=`TB-${String((start+offset)%100000).padStart(5,'0')}`;if(!used.has(normalizeProductSku(candidate)))return candidate}
+  return `TB-${Date.now()}`;
+}
+function collectProductVariantSkus(){
+  const used=new Set();
+  for(const item of Array.isArray(db.products)?db.products:[])for(const variant of Array.isArray(item.variants)?item.variants:[]){const sku=normalizeProductSku(variant.sku);if(sku)used.add(sku)}
+  return used;
+}
+function makeUniqueVariantSku(baseSku,size,color,usedSkus=collectProductVariantSkus()){
+  const encode=value=>encodeURIComponent(latinDigits(String(value||'').trim()).toLocaleUpperCase('en-US')).toUpperCase();
+  const stem=`${String(baseSku||'TB').trim().toLocaleUpperCase('en-US')}-${encode(size)||'EMPTY'}-${encode(color)||'EMPTY'}`;
+  let candidate=stem,suffix=2;
+  while(usedSkus.has(normalizeProductSku(candidate)))candidate=`${stem}-${suffix++}`;
+  usedSkus.add(normalizeProductSku(candidate));
+  return candidate;
+}
+function clearProductValidation(form){
+  if(!form)return;
+  form.querySelectorAll('.pf-invalid-control').forEach(element=>{element.classList.remove('pf-invalid-control');element.removeAttribute('aria-invalid')});
+  form.querySelectorAll('.pf-field-invalid,.pf-row-invalid').forEach(element=>element.classList.remove('pf-field-invalid','pf-row-invalid'));
+  form.querySelectorAll('.pf-inline-error').forEach(element=>element.remove());
+  const summary=form.querySelector('#product-error-summary');if(summary){summary.hidden=true;summary.replaceChildren()}
+}
+function clearProductErrorForTarget(form,target){
+  if(!form||!target)return;
+  const row=target.closest?.('tr'),field=target.closest?.('.field'),cell=target.closest?.('td');
+  if(row&&cell){cell.querySelectorAll('.pf-inline-error').forEach(element=>element.remove());target.classList.remove('pf-invalid-control');target.removeAttribute('aria-invalid');if(!row.querySelector('.pf-invalid-control'))row.classList.remove('pf-row-invalid')}
+  else if(field){field.classList.remove('pf-field-invalid');field.querySelectorAll('.pf-invalid-control').forEach(element=>{element.classList.remove('pf-invalid-control');element.removeAttribute('aria-invalid')});field.querySelectorAll('.pf-inline-error').forEach(element=>element.remove())}
+  else{target.classList.remove('pf-invalid-control');target.removeAttribute('aria-invalid');target.parentElement?.querySelectorAll('.pf-inline-error').forEach(element=>element.remove())}
+  const summary=form.querySelector('#product-error-summary');if(summary){summary.hidden=true;summary.replaceChildren()}
+}
+function bindProductValidation(form){
+  if(!form||form.dataset.pfValidationBound)return;
+  form.dataset.pfValidationBound='true';
+  const clear=event=>clearProductErrorForTarget(form,event.target);
+  form.addEventListener('input',clear);form.addEventListener('change',clear);
+}
+function addProductFieldError(form,target,label,message,errors){
+  errors.push({label,message,target});
+  if(!target)return;
+  const row=target.closest?.('tr'),field=target.closest?.('.field');
+  target.classList.add('pf-invalid-control');target.setAttribute('aria-invalid','true');
+  if(row)row.classList.add('pf-row-invalid');
+  if(field)field.classList.add('pf-field-invalid');
+  const details=target.closest?.('details.pf-adv');if(details)details.open=true;
+  const holder=row?(target.closest('td')||row):(field||target.parentElement||form);
+  const note=document.createElement('div');note.className='pf-inline-error';note.textContent=message;holder.append(note);
+}
+function showProductErrorSummary(form,errors){
+  const summary=form?.querySelector('#product-error-summary');if(!summary)return;
+  summary.replaceChildren();
+  const title=document.createElement('strong');title.textContent='ذخیره انجام نشد؛ بخش‌های قرمز را اصلاح کنید:';summary.append(title);
+  const list=document.createElement('ul');
+  for(const error of errors){const item=document.createElement('li');item.textContent=`${error.label}: ${error.message}`;list.append(item)}
+  summary.append(list);summary.hidden=false;
+}
+function focusProductError(form,errors){
+  const target=errors.find(error=>error.target)?.target;if(!target)return;
+  const details=target.closest?.('details.pf-adv');if(details)details.open=true;
+  target.scrollIntoView?.({behavior:'smooth',block:'center'});
+  const focusTarget=target.matches?.('input,select,textarea,button')?target:target.querySelector?.('input:not([type="hidden"]),select,textarea,button');
+  focusTarget?.focus?.({preventScroll:true});
+}
+function validateProductForm(form,id,{checkVariants=true}={}){
+  clearProductValidation(form);
+  const errors=[],control=name=>form.elements.namedItem(name),text=(name)=>String(control(name)?.value||'').trim(),split=name=>text(name).split(',').map(value=>value.trim()).filter(Boolean),field=name=>control(name),display=(value)=>String(value||'').trim();
+  const add=(target,label,message)=>addProductFieldError(form,target,label,message,errors);
+  const name=text('name'),categoryId=text('category'),priceRaw=text('price'),price=Number(latinDigits(priceRaw));
+  if(!name)add(field('name'),'نام محصول','نام محصول را وارد کنید.');
+  const selectedCategory=(db.categories||[]).find(category=>String(category.id)===categoryId);
+  if(!categoryId)add(field('category'),'دسته‌بندی','یک دسته‌بندی انتخاب کنید.');
+  else if(!selectedCategory)add(field('category'),'دسته‌بندی','این دسته‌بندی در پایگاه داده وجود ندارد؛ دسته‌بندی معتبر دیگری انتخاب کنید.');
+  else if(form.elements.namedItem('active')?.checked&&selectedCategory.active===false)add(field('category'),'دسته‌بندی','برای انتشار محصول، دسته‌بندی فعال انتخاب کنید یا محصول را به‌صورت پیش‌نویس نگه دارید.')
+  if(!priceRaw||!Number.isFinite(price)||!Number.isInteger(price)||price<0)add(field('price'),'قیمت','قیمت را به‌صورت عدد صحیح و صفر یا بیشتر وارد کنید.');
+  const oldPriceRaw=text('oldPrice'),oldPrice=oldPriceRaw?Number(latinDigits(oldPriceRaw)):0;
+  if(oldPriceRaw&&(!Number.isFinite(oldPrice)||!Number.isInteger(oldPrice)||oldPrice<0))add(field('oldPrice'),'قیمت قبل از تخفیف','قیمت قبل از تخفیف باید عدد صحیح و صفر یا بیشتر باشد.');
+  else if(oldPrice>0&&Number.isFinite(price)&&oldPrice<=price)add(field('oldPrice'),'قیمت قبل از تخفیف','برای نمایش تخفیف، قیمت قبل از تخفیف باید از قیمت فعلی بیشتر باشد.');
+  const productSku=text('sku'),normalizedProductSku=normalizeProductSku(productSku);
+  if(!productSku)add(field('sku'),'کد محصول / SKU','کد یکتای محصول را وارد کنید.');
+  else if((db.products||[]).some(item=>String(item.id)!==String(id||'')&&normalizeProductSku(item.sku)===normalizedProductSku))add(field('sku'),'کد محصول / SKU',`کد «${productSku}» قبلاً برای محصول دیگری ثبت شده؛ کد متفاوتی وارد کنید.`);
+  const slugField=field('slug'),slugInput=String(slugField?.value||'').trim(),slug=slugInput||(name&&typeof v2slug==='function'?v2slug(name):'');
+  if(!slug)add(slugField,'نشانی صفحه (Slug)','یک نام محصول معتبر وارد کنید یا در تنظیمات پیشرفته slug بنویسید.');
+  else if((db.products||[]).some(item=>String(item.id)!==String(id||'')&&String(item.slug||'').trim().toLocaleLowerCase('fa-IR')===String(slug).trim().toLocaleLowerCase('fa-IR')))add(slugField,'نشانی صفحه (Slug)',`نشانی «${slug}» قبلاً استفاده شده؛ در تنظیمات پیشرفته slug متفاوتی وارد کنید.`);
+  const sizes=split('sizes'),colors=split('colors'),sizeTarget=form.querySelector('#size-grid')||field('sizes'),colorTarget=field('colors');
+  if(!sizes.length)add(sizeTarget,'سایزها','حداقل یک سایز انتخاب کنید.');
+  const seenSizes=new Set();for(const size of sizes){const key=latinDigits(size).replace(/\s+/g,'').toLocaleLowerCase('en-US');if(seenSizes.has(key)){add(sizeTarget,'سایزها',`سایز «${size}» تکراری است؛ مقدارهای تکراری را حذف کنید.`);break}seenSizes.add(key)}
+  if(!colors.length)add(colorTarget,'رنگ‌بندی','حداقل یک رنگ وارد کنید و رنگ‌ها را با ویرگول جدا کنید.');
+  const seenColors=new Set();for(const color of colors){const key=color.normalize('NFKC').replace(/\s+/g,' ').trim().toLocaleLowerCase('fa-IR');if(seenColors.has(key)){add(colorTarget,'رنگ‌بندی',`رنگ «${color}» تکراری است؛ مقدارهای تکراری را حذف کنید.`);break}seenColors.add(key)}
+  const imageField=field('images'),imageValues=String(imageField?.value||'').split(/\r?\n/).map(value=>value.trim()).filter(Boolean),invalidImage=imageValues.find(value=>!isLocalAsset(value));
+  if(invalidImage)add(imageField,'تصاویر محصول',`نشانی «${invalidImage}» معتبر نیست؛ از مسیر محلی سایت یا URL امن HTTPS استفاده کنید.`);
+  if(checkVariants){
+    const rows=[...form.querySelectorAll('#variant-editor tr')],tableTarget=form.querySelector('#variant-editor')?.closest('table')||form.querySelector('#variant-editor');
+    if(!rows.length||rows.length!==sizes.length*colors.length)add(tableTarget,'جدول سایز × رنگ',`جدول باید برای هر ترکیب سایز و رنگ یک ردیف داشته باشد؛ انتظار ${sizes.length*colors.length} ردیف و ${rows.length} ردیف فعلی است. دکمهٔ «بازسازی جدول سایز × رنگ» را بزنید.`);
+    const comboCounts=new Map(),rowInfo=rows.map(row=>({row,size:display(row.querySelector('.v-size')?.value),color:display(row.querySelector('.v-color')?.value),sku:display(row.querySelector('.v-sku')?.value),stockField:row.querySelector('.v-stock'),skuField:row.querySelector('.v-sku')}));
+    for(const item of rowInfo){const key=`${latinDigits(item.size).replace(/\s+/g,'')}\u0000${item.color.normalize('NFKC').replace(/\s+/g,' ').trim().toLocaleLowerCase('fa-IR')}`;comboCounts.set(key,(comboCounts.get(key)||0)+1);const stockRaw=String(item.stockField?.value||'').trim(),stock=Number(latinDigits(stockRaw));if(!stockRaw||!Number.isInteger(stock)||stock<0)add(item.stockField,`موجودی سایز ${item.size} / رنگ ${item.color}`,'موجودی باید عدد صحیحِ صفر یا بیشتر باشد.')}
+    if([...comboCounts.values()].some(count=>count>1))add(tableTarget,'جدول سایز × رنگ','یک ترکیب سایز و رنگ در چند ردیف تکرار شده است؛ جدول را بازسازی کنید.');
+    const enteredSkus=new Map();for(const item of rowInfo){const key=normalizeProductSku(item.sku);if(!key){add(item.skuField,`SKU سایز ${item.size} / رنگ ${item.color}`,'کد SKU این ترکیب خالی است؛ یک کد یکتا وارد کنید.');continue}if(!enteredSkus.has(key))enteredSkus.set(key,[]);enteredSkus.get(key).push(item)}
+    for(const [sku,items] of enteredSkus)if(items.length>1)for(const item of items)add(item.skuField,`SKU سایز ${item.size} / رنگ ${item.color}`,`کد «${item.sku}» در جدول این محصول تکراری است؛ برای هر ترکیب کد متفاوت وارد کنید.`);
+    const persisted=[];for(const item of db.products||[])for(const variant of item.variants||[])if(variant.sku)persisted.push({productId:String(item.id),productName:item.name||'محصول دیگر',size:String(variant.size||'').trim(),color:String(variant.color||'').trim(),sku:normalizeProductSku(variant.sku)});
+    for(const item of rowInfo){const sku=normalizeProductSku(item.sku);if(!sku)continue;const conflict=persisted.find(saved=>saved.sku===sku&&!(saved.productId===String(id||'')&&saved.size===item.size&&saved.color===item.color));if(conflict)add(item.skuField,`SKU سایز ${item.size} / رنگ ${item.color}`,`کد «${item.sku}» قبلاً برای ${conflict.productName}، سایز ${conflict.size} و رنگ ${conflict.color} ثبت شده؛ برای این ترکیب SKU دیگری وارد کنید.`)}
+  }
+  if(errors.length){showProductErrorSummary(form,errors);focusProductError(form,errors);return false}
+  return true;
+}
+function showProductSaveError(form,error){
+  clearProductValidation(form);
+  const message=String(error?.message||error||'خطای نامشخص در ذخیره محصول'),lower=message.toLocaleLowerCase('en-US'),errors=[],add=(target,label,text)=>addProductFieldError(form,target,label,text,errors);
+  if(lower.includes('product_variants_sku_key')){
+    const duplicate=message.match(/key\s*\(sku\)\s*=\s*\(([^)]+)\)/i)?.[1]?.trim(),inputs=[...form.querySelectorAll('.v-sku')],targets=duplicate?inputs.filter(input=>normalizeProductSku(input.value)===normalizeProductSku(duplicate)):inputs;
+    for(const target of (targets.length?targets:inputs))add(target,'SKU واریانت‌ها',duplicate?`کد «${duplicate}» قبلاً در پایگاه داده ثبت شده؛ فقط ستون SKU واریانت را برای این ترکیب اصلاح کنید.`:'یکی از کدهای ستون SKU واریانت قبلاً در پایگاه داده استفاده شده؛ کدهای این ستون را بررسی و کد تکراری را عوض کنید.');
+  }else if(lower.includes('products_sku_key'))add(form.elements.namedItem('sku'),'کد محصول / SKU','این کد محصول در پایگاه داده تکراری است؛ کد یکتای دیگری وارد کنید.');
+  else if(lower.includes('products_slug_key')){const slug=form.elements.namedItem('slug');if(slug?.closest('details'))slug.closest('details').open=true;add(slug,'نشانی صفحه (Slug)','این نشانی قبلاً ثبت شده؛ در تنظیمات پیشرفته slug یکتای دیگری وارد کنید.')}
+  else if(lower.includes('product_variants_stock_check'))for(const input of form.querySelectorAll('.v-stock'))add(input,'موجودی واریانت','موجودی این ردیف باید عدد صحیحِ صفر یا بیشتر باشد.');
+  else if(lower.includes('product_variants_product_id_size_color_key')){
+    const match=message.match(/key\s*\(product_id,\s*size,\s*color\)\s*=\s*\(([^,]+),\s*([^,]+),\s*([^)]+)\)/i),rows=[...form.querySelectorAll('#variant-editor tr')];
+    const conflict=match&&rows.find(row=>latinDigits(row.querySelector('.v-size')?.value||'').trim()===latinDigits(match[2]).trim()&&String(row.querySelector('.v-color')?.value||'').trim().toLocaleLowerCase('fa-IR')===match[3].trim().toLocaleLowerCase('fa-IR'));
+    if(conflict){const size=match[2].trim(),color=match[3].trim();add(conflict.querySelector('.v-color'),'ترکیب سایز × رنگ',`ترکیب سایز ${size} و رنگ ${color} از قبل برای این محصول وجود دارد؛ این ردیف را بازبینی کنید.`);add(form.elements.namedItem('sizes'),'سایزها',`سایز ${size} در ترکیب تکراری پایگاه داده است؛ انتخاب سایزها را بازبینی کنید.`);add(form.elements.namedItem('colors'),'رنگ‌بندی',`رنگ ${color} در ترکیب تکراری پایگاه داده است؛ رنگ‌ها را بازبینی کنید.`)}
+    else{add(form.querySelector('#variant-editor')?.closest('table')||form.querySelector('#variant-editor'),'جدول سایز × رنگ','یک ترکیب سایز و رنگ از قبل برای این محصول وجود دارد؛ ترکیب‌های تکراری را حذف یا جدول را بازسازی کنید.');add(form.elements.namedItem('colors'),'رنگ‌بندی','رنگ‌ها و ترکیب‌های تکراری را بررسی کنید.')}
+  }
+  else if(lower.includes('products_price_toman_check'))add(form.elements.namedItem('price'),'قیمت','قیمت پذیرفته نشد؛ مقدار صحیح و صفر یا بیشتر وارد کنید.');
+  else if(lower.includes('products_compare_at_price_toman_check'))add(form.elements.namedItem('oldPrice'),'قیمت قبل از تخفیف','قیمت قبل از تخفیف پذیرفته نشد؛ مقدار صفر یا بزرگ‌تر وارد کنید.');
+  else if(lower.includes('category_id_fkey'))add(form.elements.namedItem('category'),'دسته‌بندی','دسته‌بندی انتخاب‌شده در پایگاه داده وجود ندارد؛ دسته‌بندی معتبر دیگری انتخاب کنید.');
+  else if(lower.includes('ذخیره موجودی و واریانت')||lower.includes('product_variants'))add(form.querySelector('#variant-editor')?.closest('table')||form.querySelector('#variant-editor'),'جدول سایز × رنگ','پایگاه داده ترکیب واریانت‌ها را نپذیرفت؛ SKU، سایز، رنگ و موجودی ردیف‌های قرمز را بررسی کنید.');
+  const detail=errors.length?errors:[{label:'خطای ذخیره محصول',message:`ذخیره در پایگاه داده انجام نشد. جزئیات: ${message}`,target:null}];
+  showProductErrorSummary(form,detail);focusProductError(form,errors);toast('ذخیره انجام نشد؛ توضیح و بخش قرمز را در فرم ببینید.');
+}
+window.validateProductForm=validateProductForm;
+window.showProductSaveError=showProductSaveError;
 
 const SIZE_TICK_MIN=20,SIZE_TICK_MAX=50;
 function faDigits(n){return String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}
@@ -224,7 +364,19 @@ async function shrinkImageTo(dataUrl,maxSide,quality){
     return canvas.toDataURL(keepAlpha?'image/webp':'image/jpeg',quality)||dataUrl;
   }catch{return dataUrl}
 }
-function buildVariantEditor(){let f=$('#product-edit-form'),sizes=[...new Set(f.elements.sizes.value.split(',').map(s=>s.trim()).filter(Boolean))],colors=[...new Set(f.elements.colors.value.split(',').map(s=>s.trim()).filter(Boolean))],old=[...$('#variant-editor').querySelectorAll('tr')].map(r=>({size:r.querySelector('.v-size').value,color:r.querySelector('.v-color').value,sku:r.querySelector('.v-sku').value,stock:r.querySelector('.v-stock').value}));syncSizeSpecification(f,sizes);$('#variant-editor').innerHTML=sizes.flatMap(size=>colors.map(color=>{let found=old.find(x=>x.size===size&&x.color===color);return variantEditorRow(found||{size,color,sku:`${f.elements.sku.value}-${sizes.indexOf(size)+1}${colors.indexOf(color)+1}`,stock:0})})).join('')}
+function buildVariantEditor(){
+  const form=$('#product-edit-form');
+  const sizes=[...new Set(String(form.elements.sizes.value||'').split(',').map(value=>value.trim()).filter(Boolean))];
+  const colors=[...new Set(String(form.elements.colors.value||'').split(',').map(value=>value.trim()).filter(Boolean))];
+  const old=[...form.querySelectorAll('#variant-editor tr')].map(row=>({size:row.querySelector('.v-size').value.trim(),color:row.querySelector('.v-color').value.trim(),sku:row.querySelector('.v-sku').value.trim(),stock:row.querySelector('.v-stock').value}));
+  if(!String(form.elements.sku.value||'').trim())form.elements.sku.value=nextProductSku();
+  const usedSkus=collectProductVariantSkus();
+  syncSizeSpecification(form,sizes);
+  form.querySelector('#variant-editor').innerHTML=sizes.flatMap(size=>colors.map(color=>{
+    const found=old.find(item=>item.size===size&&item.color===color);
+    return variantEditorRow(found?.sku?found:{size,color,sku:makeUniqueVariantSku(form.elements.sku.value,size,color,usedSkus),stock:found?.stock||0});
+  })).join('');
+}
 function quickProductModal(){return productModal()}
 async function saveQuickProduct(form){
   const name=form.elements.name.value.trim(),sku=form.elements.sku.value.trim(),categoryId=form.elements.category.value;
