@@ -7171,3 +7171,11 @@ body.admin-body #product-edit-form input.pf-invalid-control,
 body.admin-body #product-edit-form select.pf-invalid-control,
 body.admin-body #product-edit-form textarea.pf-invalid-control{border-color:#f87171!important;box-shadow:0 0 0 3px rgba(248,113,113,.2)!important}
 body.admin-body #product-edit-form tr.pf-row-invalid td{background:rgba(127,29,29,.22)!important}
+
+/* Bind each uploaded slide to a variant color in the admin editor. */
+#product-edit-form .img-slide{width:132px}
+#product-edit-form .img-color-bind{display:flex;flex-direction:column;gap:3px;padding:4px 6px;color:#59664f;font-size:9px;font-weight:700}
+#product-edit-form .img-color-bind select{width:100%;min-width:0;padding:4px 5px;border:1px solid #dfe4d8;border-radius:6px;background:#fff;color:#27352a;font-size:10px}
+body.admin-body #product-edit-form .img-color-bind{color:#a9b8a4}
+body.admin-body #product-edit-form .img-color-bind select{border-color:#2c3a2f;background:#121b15;color:var(--adm-text)}
+.gallery-color-message{margin:8px 0 0;padding:8px 11px;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.7}

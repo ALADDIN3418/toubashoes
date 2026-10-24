@@ -87,7 +87,7 @@ function fakeClient() {
     storageRemovals:[],
     tables:{
       categories:[{id:ids.category,slug:'boots',name:'بوت',description:'',image_url:null,icon:'◈',sort_order:1,is_active:true,created_at:'2026-10-01T00:00:00.000Z'}],
-      products:[{id:ids.product,slug:'real-shoe',name:'کفش ثبت‌شده',short_description:'توضیح',description:'شرح محصول',brand:'طوبی',sku:'TB-DB-1',price_toman:1250000,compare_at_price_toman:1400000,is_active:true,is_featured:true,is_best_seller:false,features:['راحت'],specifications:{جنس:'چرم'},category_id:ids.category,created_at:'2026-10-01T00:00:00.000Z'}],
+      products:[{id:ids.product,slug:'real-shoe',name:'کفش ثبت‌شده',short_description:'توضیح',description:'شرح محصول',brand:'طوبی',sku:'TB-DB-1',price_toman:1250000,compare_at_price_toman:1400000,is_active:true,is_featured:true,is_best_seller:false,features:['راحت'],specifications:{جنس:'چرم',__imageColors:{'https://cdn.example.test/shoe.jpg':'مشکی'}},category_id:ids.category,created_at:'2026-10-01T00:00:00.000Z'}],
       product_variants:[{id:ids.variant,product_id:ids.product,size:'۴۰',color:'مشکی',sku:'TB-DB-1-40',stock:6,price_toman:null}],
       product_images:[{id:'60000000-0000-4000-8000-000000000001',product_id:ids.product,url:'https://cdn.example.test/shoe.jpg',alt:'کفش',sort_order:0}],
       site_settings:[{key:'storeName',value:'فروشگاه واقعی طوبی',is_public:true},{key:'phone',value:'۰۹۱۲۱۲۳۴۵۶۷',is_public:true},{key:'shipping',value:80000,is_public:true},{key:'freeShipping',value:2000000,is_public:true},{key:'shippingOptions',value:{normal:80000,express:160000,freeFrom:2000000},is_public:true},{key:'homepage',value:{categoryIds:[ids.category],featuredProductIds:[ids.product],bestSellerProductIds:[],advantages:[]},is_public:true}],
@@ -146,6 +146,7 @@ async function main() {
   assert.equal(data.products[0].price,1250000);
   assert.equal(data.products[0].variants[0].stock,6);
   assert.deepEqual(JSON.parse(JSON.stringify(data.products[0].images)),['https://cdn.example.test/shoe.jpg']);
+  assert.equal(data.products[0].specifications.__imageColors['https://cdn.example.test/shoe.jpg'],'مشکی','color-to-image associations should hydrate from product specifications');
   assert.equal(data.categories[0].name,'بوت');
   assert.equal(data.settings.storeName,'فروشگاه واقعی طوبی');
   assert.equal(data.settings.phone,'۰۹۱۲۱۲۳۴۵۶۷');
@@ -188,9 +189,11 @@ async function main() {
   await repositories.banners.delete(banner.id);
   assert.equal(client.tables.banners.length,0);
 
-  await repositories.products.update(ids.product,{price:1300000,variants:[{id:ids.variant,size:'۴۰',color:'مشکی',sku:'TB-DB-1-40',stock:9}]});
+  await repositories.products.update(ids.product,{price:1300000,specifications:{جنس:'چرم',__imageColors:{'https://cdn.example.test/shoe.jpg':'زرشکی'}},variants:[{id:ids.variant,size:'۴۰',color:'مشکی',sku:'TB-DB-1-40',stock:9}]});
   assert.equal(client.tables.products.find(row=>row.id===ids.product).price_toman,1300000);
+  assert.equal(client.tables.products.find(row=>row.id===ids.product).specifications.__imageColors['https://cdn.example.test/shoe.jpg'],'زرشکی','color-to-image associations should persist in specifications');
   assert.equal(client.tables.product_variants.find(row=>row.id===ids.variant).stock,9);
+  assert.equal(data.products[0].specifications.__imageColors['https://cdn.example.test/shoe.jpg'],'زرشکی');
   assert.equal(data.products[0].price,1300000);
 
   await repositories.siteSettings.update('phone',{value:'۰۹۱۲۹۹۹۹۹۹۹'});

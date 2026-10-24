@@ -218,6 +218,7 @@ async function main() {
     const st3 = fs.readFileSync(path.join(root,'stage3.js'),'utf8');
     assert(st3.includes("imageUrl:f.elements.imageUrl?.value.trim()||''"), 'saveCategory must persist the image');
     assert(st3.includes('obj.specifications.__colorHexes=hx'), 'saveProduct must persist admin color-dot hexes');
+    assert(st3.includes('fd.get(\'imageColors\')') && st3.includes('obj.specifications.__imageColors=map'), 'saveProduct must persist per-image product color associations');
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(st4.includes('p.specifications.__colorHexes'), 'product card dots must honor admin-configured hexes');
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
@@ -448,11 +449,21 @@ async function main() {
   {
     const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
     assert(enh.includes('multiple onchange="uploadManualProductImage(this)"'), 'file input must allow selecting several slides at once');
-    for (const needle of ['function renderImageStrip','function imageSetMain','function imageMove','function imageRemove','function readFormImages','function writeFormImages','اسلاید اول تصویر اصلی'])
-      assert(enh.includes(needle), `enhancements.js multi-slide missing: ${needle}`);
-    assert(enh.includes("oninput=\"renderImageStrip(this.form)\""), 'images textarea must live-sync the preview strip');
+    for (const needle of ['function renderImageStrip','function imageSetMain','function imageMove','function imageRemove','function readFormImages','function writeFormImages','function readFormImageColors','function cleanFormImageColors','function setImageColor','function productImagesForColor','function updateProductGalleryForColor','data-image-url=','اسلاید اول تصویر اصلی'])
+      assert(enh.includes(needle), `enhancements.js multi-slide/color mapping missing: ${needle}`);
+    assert(enh.includes("oninput=\"renderImageStrip(this.form)\"") && enh.includes('onchange="setImageColor(this)"'), 'image URLs and their color bindings must live-sync in the product form');
+    assert(enh.includes('updateProductGalleryForColor(id,el.dataset.color)'), 'selecting a storefront color must update the main product gallery');
+    const galleryStart=enh.indexOf('function productImagesForColor'),galleryEnd=enh.indexOf('function updateProductGalleryForColor',galleryStart);
+    assert(galleryStart>=0&&galleryEnd>galleryStart,'per-color gallery filtering should be testable as a pure helper');
+    const galleryContext={};vm.runInNewContext(enh.slice(galleryStart,galleryEnd),galleryContext);
+    const mappedProduct={images:['red-front.jpg','black-front.jpg','all-angle.jpg'],specifications:{__imageColors:{'red-front.jpg':'زرشکی','black-front.jpg':'مشکی'}}};
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor(mappedProduct,'زرشکی')),['red-front.jpg','all-angle.jpg'],'color selection should show matching images and shared images');
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor(mappedProduct,'سفید')),['all-angle.jpg'],'unassigned shared images should remain visible for every color');
+    const noSharedImages={images:['red-front.jpg','black-front.jpg'],specifications:{__imageColors:{'red-front.jpg':'زرشکی','black-front.jpg':'مشکی'}}};
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor(noSharedImages,'سفید')),[],'a color without assigned or shared images must not show another color image');
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor({images:['one.jpg','two.jpg']},'مشکی')),['one.jpg','two.jpg'],'legacy products without color assignments should retain their gallery');
     const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
-    assert(css.includes('.image-strip{') && css.includes('.img-slide.main{'), 'slide strip styles must ship');
+    assert(css.includes('.image-strip{') && css.includes('.img-slide.main{') && css.includes('.img-color-bind'), 'slide color-binding styles must ship');
     assert(fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8').includes('body.storefront-mode .img-slide'), 'slide strip must be themed for dark mode');
   }
 
