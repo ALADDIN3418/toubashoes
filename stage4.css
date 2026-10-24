@@ -6959,7 +6959,7 @@ html, body, #app, main {
 }
 
 
-/* ═══ جدول تیک سایز (۲۲ تا ۴۸) و آپلود مستقیم تصویر — فرم محصول پنل ═══ */
+/* ═══ جدول تیک سایز (۲۰ تا ۵۰) و آپلود مستقیم تصویر — فرم محصول پنل ═══ */
 .size-grid-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:8px}
 .size-grid-toolbar select{padding:5px 8px;border-radius:8px;border:1px solid var(--line,#dfe5dd);background:#fff;color:var(--ink,#142018);font-size:12px}
 .size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;margin-top:8px}

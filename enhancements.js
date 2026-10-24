@@ -59,7 +59,7 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 <div class="form-grid">
 <div class="field"><label>رنگ‌بندی (با ویرگول)</label><input id="variant-colors" name="colors" onchange="renderColorHexEditor(this.form)" value="${esc(p.colors.join(','))}" placeholder="مشکی، سفید"></div><div class="field full"><div class="pf-colors-hex" id="color-hex-editor"></div><input type="hidden" name="colorHex" id="color-hex-data" value="${esc(JSON.stringify((p.specifications&&p.specifications.__colorHexes)||{}))}"></div>
 <div class="field"><label>موجودی هر سایز</label><input id="variant-stock-all" type="number" min="0" value="0" onchange="applyStockToAllVariants(this.form)" placeholder="مثلاً ۱۰"></div>
-<div class="field full"><label>سایزها را تیک بزنید (۲۲ تا ۴۸)</label>${sizeGridMarkup(p.sizes)}<p class="pf-hint">یک عدد در «موجودی هر سایز» بنویسید؛ روی همهٔ ترکیب‌های سایز×رنگ تقسیم می‌شود. موجودی دقیق هر ترکیب در تنظیمات پیشرفته است.</p></div>
+<div class="field full"><label>سایزها را تیک بزنید (۲۰ تا ۵۰)</label>${sizeGridMarkup(p.sizes)}<p class="pf-hint">یک عدد در «موجودی هر سایز» بنویسید؛ روی همهٔ ترکیب‌های سایز×رنگ تقسیم می‌شود. موجودی دقیق هر ترکیب در تنظیمات پیشرفته است.</p></div>
 <div class="field full"><label>قیمت قبل از تخفیف (اختیاری — برای درج خط‌خورده)</label><input type="number" min="0" name="oldPrice" value="${p.oldPrice||''}"></div>
 </div>
 <div class="pf-section-title"><b>۳</b> تصاویر محصول — چند اسلاید</div>
@@ -86,7 +86,7 @@ function productModal(id){let p=id?product(id):{id:'',name:'',category:db.catego
 function syncSizeSpecification(form,sizeValues){let field=form?.elements?.specifications;if(!field)return '';let raw=Array.isArray(sizeValues)?sizeValues:String(form.elements.sizes?.value||'').split(','),sizes=[...new Set(raw.map(value=>String(value||'').trim()).filter(Boolean))],isSizeLine=/^\s*(?:سایزبندی(?:\s*(?:موجود|کالا|محصول))?|سایز(?:ها)?|اندازه(?:بندی)?|sizes?|size\s*range)\s*:/iu,lines=String(field.value||'').split(/\r?\n/).filter(line=>line.trim()&&!isSizeLine.test(line));if(sizes.length)lines.push(`سایزبندی: ${sizes.join('، ')}`);field.value=lines.join('\n');return field.value}
 function variantEditorRow(v){return `<tr><td><input class="v-size" value="${esc(v.size)}" readonly></td><td><input class="v-color" value="${esc(v.color)}" readonly></td><td><input class="v-sku" value="${esc(v.sku||'')}" aria-label="SKU واریانت"></td><td><input class="v-stock" type="number" min="0" value="${Number(v.stock)||0}" aria-label="موجودی"></td></tr>`}
 
-const SIZE_TICK_MIN=22,SIZE_TICK_MAX=48;
+const SIZE_TICK_MIN=20,SIZE_TICK_MAX=50;
 function faDigits(n){return String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])}
 function sizeGridMarkup(selected){
   const chosen=new Set((selected||[]).map(v=>Number(latinDigits(String(v)))));

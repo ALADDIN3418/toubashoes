@@ -148,7 +148,7 @@ async function main() {
     assert(fs.readFileSync(path.join(root,'stage4.js'),'utf8').includes('color:var(--touba-brand,#10b981)'), 'stage4 free-shipping highlight must follow theme brand color');
   }
 
-  // Admin product-form upgrade guards: honest <title>, size-tick grid 22-48, manual upload, variant-id resilience.
+  // Admin product-form upgrade guards: honest <title>, size-tick grid 20-50, manual upload, variant-id resilience.
   {
     const idx = fs.readFileSync(path.join(root,'index.html'),'utf-8');
     assert(idx.includes('<title>خرید اینترنتی کفش زنانه و مردانه | کفش طوبی</title>'), 'index.html <title> must target the store’s core Persian shoe-shopping searches');
@@ -156,8 +156,10 @@ async function main() {
     assert(!/og:title[^>]*22342065|twitter:title[^>]*22342065/.test(idx), 'social title tags must not contain the enamad code');
     assert(!fs.readFileSync(path.join(root,'services/seo.js'),'utf8').includes('22342065'), 'seo.js home title must use store name, not enamad code');
     const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
-    for (const needle of ['function sizeGridMarkup','SIZE_TICK_MIN=22','SIZE_TICK_MAX=48','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','تیک بزنید'])
+    for (const needle of ['function sizeGridMarkup','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','تیک بزنید (۲۰ تا ۵۰)'])
       assert(enh.includes(needle), `enhancements.js missing product-form feature: ${needle}`);
+    const sizeBounds = enh.match(/const SIZE_TICK_MIN=(\d+),SIZE_TICK_MAX=(\d+);/);
+    assert(sizeBounds && Number(sizeBounds[1]) === 20 && Number(sizeBounds[2]) === 50 && Number(sizeBounds[2]) - Number(sizeBounds[1]) + 1 === 31, 'admin size tick grid must include every size from 20 through 50');
     const digits = enh.match(/function faDigits\(n\)\{return String\(n\)\.replace\(\s*\/[^/]*\/g\s*,\s*d\s*=>\s*'([^']*)'/);
     assert(digits && [...digits[1]].length === 10 && digits[1][0] === '\u06f0' && digits[1][9] === '\u06f9', 'faDigits conversion map must cover all ten Persian digits in order');
     const repo = fs.readFileSync(path.join(root,'repositories/supabase-repository.js'),'utf8');
