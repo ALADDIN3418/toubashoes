@@ -116,6 +116,101 @@ async function main() {
   assert.match(layoutCss, /\.mobile-bottom-nav svg[\s\S]*?width:\s*20px/);
   assert.match(storeCss, /@media\s*\(max-width:\s*860px\)[\s\S]*?mobile-bottom-nav/);
 
+  // Mobile UX: compact admin cards, manual home shelves, accessible filter modal, and keyboard-safe forms.
+  {
+    const adminTableFunction = authUiSource.match(/function adminTable\(headers, rows, mobileCards = false\) \{[\s\S]*?\n  \}/)?.[0] || '';
+    assert(adminTableFunction, 'adminTable must support the mobile-card variant');
+    const tableContext = { esc:value=>String(value) };
+    vm.runInNewContext(`${adminTableFunction}\nthis.renderAdminTable=adminTable;`, tableContext);
+    const cardTable = tableContext.renderAdminTable(['نام'], '<tr><td data-label="نام">کفش</td></tr>', true);
+    assert.match(cardTable, /admin-table-mobile-cards/);
+    assert.match(cardTable, /mobile-card-table/);
+    for (const label of ['نام محصول','عملیات','شماره سفارش','مشتری','مبلغ (تومان)','برچسب ارسال','ایمیل \/ شماره تماس'])
+      assert(authUiSource.includes(`data-label="${label}"`), `admin card cells must label ${label}`);
+
+    const shelfFunction = storefrontSource.match(/function homeProductShelf\(id,items,label,emptyText\)\{[\s\S]*?\n\}/)?.[0] || '';
+    assert(shelfFunction, 'homeProductShelf must render one manual, accessible product row');
+    assert.doesNotMatch(shelfFunction, /setInterval|setTimeout/, 'home product shelves must never auto-rotate');
+    const shelfContext = { esc:value=>String(value), card:product=>`<article class="lux-product-card">${product.name}</article>`, uiIcon:()=>'<svg></svg>' };
+    vm.runInNewContext(`${shelfFunction}\nthis.renderShelf=homeProductShelf;`, shelfContext);
+    const shelfMarkup = shelfContext.renderShelf('test-shelf',[{name:'A'},{name:'B'}],'محصولات ویژه','خالی');
+    assert.equal((shelfMarkup.match(/<article class="lux-product-card"/g)||[]).length,2,'shelves render each product once without cloned tiles');
+    assert.match(shelfMarkup, /role="region"[\s\S]*?aria-label="محصولات ویژه"/);
+    assert.match(shelfMarkup, /aria-controls="test-shelf"/);
+    assert.match(storefrontSource, /homeProductShelf\('home-featured-products',featured\.slice\(0,5\)/);
+    assert.match(storefrontSource, /homeProductShelf\('home-bestseller-products',best\.slice\(0,5\)/);
+    assert.match(storefrontSource, /newest\.map\(card\)/, 'the newest-products section stays as a normal product grid');
+
+    const shelfScrollFunction = storefrontSource.match(/function scrollHomeProductShelf\(id,dir\)\{[\s\S]*?\n\}/)?.[0] || '';
+    let scrolledIndex = -1;
+    const shelfCards = [0,1,2].map(index=>({
+      getBoundingClientRect:()=>({left:index*100,width:100}),
+      scrollIntoView:()=>{scrolledIndex=index;}
+    }));
+    const shelfRow = {getBoundingClientRect:()=>({left:0,width:100}),querySelectorAll:()=>shelfCards};
+    const scrollContext = {document:{getElementById:()=>shelfRow}};
+    vm.runInNewContext(`${shelfScrollFunction}\nthis.scrollShelf=scrollHomeProductShelf;`, scrollContext);
+    scrollContext.scrollShelf('test-shelf',1);
+    assert.equal(scrolledIndex,1,'a user-clicked shelf arrow advances one card');
+
+    assert.doesNotMatch(storefrontSource, /با تأیید خودکار تراکنش از درگاه بیت‌پی/);
+    assert.match(storefrontSource, /پرداخت از مسیر درگاه بیت‌پی انجام می‌شود/);
+    const focusableFunction = storefrontSource.match(/function shopFilterFocusableElements\(panel\)\{[\s\S]*?\n\}/)?.[0] || '';
+    const filterKeyFunction = storefrontSource.match(/function handleShopFilterKeydown\(event\)\{[\s\S]*?\n\}/)?.[0] || '';
+    assert(focusableFunction && filterKeyFunction, 'mobile filter must define focusable controls and a keyboard trap');
+    let focusedFilterControl=null,closedFilterCount=0;
+    const filterControls=[0,1,2].map(()=>({
+      hidden:false,
+      getAttribute:()=>null,
+      getClientRects:()=>[{width:1}],
+      focus(){focusedFilterControl=this;}
+    }));
+    const filterPanel={
+      classList:{contains:className=>className==='drawer-open'},
+      querySelectorAll:()=>filterControls,
+      contains:element=>filterControls.includes(element),
+      focus(){focusedFilterControl=this;}
+    };
+    const filterDocument={querySelector:()=>filterPanel};
+    Object.defineProperty(filterDocument,'activeElement',{get:()=>focusedFilterControl});
+    const filterContext={document:filterDocument,closeShopFilters:()=>{closedFilterCount++;}};
+    vm.runInNewContext(`${focusableFunction}\n${filterKeyFunction}\nthis.handleFilterKey=handleShopFilterKeydown;`,filterContext);
+    let prevented=0;
+    focusedFilterControl=filterControls[0];
+    filterContext.handleFilterKey({key:'Tab',shiftKey:true,preventDefault(){prevented++;}});
+    assert.equal(focusedFilterControl,filterControls[2],'Shift+Tab from the first filter control wraps to the last');
+    filterContext.handleFilterKey({key:'Tab',shiftKey:false,preventDefault(){prevented++;}});
+    assert.equal(focusedFilterControl,filterControls[0],'Tab from the last filter control wraps to the first');
+    filterContext.handleFilterKey({key:'Escape',preventDefault(){prevented++;}});
+    assert.equal(closedFilterCount,1,'Escape closes the mobile filter modal');
+    assert.equal(prevented,3,'the trap prevents all three boundary key defaults');
+    const closeFilterFunction = storefrontSource.match(/function closeShopFilters\(options=\{\}\)\{[\s\S]*?\n\}/)?.[0] || '';
+    let modalOpen=true,restoredFilterFocus=false,activeFilterElement=null;
+    const closePanel={classList:{contains:()=>modalOpen,remove:()=>{modalOpen=false;}}};
+    const filterButton={disabled:false,focus(){restoredFilterFocus=true;activeFilterElement=this;}};
+    const closeDocument={querySelector:selector=>selector==='#shop-filters'?closePanel:filterButton};
+    Object.defineProperty(closeDocument,'activeElement',{get:()=>activeFilterElement});
+    const closeContext={document:closeDocument,syncShopFilterAccessibility(){}};
+    vm.runInNewContext(`${closeFilterFunction}\nthis.closeFilter=closeShopFilters;`,closeContext);
+    closeContext.closeFilter();
+    assert.equal(restoredFilterFocus,true,'closing the mobile filter restores focus to its trigger');
+    assert.equal(modalOpen,false,'closing the mobile filter removes its open state');
+    assert.match(storefrontSource, /setAttribute\('aria-modal','true'\)/);
+    assert.match(storefrontSource, /function isMobileAuthOrCheckoutField/);
+    assert.match(storefrontSource, /mobile-form-keyboard-open/);
+    assert.match(storeCss, /\.filter-panel\s*\{[\s\S]*?height:\s*100dvh !important/);
+    assert.match(storeCss, /\.filter-panel\.drawer-open\s*\{[\s\S]*?translateX\(0\)/);
+    assert.match(storeCss, /\.cart-items-scrollable\s*\{[\s\S]*?max-height:\s*none !important/);
+    assert.match(storeCss, /\.mobile-form-keyboard-open \.mobile-bottom-nav/);
+    assert.match(storeCss, /\.home-mobile-shelf\s*\{[\s\S]*?display:\s*flex !important/);
+    assert.match(storeCss, /body\.storefront-mode \.cat-arrow,[\s\S]*?width:\s*44px/);
+    assert.match(storeCss, /shop-toolbar \.filter-open,[\s\S]*?min-height:\s*44px/);
+    assert.match(storeCss, /\.checkout-step-actions > \.btn\s*\{[\s\S]*?min-height:\s*48px/);
+    assert.match(storeCss, /\.lux-cream-trust-item span\s*\{[\s\S]*?font-size:\s*12px !important/);
+    assert.match(layoutCss, /mobile-card-table tbody td::before\s*\{[\s\S]*?content:\s*attr\(data-label\)/);
+    assert.match(layoutCss, /admin-table-mobile-cards[\s\S]*?min-height:\s*44px/);
+  }
+
   const studio = fs.readFileSync(path.join(root,'admin-product-ai.js'),'utf8');
   assert.match(studio, /\(Legacy compatibility markers: ComfyUI \/ Qwen-Image-Edit\)/);
   assert.doesNotMatch(studio, /id:\s*['"][^'"]*gemini/i, 'Gemini must not be offered as an image model');
@@ -148,7 +243,7 @@ async function main() {
     assert(fs.readFileSync(path.join(root,'stage4.js'),'utf8').includes('color:var(--touba-brand,#10b981)'), 'stage4 free-shipping highlight must follow theme brand color');
   }
 
-  // Admin product-form upgrade guards: honest <title>, size-tick grid 22-48, manual upload, variant-id resilience.
+  // Admin product-form upgrade guards: honest <title>, size-tick grid 20-50, manual upload, variant-id resilience.
   {
     const idx = fs.readFileSync(path.join(root,'index.html'),'utf-8');
     assert(idx.includes('<title>خرید اینترنتی کفش زنانه و مردانه | کفش طوبی</title>'), 'index.html <title> must target the store’s core Persian shoe-shopping searches');
@@ -156,8 +251,10 @@ async function main() {
     assert(!/og:title[^>]*22342065|twitter:title[^>]*22342065/.test(idx), 'social title tags must not contain the enamad code');
     assert(!fs.readFileSync(path.join(root,'services/seo.js'),'utf8').includes('22342065'), 'seo.js home title must use store name, not enamad code');
     const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
-    for (const needle of ['function sizeGridMarkup','SIZE_TICK_MIN=22','SIZE_TICK_MAX=48','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','تیک بزنید'])
+    for (const needle of ['function sizeGridMarkup','function applySizeRange','function clearSizeGrid','function syncSizeGrid','function uploadManualProductImage','function shrinkImageTo','تیک بزنید (۲۰ تا ۵۰)'])
       assert(enh.includes(needle), `enhancements.js missing product-form feature: ${needle}`);
+    const sizeBounds = enh.match(/const SIZE_TICK_MIN=(\d+),SIZE_TICK_MAX=(\d+);/);
+    assert(sizeBounds && Number(sizeBounds[1]) === 20 && Number(sizeBounds[2]) === 50 && Number(sizeBounds[2]) - Number(sizeBounds[1]) + 1 === 31, 'admin size tick grid must include every size from 20 through 50');
     const digits = enh.match(/function faDigits\(n\)\{return String\(n\)\.replace\(\s*\/[^/]*\/g\s*,\s*d\s*=>\s*'([^']*)'/);
     assert(digits && [...digits[1]].length === 10 && digits[1][0] === '\u06f0' && digits[1][9] === '\u06f9', 'faDigits conversion map must cover all ten Persian digits in order');
     const repo = fs.readFileSync(path.join(root,'repositories/supabase-repository.js'),'utf8');
@@ -165,8 +262,29 @@ async function main() {
     const migPath = path.join(root,'supabase/migrations/202610060001_variant_id_default.sql');
     assert(fs.existsSync(migPath), 'variant id default migration must ship');
     assert(/product_variants[\s\S]*alter column id set default/.test(fs.readFileSync(migPath,'utf8')), 'migration must set product_variants.id default');
+    for (const needle of ['function bindProductValidation','function validateProductForm','function showProductSaveError','function nextProductSku','function collectProductVariantSkus','function makeUniqueVariantSku','while(usedSkus.has(normalizeProductSku(candidate)))','product_variants_sku_key','product_variants_product_id_size_color_key','products_sku_key','products_slug_key','product_variants_stock_check','product-error-summary','کد SKU این ترکیب خالی است'])
+      assert(enh.includes(needle), `product editor must provide field-level validation: ${needle}`);
+    const skuStart = enh.indexOf('function normalizeProductSku');
+    const skuEnd = enh.indexOf('function clearProductValidation',skuStart);
+    assert(skuStart >= 0 && skuEnd > skuStart, 'SKU helpers must be separable for unit checks');
+    const skuContext = {
+      Date:{now:()=>1234567},
+      latinDigits:value=>String(value),
+      db:{products:[{id:'existing',sku:'TB-34567',variants:[{sku:'TB-34567-39-BLACK'}]}]}
+    };
+    vm.runInNewContext(enh.slice(skuStart,skuEnd),skuContext);
+    assert.equal(skuContext.nextProductSku(),'TB-34568','generated product SKU should advance past a collision');
+    const usedVariantSkus=skuContext.collectProductVariantSkus();
+    const firstVariantSku=skuContext.makeUniqueVariantSku('TB-NEW','39','BLACK',usedVariantSkus);
+    const nextVariantSku=skuContext.makeUniqueVariantSku('TB-NEW','39','BLACK',usedVariantSkus);
+    assert.notEqual(firstVariantSku,nextVariantSku,'default SKU generation must not repeat for identical new variants');
+    const stage3 = fs.readFileSync(path.join(root,'stage3.js'),'utf8');
+    assert(stage3.includes('window.validateProductForm(f,id,{checkVariants:false})') && stage3.includes('window.validateProductForm(f,id,{checkVariants:true})') && stage3.includes('window.showProductSaveError(f,error)'), 'product save path must validate fields and map server errors inline');
+    const repository = fs.readFileSync(path.join(root,'repositories/supabase-repository.js'),'utf8');
+    assert(repository.includes('error.details') && repository.includes('error.hint'), 'repository errors must preserve details so the editor can identify the failing field');
     const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
     assert(css.includes('.size-grid{') && css.includes('.size-cell.on{') && css.includes('.manual-upload-row'), 'size-tick + upload styles must be in stage4.css');
+    assert(css.includes('#product-edit-form .pf-inline-error') && css.includes('#product-edit-form .pf-invalid-control') && css.includes('tr.pf-row-invalid td'), 'product editor validation must render inline red field and row highlights');
   }
 
   // v1.0.1b: IRANSans webfont, admin console skin, full homepage categories.
@@ -195,6 +313,7 @@ async function main() {
     const st3 = fs.readFileSync(path.join(root,'stage3.js'),'utf8');
     assert(st3.includes("imageUrl:f.elements.imageUrl?.value.trim()||''"), 'saveCategory must persist the image');
     assert(st3.includes('obj.specifications.__colorHexes=hx'), 'saveProduct must persist admin color-dot hexes');
+    assert(st3.includes('fd.get(\'imageColors\')') && st3.includes('obj.specifications.__imageColors=map'), 'saveProduct must persist per-image product color associations');
     const st4 = fs.readFileSync(path.join(root,'stage4.js'),'utf8');
     assert(st4.includes('p.specifications.__colorHexes'), 'product card dots must honor admin-configured hexes');
     assert(st4.includes('class="cat-tile"'), 'category row must render the admin image tile as-is');
@@ -270,8 +389,8 @@ async function main() {
     const baseCss = fs.readFileSync(path.join(root,'styles.css'),'utf8');
     assert(st4.includes('cat-row-wrap') && st4.includes('id="cat-tile-row"'), 'category row must sit inside the arrowed wrapper');
     assert(st4.includes('scrollCatRow(-1)') && st4.includes('scrollCatRow(1)'), 'both edge arrows wired, one tile per tap');
-    assert(st4.includes('function updateCatArrows') && st4.includes("addEventListener('resize',updateCatArrows"), 'arrows must track overflow');
-    assert(st4.includes('base.__catArrows'), 'render pipeline must refresh arrow state');
+    assert(st4.includes('function updateCatArrows') && st4.includes('function updateStorefrontHorizontalRows') && st4.includes("addEventListener('resize',updateStorefrontHorizontalRows"), 'category and home arrows must track overflow');
+    assert(st4.includes('base.__horizontalRows'), 'render pipeline must refresh arrow state');
     assert(st4.includes("'chev-r':'") && st4.includes("'chev-l':'"), 'chevron glyphs registered in the icon set');
     assert(themeCss.includes('.cat-arrow{') && themeCss.includes('.cat-row-wrap.has-overflow .cat-arrow{display:grid}') && themeCss.includes('.cat-arrow-start{inset-inline-start:2px}'), 'arrows hidden until overflow, RTL-aware placement');
     assert(html.includes('class="initial"') && html.includes('initial-ring') && html.includes('<img src="/touba-logo.png" alt="طوبی">'), 'splash must show the Touba logo in the ring');
@@ -425,11 +544,21 @@ async function main() {
   {
     const enh = fs.readFileSync(path.join(root,'enhancements.js'),'utf8');
     assert(enh.includes('multiple onchange="uploadManualProductImage(this)"'), 'file input must allow selecting several slides at once');
-    for (const needle of ['function renderImageStrip','function imageSetMain','function imageMove','function imageRemove','function readFormImages','function writeFormImages','اسلاید اول تصویر اصلی'])
-      assert(enh.includes(needle), `enhancements.js multi-slide missing: ${needle}`);
-    assert(enh.includes("oninput=\"renderImageStrip(this.form)\""), 'images textarea must live-sync the preview strip');
+    for (const needle of ['function renderImageStrip','function imageSetMain','function imageMove','function imageRemove','function readFormImages','function writeFormImages','function readFormImageColors','function cleanFormImageColors','function setImageColor','function productImagesForColor','function updateProductGalleryForColor','data-image-url=','اسلاید اول تصویر اصلی'])
+      assert(enh.includes(needle), `enhancements.js multi-slide/color mapping missing: ${needle}`);
+    assert(enh.includes("oninput=\"renderImageStrip(this.form)\"") && enh.includes('onchange="setImageColor(this)"'), 'image URLs and their color bindings must live-sync in the product form');
+    assert(enh.includes('updateProductGalleryForColor(id,el.dataset.color)'), 'selecting a storefront color must update the main product gallery');
+    const galleryStart=enh.indexOf('function productImagesForColor'),galleryEnd=enh.indexOf('function updateProductGalleryForColor',galleryStart);
+    assert(galleryStart>=0&&galleryEnd>galleryStart,'per-color gallery filtering should be testable as a pure helper');
+    const galleryContext={};vm.runInNewContext(enh.slice(galleryStart,galleryEnd),galleryContext);
+    const mappedProduct={images:['red-front.jpg','black-front.jpg','all-angle.jpg'],specifications:{__imageColors:{'red-front.jpg':'زرشکی','black-front.jpg':'مشکی'}}};
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor(mappedProduct,'زرشکی')),['red-front.jpg','all-angle.jpg'],'color selection should show matching images and shared images');
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor(mappedProduct,'سفید')),['all-angle.jpg'],'unassigned shared images should remain visible for every color');
+    const noSharedImages={images:['red-front.jpg','black-front.jpg'],specifications:{__imageColors:{'red-front.jpg':'زرشکی','black-front.jpg':'مشکی'}}};
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor(noSharedImages,'سفید')),[],'a color without assigned or shared images must not show another color image');
+    assert.deepEqual(Array.from(galleryContext.productImagesForColor({images:['one.jpg','two.jpg']},'مشکی')),['one.jpg','two.jpg'],'legacy products without color assignments should retain their gallery');
     const css = fs.readFileSync(path.join(root,'stage4.css'),'utf8');
-    assert(css.includes('.image-strip{') && css.includes('.img-slide.main{'), 'slide strip styles must ship');
+    assert(css.includes('.image-strip{') && css.includes('.img-slide.main{') && css.includes('.img-color-bind'), 'slide color-binding styles must ship');
     assert(fs.readFileSync(path.join(root,'storefront-theme.css'),'utf8').includes('body.storefront-mode .img-slide'), 'slide strip must be themed for dark mode');
   }
 
@@ -450,7 +579,7 @@ async function main() {
     assert(css.includes('.auth-touba-mark{') && css.includes('details.pf-adv'), 'mark + advanced-section styles must ship');
   }
 
-  console.log('PASS: Supabase-only hydration, fail-closed schema guard, no local commerce snapshots/demo fixtures, Supabase Storage image path, script order, AI Studio constraints, and responsive layout guards');
+  console.log('PASS: Supabase-only hydration, fail-closed schema guard, no local commerce snapshots/demo fixtures, Supabase Storage image path, mobile admin cards and manual home shelves, accessible filter modal and keyboard-safe forms, script order, AI Studio constraints, and responsive layout guards');
 }
 
 main().catch(error => { console.error(error); process.exit(1); });

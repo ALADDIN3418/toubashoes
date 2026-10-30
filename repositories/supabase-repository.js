@@ -17,7 +17,8 @@
 
   function fail(error, operation) {
     if (!error) return;
-    const detail = error.message || error.details || error.code || 'خطای پایگاه داده';
+    const details = [error.message, error.details, error.hint].filter(value => typeof value === 'string' && value.trim());
+    const detail = [...new Set(details)].join(' — ') || error.code || 'خطای پایگاه داده';
     const permission = error.code === '42501' || /row-level security|permission denied/i.test(detail);
     throw new Error(permission
       ? `مجوز پایگاه داده این عملیات را نپذیرفت. نقش حساب، فعال‌بودن پروفایل و policyهای RLS را بررسی کنید. (${detail})`

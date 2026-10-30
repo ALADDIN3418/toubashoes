@@ -231,7 +231,31 @@ function updateCatArrows(){
     if(row)wrap.classList.toggle('has-overflow',row.scrollWidth>row.clientWidth+8);
   }
 }
-
+function scrollHomeProductShelf(id,dir){
+  const row=document.getElementById(id);
+  if(!row)return;
+  const cards=Array.from(row.querySelectorAll(':scope > .lux-product-card'));
+  if(cards.length<2)return;
+  const bounds=row.getBoundingClientRect(),mid=bounds.left+bounds.width/2;
+  let current=0,best=Number.POSITIVE_INFINITY;
+  cards.forEach((card,index)=>{const rect=card.getBoundingClientRect(),distance=Math.abs(rect.left+rect.width/2-mid);if(distance<best){best=distance;current=index}});
+  const next=Math.max(0,Math.min(cards.length-1,current+(Number(dir)>0?1:-1)));
+  cards[next].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+}
+function updateHomeProductShelfArrows(){
+  document.querySelectorAll('[data-home-shelf]').forEach(wrap=>{
+    const row=wrap.querySelector('.home-mobile-shelf');
+    if(row)wrap.classList.toggle('has-overflow',row.scrollWidth>row.clientWidth+8);
+  });
+}
+function updateStorefrontHorizontalRows(){
+  updateCatArrows();
+  updateHomeProductShelfArrows();
+}
+function homeProductShelf(id,items,label,emptyText){
+  const cards=items.map(card).join('')||`<div class="empty-state">${esc(emptyText)}</div>`;
+  return `<div class="home-product-shelf" data-home-shelf><button class="home-shelf-arrow home-shelf-arrow-start" type="button" aria-label="محصولات قبلی؛ ${esc(label)}" aria-controls="${esc(id)}" onclick="scrollHomeProductShelf('${esc(id)}',-1)">${uiIcon('chev-r')}</button><div class="lux-product-grid home-mobile-shelf" id="${esc(id)}" role="region" aria-label="${esc(label)}" tabindex="0">${cards}</div><button class="home-shelf-arrow home-shelf-arrow-end" type="button" aria-label="محصولات بعدی؛ ${esc(label)}" aria-controls="${esc(id)}" onclick="scrollHomeProductShelf('${esc(id)}',1)">${uiIcon('chev-l')}</button></div>`;
+}
 
 function card(p){
   let off=discountPercent(p),stock=totalStock(p),reviews=db.reviews.filter(r=>r.productId===p.id&&r.status==='تأیید شده'),rating=reviews.length?reviews.reduce((n,r)=>n+Number(r.rating||0),0)/reviews.length:0,category=db.categories.find(c=>c.id===p.category),url=p.slug||p.id,pos=p.image===0?'0 0':p.image===1?'100% 0':p.image===2?'0 100%':'100% 100%',visual=p.images?.[0]?`<img class="image-skeleton" src="${esc(p.images[0])}" alt="${esc(p.name)}" loading="lazy" width="480" height="380" onload="this.classList.add('image-loaded')" onerror="this.classList.add('image-loaded');this.src='/product-shoes.jpg'">`:`<div class="lux-product-placeholder" role="img" aria-label="${esc(p.name)}" style="background-position:${pos}"></div>`,isFavorite=db.settings.favorites?.includes(p.id)||false,colorDots=(p.colors||[]).slice(0,4).map(c=>{let colorMap={'مشکی':'#1e293b','قهوه‌ای':'#78350f','عسلی':'#d97706','سفید':'#f8fafc','کرم':'#fef3c7','زرشکی':'#991b1b','طوسی':'#64748b'};return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${(()=>{let m=p.specifications&&p.specifications.__colorHexes;let h=m&&m[c];return /^#[0-9a-fA-F]{6}$/.test(String(h||''))?h:(colorMap[c]||'#64748b')})()};border:1px solid rgba(125,135,125,.6)" title="${esc(c)}"></span>`}).join('');
@@ -243,7 +267,7 @@ function card(p){
   return `<article class="lux-product-card"><button class="favorite-button ${isFavorite?'is-favorite':''}" aria-label="${isFavorite?'حذف':'افزودن'} ${esc(p.name)} ${isFavorite?'از':'به'} علاقه‌مندی‌ها" aria-pressed="${isFavorite}" onclick="toggleFav(this,'${p.id}')">${uiIcon('heart')}</button>${off?`<span class="product-discount">${off}٪ تخفیف</span>`:''}<a class="lux-product-image" href="/product/${encodeURIComponent(url)}">${visual}<span class="image-overlay">مشاهده جزئیات　←</span></a><div class="lux-product-info"><div style="display:flex;justify-content:space-between;align-items:center"><span class="product-category">${esc(category?.name||'کفش طوبی')}</span><div style="display:flex;gap:4px">${colorDots}</div></div><a href="/product/${encodeURIComponent(url)}" class="lux-product-name">${esc(p.name)}</a><div class="product-rating" aria-label="${reviews.length?`امتیاز ${rating.toLocaleString('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1})} از ۵`:'هنوز امتیازی ثبت نشده است'}"><span>${reviews.length?'★'.repeat(Math.round(rating))+'☆'.repeat(Math.max(0,5-Math.round(rating))):'☆☆☆☆☆'}</span><small>${reviews.length?rating.toLocaleString('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1}):'بدون امتیاز'}</small></div><div class="lux-price-row">${p.oldPrice>p.price?`<del>${toman(p.oldPrice)}</del>`:''}<strong>${toman(p.price)}</strong></div><div class="product-card-bottom">${stockMarkup}<a class="product-view-link" href="/product/${encodeURIComponent(url)}">مشاهده محصول</a><button class="quick-add-button" ${stock>0?'':'disabled'} onclick="quickAdd('${p.id}')" aria-label="افزودن سریع ${esc(p.name)} به سبد">+</button></div></div></article>`;
 }
 
-/* Shopping Cart designed specifically for mobile: compact items, scroll container, sticky action bar */
+/* Shopping cart: compact items, normal mobile page scroll, and a clear sticky checkout action. */
 function cartPage(){
   let items=db.cart.map((i,idx)=>({...i,p:product(i.id),idx})).filter(x=>x.p);
   let sub=items.reduce((a,x)=>a+(x.p.price||0)*x.qty,0);
@@ -320,7 +344,7 @@ function cartPage(){
           <a class="text-link" href="/shop">← ادامه خرید از فروشگاه</a>
         </div>
 
-        <!-- Scrollable items box for mobile to prevent infinite page explosion -->
+        <!-- On mobile, the item list joins the normal page scroll without a nested scroller. -->
         <div class="cart-items-scrollable">
           ${rowsHtml}
         </div>
@@ -430,7 +454,7 @@ function home(){
     <div class="container trust-grid lux-cream-trust-grid">
       <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1"/></svg>
-        <div><b>پرداخت امن</b><span>با تأیید خودکار تراکنش از درگاه بیت‌پی</span></div>
+        <div><b>پرداخت از درگاه</b><span>پرداخت از مسیر درگاه بیت‌پی انجام می‌شود</span></div>
       </div>
       <div class="trust-item lux-cream-trust-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M4 13h3v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 1-2Zm16 0h-3v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-1-2Z"/></svg>
@@ -454,7 +478,7 @@ function home(){
   ${categorySection}
 
   <section class="products-section container latest-products-section"><div class="section-heading"><div><span class="section-eyebrow">تازه‌های طوبی</span><h2>جدیدترین محصولات</h2><p>مدل‌های تازه‌رسیده برای قدم بعدی شما.</p></div><a href="/shop?sort=newest">همهٔ تازه‌رسیده‌ها <span>←</span></a></div><div class="lux-product-grid">${newest.map(card).join('')||'<div class="empty-state">به‌زودی مدل‌های تازه در اینجا قرار می‌گیرند.</div>'}</div></section>
-  <section class="products-section container"><div class="section-heading"><div><span class="section-eyebrow">منتخب برای شما</span><h2>انتخاب‌های ویژه طوبی</h2><p>مدل‌هایی که راحتی، کیفیت و سادگی را کنار هم می‌آورند.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div><div class="lux-product-grid">${featured.slice(0,5).map(card).join('')||'<div class="empty-state">به‌زودی انتخاب‌های ویژه در اینجا قرار می‌گیرند.</div>'}</div></section><section class="collection-banner container"><div class="collection-visual"><img src="${esc(bannerImage)}" alt="کالکشن کفش‌های طوبی" loading="lazy" width="800" height="520"></div><div class="collection-content"><span class="section-eyebrow">از کالکشن تازه دیدن کنید</span><h2>قدم بعدی را<br><em>متفاوت بردار</em></h2><p>${esc(banner?.subtitle||'کفش مناسب استایل و روزهای شما؛ با کیفیتی که ارزش انتخاب دارد.')}</p><a class="btn collection-button" href="${esc(banner?.linkUrl||'/shop')}">${esc(banner?.buttonText||'مشاهده کالکشن')} ${uiIcon('arrow')}</a><span class="collection-watermark">TOUBA</span></div></section><section class="products-section container bestseller-section"><div class="section-heading"><div><span class="section-eyebrow">محبوب همراهان طوبی</span><h2>پرفروش‌های این روزها</h2></div><a href="/shop">رفتن به فروشگاه <span>←</span></a></div><div class="lux-product-grid">${best.slice(0,5).map(card).join('')}</div></section><section class="why-section"><div class="container"><div class="section-heading light-heading"><div><span class="section-eyebrow">چرا طوبی؟</span><h2>کیفیت را در هر قدم حس کنید</h2></div><p>از انتخاب مواد اولیه تا لحظه‌ای که سفارش به دست شما می‌رسد، به جزئیات اهمیت می‌دهیم.</p></div><div class="why-grid">${(cms.advantages||[]).slice(0,4).map((x,i)=>`<article class="why-card"><span class="why-number">۰${i+1}</span><span class="why-icon">${[uiIcon('shield'),uiIcon('heart'),uiIcon('support'),uiIcon('truck')][i]}</span><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p></article>`).join('')}</div></div></section><section class="about-section container"><div class="about-photo-wrap"><img src="${esc(heroImage)}" alt="جزئیات کیفیت کفش طوبی" loading="lazy" width="760" height="650"><span class="about-photo-caption">کیفیت؛ از اولین قدم</span></div><div class="about-copy"><span class="section-eyebrow">آشنایی با ما</span><h2>درباره کفش طوبی</h2><p>${esc(cms.aboutText||db.settings.about||'اطلاعات معرفی فروشگاه هنوز ثبت نشده است.')}</p><a class="btn about-button" href="/about">بیشتر درباره ما ${uiIcon('arrow')}</a><div class="about-signature">طوبی <span>· قدم‌هایی مطمئن</span></div></div></section>${approved.length?`<section class="reviews-section"><div class="container"><div class="section-heading"><div><span class="section-eyebrow">از زبان همراهان ما</span><h2>تجربه خرید مشتریان</h2></div><span class="review-summary">${'★'.repeat(Math.round(averageReviewRating))+'☆'.repeat(Math.max(0,5-Math.round(averageReviewRating)))} <small>${averageReviewRating.toLocaleString('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1})} از ۵ · ${approved.length.toLocaleString('fa-IR')} دیدگاه تأییدشده</small></span></div><div class="review-grid">${approved.slice(0,3).map(r=>`<article class="customer-review"><div class="review-top"><span class="review-avatar">${esc((r.name||'م').trim().slice(0,1))}</span><div><b>${esc(r.name)}</b><span>${esc(r.product||'خریدار طوبی')}</span></div><div class="review-stars" aria-label="${Number(r.rating)||0} از ۵ ستاره">${'★'.repeat(Number(r.rating)||0)}${'☆'.repeat(Math.max(0,5-(Number(r.rating)||0)))}</div></div><p>«${esc(r.text)}»</p><time>${r.createdAt?new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'long',day:'numeric'}).format(new Date(r.createdAt)):'خریدار کفش طوبی'}</time></article>`).join('')}</div></div></section>`:''}<section class="newsletter-section"><div class="container newsletter-card"><div class="newsletter-leaf">${brandLogoImg()}</div><div class="newsletter-copy"><span class="section-eyebrow">همراه طوبی باشید</span><h2>از تخفیف‌های ویژه باخبر شوید</h2><p>خبر کالکشن‌های تازه و پیشنهادهای ویژه را زودتر دریافت کنید.</p></div><form class="newsletter-form" onsubmit="event.preventDefault();subscribeNewsletter(this)"><label class="sr-only" for="newsletter-contact">موبایل یا ایمیل</label><input id="newsletter-contact" name="contact" required placeholder="شماره موبایل یا ایمیل شما"><button type="submit">عضویت <span>←</span></button></form></div></section></main>${footer()}`;
+  <section class="products-section container"><div class="section-heading"><div><span class="section-eyebrow">منتخب برای شما</span><h2>انتخاب‌های ویژه طوبی</h2><p>مدل‌هایی که راحتی، کیفیت و سادگی را کنار هم می‌آورند.</p></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div>${homeProductShelf('home-featured-products',featured.slice(0,5),'انتخاب‌های ویژه طوبی','به‌زودی انتخاب‌های ویژه در اینجا قرار می‌گیرند.')}</section><section class="collection-banner container"><div class="collection-visual"><img src="${esc(bannerImage)}" alt="کالکشن کفش‌های طوبی" loading="lazy" width="800" height="520"></div><div class="collection-content"><span class="section-eyebrow">از کالکشن تازه دیدن کنید</span><h2>قدم بعدی را<br><em>متفاوت بردار</em></h2><p>${esc(banner?.subtitle||'کفش مناسب استایل و روزهای شما؛ با کیفیتی که ارزش انتخاب دارد.')}</p><a class="btn collection-button" href="${esc(banner?.linkUrl||'/shop')}">${esc(banner?.buttonText||'مشاهده کالکشن')} ${uiIcon('arrow')}</a><span class="collection-watermark">TOUBA</span></div></section><section class="products-section container bestseller-section"><div class="section-heading"><div><span class="section-eyebrow">محبوب همراهان طوبی</span><h2>پرفروش‌های این روزها</h2></div><a href="/shop">مشاهده همه محصولات <span>←</span></a></div>${homeProductShelf('home-bestseller-products',best.slice(0,5),'پرفروش‌های این روزها','به‌زودی محصولات پرفروش در اینجا قرار می‌گیرند.')}</section><section class="why-section"><div class="container"><div class="section-heading light-heading"><div><span class="section-eyebrow">چرا طوبی؟</span><h2>کیفیت را در هر قدم حس کنید</h2></div><p>از انتخاب مواد اولیه تا لحظه‌ای که سفارش به دست شما می‌رسد، به جزئیات اهمیت می‌دهیم.</p></div><div class="why-grid">${(cms.advantages||[]).slice(0,4).map((x,i)=>`<article class="why-card"><span class="why-number">۰${i+1}</span><span class="why-icon">${[uiIcon('shield'),uiIcon('heart'),uiIcon('support'),uiIcon('truck')][i]}</span><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p></article>`).join('')}</div></div></section><section class="about-section container"><div class="about-photo-wrap"><img src="${esc(heroImage)}" alt="جزئیات کیفیت کفش طوبی" loading="lazy" width="760" height="650"><span class="about-photo-caption">کیفیت؛ از اولین قدم</span></div><div class="about-copy"><span class="section-eyebrow">آشنایی با ما</span><h2>درباره کفش طوبی</h2><p>${esc(cms.aboutText||db.settings.about||'اطلاعات معرفی فروشگاه هنوز ثبت نشده است.')}</p><a class="btn about-button" href="/about">بیشتر درباره ما ${uiIcon('arrow')}</a><div class="about-signature">طوبی <span>· قدم‌هایی مطمئن</span></div></div></section>${approved.length?`<section class="reviews-section"><div class="container"><div class="section-heading"><div><span class="section-eyebrow">از زبان همراهان ما</span><h2>تجربه خرید مشتریان</h2></div><span class="review-summary">${'★'.repeat(Math.round(averageReviewRating))+'☆'.repeat(Math.max(0,5-Math.round(averageReviewRating)))} <small>${averageReviewRating.toLocaleString('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1})} از ۵ · ${approved.length.toLocaleString('fa-IR')} دیدگاه تأییدشده</small></span></div><div class="review-grid">${approved.slice(0,3).map(r=>`<article class="customer-review"><div class="review-top"><span class="review-avatar">${esc((r.name||'م').trim().slice(0,1))}</span><div><b>${esc(r.name)}</b><span>${esc(r.product||'خریدار طوبی')}</span></div><div class="review-stars" aria-label="${Number(r.rating)||0} از ۵ ستاره">${'★'.repeat(Number(r.rating)||0)}${'☆'.repeat(Math.max(0,5-(Number(r.rating)||0)))}</div></div><p>«${esc(r.text)}»</p><time>${r.createdAt?new Intl.DateTimeFormat('fa-IR',{year:'numeric',month:'long',day:'numeric'}).format(new Date(r.createdAt)):'خریدار کفش طوبی'}</time></article>`).join('')}</div></div></section>`:''}<section class="newsletter-section"><div class="container newsletter-card"><div class="newsletter-leaf">${brandLogoImg()}</div><div class="newsletter-copy"><span class="section-eyebrow">همراه طوبی باشید</span><h2>از تخفیف‌های ویژه باخبر شوید</h2><p>خبر کالکشن‌های تازه و پیشنهادهای ویژه را زودتر دریافت کنید.</p></div><form class="newsletter-form" onsubmit="event.preventDefault();subscribeNewsletter(this)"><label class="sr-only" for="newsletter-contact">موبایل یا ایمیل</label><input id="newsletter-contact" name="contact" required placeholder="شماره موبایل یا ایمیل شما"><button type="submit">عضویت <span>←</span></button></form></div></section></main>${footer()}`;
 }
 
 async function subscribeNewsletter(form){
@@ -554,6 +578,8 @@ window.refreshCartBadge=function(){
   animateCartBadge();
 };
 
+var shopFilterTrapActive=false;
+var shopFilterKeyHandler=null;
 let lastRenderedUrl='';
 
 let __isStage4Rendering=false;
@@ -573,7 +599,7 @@ function animatedRender(isPageTransition=false){
   const doRender=()=>{
     const adminRoute=location.pathname==='/admin'||location.pathname.startsWith('/admin/');
     const body=document.body;
-    if(body?.classList){if(adminRoute)body.classList.remove('storefront-mode');else body.classList.add('storefront-mode');body.classList.remove('has-commerce-sticky')}
+    if(body?.classList){if(adminRoute)body.classList.remove('storefront-mode');else body.classList.add('storefront-mode');body.classList.remove('has-commerce-sticky','mobile-form-keyboard-open')}
     if(body?.dataset)body.dataset.route=location.pathname;
     if(adminRoute&&window.ToubaAuthUI?.adminPage){
       document.body.classList.remove('admin-body');
@@ -597,6 +623,8 @@ function animatedRender(isPageTransition=false){
     if(typeof updateSEO==='function'){
       updateSEO();
     }
+    syncShopFilterAccessibility();
+    requestAnimationFrame(updateStorefrontHorizontalRows);
     if(isNewPage&&appEl&&appEl.classList){
       appEl.classList.remove('page-transitioning');
       void appEl.offsetWidth;
@@ -683,13 +711,15 @@ window.detail=productDetailWithSticky;
 window.cartPage=cartPage;
 window.categoryCards=categoryCards;
 window.scrollCatRow=scrollCatRow;
-(function hookCategoryArrows(){
+window.scrollHomeProductShelf=scrollHomeProductShelf;
+(function hookHorizontalRows(){
   window.updateCatArrows=updateCatArrows;
-  window.addEventListener('resize',updateCatArrows,{passive:true});
+  window.updateHomeProductShelfArrows=updateHomeProductShelfArrows;
+  window.addEventListener('resize',updateStorefrontHorizontalRows,{passive:true});
   let base=window.render;
-  if(typeof base==='function'&&!base.__catArrows){
-    let wrapped=function(){base.apply(this,arguments);requestAnimationFrame(updateCatArrows)};
-    wrapped.__catArrows=1;window.render=wrapped;
+  if(typeof base==='function'&&!base.__horizontalRows){
+    let wrapped=function(){base.apply(this,arguments);requestAnimationFrame(updateStorefrontHorizontalRows)};
+    wrapped.__horizontalRows=1;window.render=wrapped;
   }
 })();
 window.header=header;
@@ -716,19 +746,117 @@ animatedRender(true);
 /* ==========================================================================
    Modern Luxury Views: Shop, Checkout, Tracking, Content
    ========================================================================== */
+function isShopFilterMobile(){
+  return typeof window.matchMedia==='function'?window.matchMedia('(max-width: 860px)').matches:window.innerWidth<=860;
+}
+function shopFilterFocusableElements(panel){
+  return Array.from(panel.querySelectorAll('a[href],button:not(:disabled),input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])'))
+    .filter(element=>!element.hidden&&element.getAttribute('aria-hidden')!=='true'&&element.getClientRects().length>0);
+}
+function handleShopFilterKeydown(event){
+  const panel=document.querySelector('#shop-filters');
+  if(!panel?.classList.contains('drawer-open'))return;
+  if(event.key==='Escape'){
+    event.preventDefault();
+    closeShopFilters();
+    return;
+  }
+  if(event.key!=='Tab')return;
+  const controls=shopFilterFocusableElements(panel);
+  if(!controls.length){event.preventDefault();panel.focus({preventScroll:true});return;}
+  const first=controls[0],last=controls[controls.length-1],active=document.activeElement;
+  if(event.shiftKey&&(active===first||!panel.contains(active))){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&(active===last||!panel.contains(active))){event.preventDefault();first.focus();}
+}
+function setShopFilterTrap(active){
+  if(active===shopFilterTrapActive)return;
+  shopFilterTrapActive=active;
+  if(active){
+    shopFilterKeyHandler=handleShopFilterKeydown;
+    document.addEventListener('keydown',shopFilterKeyHandler);
+  }else if(shopFilterKeyHandler){
+    document.removeEventListener('keydown',shopFilterKeyHandler);
+    shopFilterKeyHandler=null;
+  }
+}
+function syncShopFilterAccessibility(){
+  const panel=document.querySelector('#shop-filters'),backdrop=document.querySelector('#shop-filter-backdrop'),button=document.querySelector('.filter-open');
+  if(!panel){
+    setShopFilterTrap(false);
+    document.body?.classList.remove('filter-sheet-open');
+    return;
+  }
+  const isMobile=isShopFilterMobile();
+  if(!isMobile&&panel.classList.contains('drawer-open')){
+    panel.classList.remove('drawer-open');
+    document.body?.classList.remove('filter-sheet-open');
+  }
+  const isOpen=isMobile&&panel.classList.contains('drawer-open');
+  panel.inert=isMobile&&!isOpen;
+  if(isOpen){
+    panel.setAttribute('role','dialog');
+    panel.setAttribute('aria-modal','true');
+    panel.setAttribute('tabindex','-1');
+    panel.removeAttribute('aria-hidden');
+    document.body?.classList.add('filter-sheet-open');
+    if(backdrop){backdrop.classList.add('show');backdrop.setAttribute('aria-hidden','false')}
+    if(button)button.setAttribute('aria-expanded','true');
+    setShopFilterTrap(true);
+  }else if(isMobile){
+    panel.removeAttribute('role');
+    panel.removeAttribute('aria-modal');
+    panel.removeAttribute('tabindex');
+    panel.setAttribute('aria-hidden','true');
+    document.body?.classList.remove('filter-sheet-open');
+    if(backdrop){backdrop.classList.remove('show');backdrop.setAttribute('aria-hidden','true')}
+    if(button)button.setAttribute('aria-expanded','false');
+    if(button&&panel.contains(document.activeElement))button.focus({preventScroll:true});
+    setShopFilterTrap(false);
+  }else{
+    panel.removeAttribute('role');
+    panel.removeAttribute('aria-modal');
+    panel.removeAttribute('aria-hidden');
+    panel.removeAttribute('tabindex');
+    document.body?.classList.remove('filter-sheet-open');
+    if(backdrop){backdrop.classList.remove('show');backdrop.setAttribute('aria-hidden','true')}
+    if(button)button.setAttribute('aria-expanded','false');
+    setShopFilterTrap(false);
+  }
+}
 function openShopFilters(){
-  let panel=document.querySelector('#shop-filters'),backdrop=document.querySelector('#shop-filter-backdrop'),button=document.querySelector('.filter-open');
-  if(panel)panel.classList.add('drawer-open');
-  if(backdrop){backdrop.classList.add('show');backdrop.setAttribute('aria-hidden','false')}
-  if(button)button.setAttribute('aria-expanded','true');
-  document.body.classList.add('filter-sheet-open');
+  const panel=document.querySelector('#shop-filters');
+  if(!panel)return;
+  panel.classList.add('drawer-open');
+  syncShopFilterAccessibility();
+  const first=shopFilterFocusableElements(panel)[0];
+  (first||panel).focus({preventScroll:true});
 }
-function closeShopFilters(){
-  document.querySelector('#shop-filters')?.classList.remove('drawer-open');
-  let backdrop=document.querySelector('#shop-filter-backdrop');if(backdrop){backdrop.classList.remove('show');backdrop.setAttribute('aria-hidden','true')}
-  let button=document.querySelector('.filter-open');if(button)button.setAttribute('aria-expanded','false');
-  document.body.classList.remove('filter-sheet-open');
+function closeShopFilters(options={}){
+  const panel=document.querySelector('#shop-filters'),wasOpen=!!panel?.classList.contains('drawer-open');
+  panel?.classList.remove('drawer-open');
+  syncShopFilterAccessibility();
+  const button=document.querySelector('.filter-open');
+  if(options.restoreFocus!==false&&wasOpen&&button&&!button.disabled&&document.activeElement!==button)button.focus({preventScroll:true});
 }
+function isMobileAuthOrCheckoutField(target){
+  if(!target?.matches?.('input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),textarea,select'))return false;
+  const route=location.pathname;
+  if(route==='/checkout')return !!target.closest('#checkout-form');
+  if(route==='/login'||route==='/reset-password')return !!target.closest('.auth-card');
+  return false;
+}
+function syncMobileFormKeyboardNavigation(target=document.activeElement){
+  const isMobile=typeof window.matchMedia==='function'?window.matchMedia('(max-width: 860px)').matches:window.innerWidth<=860;
+  document.body?.classList.toggle('mobile-form-keyboard-open',isMobile&&isMobileAuthOrCheckoutField(target));
+}
+if(!window.__mobileFormKeyboardNavigationBound){
+  window.__mobileFormKeyboardNavigationBound=true;
+  document.addEventListener('focusin',event=>syncMobileFormKeyboardNavigation(event.target));
+  document.addEventListener('focusout',()=>window.setTimeout(()=>syncMobileFormKeyboardNavigation(),0));
+  window.addEventListener('resize',()=>syncMobileFormKeyboardNavigation(),{passive:true});
+  window.addEventListener('pageshow',()=>syncMobileFormKeyboardNavigation(),{passive:true});
+}
+window.addEventListener('resize',syncShopFilterAccessibility,{passive:true});
 function openShopSortSheet(){
   const options=[['popular','محبوب‌ترین'],['newest','جدیدترین'],['cheap','ارزان‌ترین'],['expensive','گران‌ترین']];
   showModal(`<div class="shop-sort-sheet"><p>نمایش محصولات بر اساس</p><div class="shop-sort-options">${options.map(([value,label])=>`<label><input type="radio" name="mobile-sort" value="${value}" ${shopState.sort===value?'checked':''} onchange="setShopSort(this.value);closeModal()"><span>${label}</span></label>`).join('')}</div></div>`,`مرتب‌سازی محصولات`);
